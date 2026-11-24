@@ -1,5 +1,7 @@
 import {
+  APPEARANCE_HINT_MAX,
   type Clock,
+  describeAppearanceFromImage,
   draftImagePrompt,
   IMAGE_NEGATIVE_PROMPT_MAX_LENGTH,
   IMAGE_PROMPT_MAX_LENGTH,
@@ -83,6 +85,23 @@ const UploadBodySchema = z.strictObject({
   dataUrl: z.string().min(1, "图片数据不能为空"),
   label: z.string().trim().max(240).optional(),
 });
+
+const DescribeAppearanceBodySchema = z
+  .strictObject({
+    dataUrl: z.string().min(1).optional(),
+    imageId: z.string().trim().min(1).max(160).optional(),
+    pronoun: z.string().trim().max(8).optional(),
+    hint: z.string().trim().max(APPEARANCE_HINT_MAX).optional(),
+    purpose: z.enum(["aux", "narrator"]).optional(),
+  })
+  .refine((v) => Boolean(v.dataUrl || v.imageId), {
+    message: "请先上传图片或指定已有立绘",
+  });
+
+function splitDataUrlBase64(dataUrl: string): string {
+  const comma = dataUrl.indexOf(",");
+  return comma >= 0 ? dataUrl.slice(comma + 1) : "";
+}
 
 function actualAspectRatio(width: number, height: number): string {
   let left = width;
@@ -259,6 +278,103 @@ export function imageRoutes(
       }
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ error: message.replace(/^生成图片校验失败：/, "本地图片校验失败：") }, 400);
+    }
+  });
+
+  app.post("/describe-appearance", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "请求体不是合法的 JSON" }, 400);
+    }
+    const parsed = DescribeAppearanceBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json(
+        { error: parsed.error.issues.map((i) => i.message).join("；") || "识图参数不对" },
+        400,
+      );
+    }
+
+    const redact = await config.redactor();
+    const signal = c.req.raw.signal;
+
+    // 解析识图模型：若前端显式指定 purpose 则按指定；否则优先 aux，aux 未就绪时回退 narrator
+    const tryOrder: readonly ("aux" | "narrator")[] = parsed.data.purpose
+      ? [parsed.data.purpose]
+      : ["aux", "narrator"];
+    let chosen:
+      | {
+          readonly purpose: "aux" | "narrator";
+          readonly profileName: string;
+          readonly model: string;
+        }
+      | undefined;
+    let firstError = "";
+    for (const purpose of tryOrder) {
+      const resolved = await llm.resolve(purpose);
+      if (resolved.ok) {
+        chosen = { purpose, profileName: resolved.profile.name, model: resolved.profile.model };
+        break;
+      }
+      if (!firstError) firstError = resolved.error;
+    }
+    if (!chosen) {
+      return c.json({ error: redact(firstError || "请先在设置页配置支持识图的模型") }, 400);
+    }
+
+    let sourceDataUrl = parsed.data.dataUrl;
+    if (!sourceDataUrl && parsed.data.imageId) {
+      const existing = await store.get(parsed.data.imageId);
+      if (!existing) return c.json({ error: "找不到对应的图片，请重新上传" }, 404);
+      sourceDataUrl = existing.dataUrl;
+    }
+    if (!sourceDataUrl) {
+      return c.json({ error: "缺少待识别的图片数据" }, 400);
+    }
+
+    let validated: Awaited<ReturnType<typeof validateImageDataUrl>>;
+    try {
+      validated = await validateImageDataUrl(sourceDataUrl, signal);
+    } catch (error) {
+      if (error instanceof AbortedError || signal.aborted) {
+        return c.json({ error: "已取消识图" }, 400);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ error: message.replace(/^生成图片校验失败：/, "图片校验失败：") }, 400);
+    }
+
+    const base64 = splitDataUrlBase64(validated.dataUrl);
+    if (!base64) {
+      return c.json({ error: "图片编码异常，请重新上传" }, 400);
+    }
+
+    try {
+      const result = await describeAppearanceFromImage(
+        llm,
+        {
+          image: { mimeType: validated.mimeType, data: base64 },
+          pronoun: parsed.data.pronoun,
+          hint: parsed.data.hint,
+          purpose: chosen.purpose,
+        },
+        signal,
+      );
+      if (!result.ok) {
+        return c.json({ error: redact(result.error) }, 502);
+      }
+      return c.json({
+        look: result.look,
+        profileName: chosen.profileName,
+        model: chosen.model,
+        usedPurpose: chosen.purpose,
+      });
+    } catch (error) {
+      if (error instanceof AbortedError || signal.aborted) {
+        return c.json({ error: "已取消反推外貌" }, 400);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ error: redact(message) }, 502);
     }
   });
 

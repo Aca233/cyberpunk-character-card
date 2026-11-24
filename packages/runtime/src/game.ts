@@ -81,6 +81,7 @@ import { z } from "zod";
 import type { CharacterStore } from "./characters";
 import type { TurnCheckpointStore } from "./checkpoints";
 import type { ConfigService } from "./config";
+import type { EmbeddingCacheStore } from "./embedding-cache";
 import { KeyedMutex } from "./mutex";
 import { SaveMovedError, type SaveStorage } from "./ports";
 import type { PresetStore } from "./presets";
@@ -177,6 +178,8 @@ export interface GameDeps {
   readonly presets?: PresetStore | undefined;
   /** 回合阶段断点存储：每步调用完成后落盘，防止报错重头再来 */
   readonly checkpoints?: TurnCheckpointStore | undefined;
+  /** 本地持久化向量缓存：按存档缓存旧记忆文档向量 */
+  readonly embeddingCache?: EmbeddingCacheStore | undefined;
   readonly workshop?: WorkshopStore | undefined;
 }
 
@@ -1111,6 +1114,7 @@ export class GameService {
           dice: record.dice,
           resolves: record.resolves ?? null,
           usage: record.usage ?? null,
+          stageUsage: record.stageUsage ?? null,
           totalUsage: total,
           prompt,
           prompts,
@@ -1225,13 +1229,20 @@ export class GameService {
           : plan.input.spendOk
             ? checkpoint?.prepared.confirmation?.quoteKey
             : undefined;
-      const embedder = await this.deps.llm.resolveEmbedder((msg) => this.deps.log(msg));
+      const [embedder, reranker] = await Promise.all([
+        this.deps.llm.resolveEmbedder((msg) => this.deps.log(msg), {
+          saveId: run.saveId,
+          cache: this.deps.embeddingCache,
+        }),
+        this.deps.llm.resolveReranker((msg) => this.deps.log(msg)),
+      ]);
       const preset = await this.deps.presets?.active();
       if (signal.aborted) throw new NarratorAbortedError("已停止");
       const result = await runNarratorTurn(
         {
           llm: this.deps.llm,
           embedder,
+          reranker,
           contextWindow: resolved.profile.contextWindow,
           maxOutputTokens: resolved.profile.maxOutputTokens,
           auxContextWindow: aux.ok ? aux.profile.contextWindow : undefined,
@@ -1431,6 +1442,7 @@ export class GameService {
         },
         ...(turn.modules.length > 0 ? { modules: [...turn.modules] } : {}),
         ...(usage ? { usage } : {}),
+        ...(turn.stageUsage ? { stageUsage: turn.stageUsage } : {}),
       };
       run.committing = true;
       await saves.appendAt(run.saveId, seq, serializeRecord(record));

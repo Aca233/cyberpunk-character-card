@@ -70,7 +70,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 320,
     ability:
-      "荒坂早期经典的重型威能手枪。结构精密扎实，单发初速与后坐力沉雄有力，老派荒坂安保人员即便在换装后依然私下佩戴。",
+      "荒坂早期精工单发点射佩枪。套筒公差严密、重心极稳，天生契合消音器，拔枪第一发盲射就准如直尺，极受老派荒坂特勤私藏；但机械公差过紧，沾满泥沙灰尘后比廉价街头枪更容易卡壳。",
     source: `${W}Ranged-DisplayName-Base_Tamayura`,
   },
   {
@@ -83,7 +83,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2500,
     ability:
-      "军用科技的技术手枪，内置磁轨加速线圈。短促蓄能后打出高初速三连发，能直接穿透轻质隔墙或柜台薄板，将藏身后的敌人逼出掩体；配合透视义眼能精准穿透点射，近战贴身缠斗时则需要留出充能空当。",
+      "军用科技平价三连发技术手枪。不蓄力可当普通半自动手枪应急，蓄满后三枚电磁弹齐出穿透木板、石膏墙与轻薄铁皮；但塑料感枪身散热差，连续蓄力连射几轮后握把烫手、充能明显变慢。",
   },
   {
     id: "kenshin",
@@ -95,7 +95,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6500,
     ability:
-      "荒坂安保人员的标准技术佩枪。工艺严丝合缝，电磁导轨蓄能迅速，在卡准射界后能隔着薄掩体打出致命穿透，撕碎自以为安全的藏身点。精准度极高，但蓄能节奏容易被贴脸近身打乱，需要射手时刻保持交火间距。",
+      "荒坂安保列装的高精度穿透技术手枪。不像奥马哈那样三连泼洒，蓄满只送出一记极细极穿的高压双发穿甲弹，专门隔着薄墙或柱子点杀头目、击穿轻型义体护板；近身被人贴脸缠斗时极难蓄满开火。",
   },
   {
     id: "grit",
@@ -107,7 +107,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2600,
     ability:
-      "面向平民防卫市场的全自动威能手枪。结构紧凑，近距离能迅速倾泻弹药；持续射击时需要控制后坐与弹药消耗，适合近身自卫和压制。",
+      "面向平民暗巷自卫的袖珍全自动“电钻手枪”。短小到能塞进牛仔裤后袋，贴脸扣死扳机一秒内倾空整匣弹药糊脸；但三五米外弹道乱飞如花洒，连射两匣枪管便滚烫冒烟。",
     source: `${W}Ranged-DisplayName-Base_Grit`,
   },
   {
@@ -120,7 +120,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6200,
     ability:
-      "军用科技最新列装的三连发技术手枪。搭载高效瞬态电容，蓄力击发时三枚超高速钨合金穿甲针弹几乎撕裂空间，连装甲轻卡的车门都能轰出透明窟窿。",
+      "军用科技新锐瞬态电容三连发技术手枪。大幅压缩蓄能等待时间，半蓄即可吐出三枚钨合金穿甲针弹洞穿防暴盾与轻卡车门；代价是电容泄压时枪口爆出刺眼蓝白电弧，在夜战里一枪就彻底暴露位置。",
     source: `${W}Ranged-DisplayName-Base_Ticon`,
   },
   {
@@ -133,7 +133,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2800,
     ability:
-      "荒坂微电机打造的三连发智能手枪。手部植入智能连接后，陀螺微型弹药在雷达锁定下能沿弧形轨迹自修正追踪，专治频繁横向突进或露头闪身的滑头目标；未连入手部芯片时退化为普通击发，实心厚墙与强电磁干扰依然会让微型弹头撞毁在半途。",
+      "荒坂三连发精准锁喉智能手枪。接通智能联锁后每扣一次吐出三枚紧密编队自导弹，专锁单名敌人的头颈与移动破绽，极克制高速闪避的义体忍者；没联锁退化为普通手枪，遇强电磁干扰直接失准。",
   },
   {
     id: "chao",
@@ -145,7 +145,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2200,
     ability:
-      "康陶早期投放民用安保市场的经典智能武器。握把植入智能连接后，弹头在出膛瞬间计算弹道曲度，配合侧移或后撤步边退边打，用自导弹道压制追击路线；在狭小走廊中弧线容易刮蹭死角，需要手部芯片保持稳定的火控握持。",
+      "康陶最轻便的单发游走自卫智能手枪。锁敌框大、响应极快，适合黑客或司机单手边撤退边回头盲射逼退追兵；但单发弹丸轻、穿透弱，面对重型护甲或宽厚混凝土柱很难打穿。",
   },
   {
     id: "kappa",
@@ -157,7 +157,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2400,
     ability:
-      "海啸防务研发的轻量化双发智能手枪。手部接入智能链接后，轻微后坐下快速吐出两枚微型火箭追踪弹，以优雅的弧度绕过掩体切入敌方侧翼。",
+      "海啸防务的直角拐弯双发智能手枪。两枚微火箭弹转弯半径极小，专门大角度绕过门框、矮墙与柱子侧面袭杀缩头敌人，甚至能从侧翼打偏对手准星；但在铁丝网或狭小玻璃隔间里极易半途擦撞自毁。",
     source: `${W}Ranged-DisplayName-Base_Kappa`,
   },
   // 左轮
@@ -245,7 +245,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 650,
     ability:
-      "平价火力制造的粗犷冲锋枪。机械结构近乎原始，极高的泼弹速率与沉重的枪机冲撞在近距离能把防弹衣和骨肉生生打烂，是贫民窟与街头火拼最凶残的消耗品。",
+      "平价火力的大口径慢射重锤冲锋枪。不靠花哨射速，沉重枪机“哒哒哒”每发像铁锤砸防弹衣，近距离能硬敲碎廉价护板与木门；代价是极重难压、连射三发枪口就直往天上跳。",
     source: `${W}Ranged-DisplayName-Base_Guillotine`,
   },
   {
@@ -258,7 +258,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 720,
     ability:
-      "荒坂安保人员列装的紧凑型微型冲锋枪。单手持握稳定性极佳，枪口补偿器压制垂直跳动，在狭小机房或撤离通道里能维持惊人致密的压制弹幕。",
+      "荒坂安保列装的单手稳控微冲。枪口补偿器把垂直跳动压得极平，单手探出车窗追射、吊绳索降或一边拖伤员一边还击都稳成一条直线；缺点是口径偏轻，对重甲目标刮痧。",
     source: `${W}Ranged-DisplayName-Base_Shigure`,
   },
   {
@@ -271,7 +271,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 3200,
     ability:
-      "荒坂安保特勤配发的高阶智能冲锋枪。配合手部智能芯片，多重火控雷达可同时锁定视界内散开的数名目标，弹头在出膛后分头循迹扑杀，有效瓦解包抄企图；集中锁定单一目标时则能形成外科手术般的连续追踪打击。",
+      "荒坂特勤的三发点射多目标智能冲锋枪。接通智能联锁后一次可锁住散开的三名敌人分头点射，弹头自带轻微引燃装药，擅长瓦解多人包抄与引燃易燃掩体；无法像全自动枪那样无脑泼水。",
   },
   {
     id: "warden",
@@ -283,7 +283,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 3100,
     ability:
-      "康陶出品的中距离战术智能冲锋枪。射频平稳、自导微电脑算力强大，多目标锁定精度卓越，弹群在半空中如蜂群合围，令试图散开包抄的敌人无处遁形。",
+      "康陶出品的持续爬坡压制型智能冲锋枪。刚扣扳机射速平缓，按住连射后火控电机越转越快、倾泻蜂群般的密集追踪弹死死压制掩体群；但停火前枪管滚烫报警，不适合打一枪换一地。",
     source: `${W}Ranged-DisplayName-Base_Warden`,
   },
   {
@@ -296,7 +296,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6500,
     ability:
-      "康陶旗舰级智能冲锋枪。射频极高且自导微电脑运算迅速，弹药能在空中拉出大角度弧线绕过半身掩体咬住目标。即便在高速侧向奔袭或掩体换位时，只要智能握把保持火控链路，弹头就能死死黏住对手。",
+      "康陶旗舰级高速跑打智能冲锋枪。专为冲刺、滑铲与飞檐走壁调校，即便在高速横移中不瞄准盲扫，弹群也能拉出大弧线绕过半身掩体咬住目标；缺点是极度依赖手部智能联锁且弹药消耗惊人。",
   },
   {
     id: "senkoh",
@@ -308,7 +308,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 6800,
     ability:
-      "海啸防务制造的紧凑型技术冲锋枪。可用短点射控制弹道，也可蓄能发射高穿透弹丸，对可穿透的掩体后目标形成威胁。",
+      "海啸防务的豪华折叠磁轨冲锋枪。腰射是精准短点射，肩抵蓄满后直接变成一串高频穿透电磁连射，能把轻型隔墙连同躲在后面的射手一起锯穿；充能瞬间蜂鸣刺耳，毫无隐蔽性可言。",
     source: `${W}Ranged-DisplayName-Base_Senkoh`,
   },
   // 突击步枪（反应）
@@ -322,7 +322,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 900,
     ability:
-      "诺科他经久不衰的全天候突击步枪。机械结构粗犷皮实，在恶土沙暴和下水道污水里泡过甩干还能正常上膛。中距离点射稳定，全自动压制可靠，没有娇贵的电子元器件，是流浪者和街头老兵最信赖的干粮枪。",
+      "诺科他全天候耐操突击步枪。零娇贵电子件、不怕 EMP 与恶土沙暴泥水浸泡，甩干就能稳稳上膛；中距点射和连发都不出彩也不掉链子，是流浪者最省心的干粮枪。",
   },
   {
     id: "ajax",
@@ -334,7 +334,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2200,
     ability:
-      "军用科技正规军与企业安保的标配步枪。气动布局成熟，后坐力传递线性平稳，在中距离无论是三发点射还是交替掩护射击都极具压迫感。握感扎实、战术扩展性强，是公司武装阵列推进时的中坚火力。",
+      "军用科技正规军的重口径稳压突击步枪。射速比同级慢一拍，但单发重弹穿深足、能把混凝土掩体边角打得碎石乱飞，非常适合正面卡点推进与打穿轻型车门。",
   },
   {
     id: "masamune",
@@ -346,7 +346,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2600,
     ability:
-      "荒坂军械精工制造的三连发突击步枪。扳机行程清晰，单次扣动即以极高射速送出三枚弹药，几乎落于同一弹着点，专为在交火缝隙中撕裂防弹板而设计。射击节奏冷峻苛刻，讲究一击见血，适合纪律严明的神射手。",
+      "荒坂精工三连发破甲步枪。每次扣动扳机瞬间送出三枚几乎叠穿同一针眼的高速弹，专用来在百米内撕开公司防弹插板；不能全自动扫射，被贴脸突袭时节奏极易被打乱。",
   },
   {
     id: "nowaki",
@@ -358,7 +358,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 950,
     ability:
-      "荒坂早期的三连发军规突击步枪。射击节奏冷酷死板，后坐力传导平稳，三枚威能重弹在百米内紧密咬合在同一弹孔，专为阵列推进击溃街头暴徒而设计。",
+      "荒坂早期老兵三连发步枪。三发弹着点略宽于正宗，但单发停滞击退力极强，专用来在狭窄走廊压退冲锋狂战士与重型义体人；老型号零配件满城好找，枪身却明显更沉。",
     source: `${W}Ranged-DisplayName-Base_Nowaki`,
   },
   {
@@ -371,7 +371,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2300,
     ability:
-      "达拉理工研制的平价全自动突击步枪。以低廉成本提供持续火力，适合中近距离交火；粗糙做工与射击时的散布需要使用者靠点射和距离控制弥补。",
+      "达拉理工的廉价近战泼水步枪。射速极狂暴、贴近十余米内靠密集弹雨硬砸防线，打完随手扔掉也不心疼；但粗糙枪管连射两匣便过热飘弹，拉开中远距离几乎全靠蒙。",
     source: `${W}Ranged-DisplayName-Base_Umbra`,
   },
   {
@@ -384,7 +384,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2400,
     ability:
-      "海啸防务制造的半自动精准突击步枪。击发单发动能极高，兼顾突击步枪的灵动与精准步枪的远距离杀伤，探身点射单发直击要害，在老练射手手中堪比死神点名。",
+      "海啸防务的半自动精准突击步枪。放弃全自动泼水，换来长枪管单发点名精度与极佳消音契合度，装上消音器即可当中距幽灵狙暗杀哨兵；但遭遇多人同时贴脸强冲时火力衔接吃紧。",
     source: `${W}Ranged-DisplayName-Base_Kyubi`,
   },
   {
@@ -586,7 +586,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 4000,
     ability:
-      "重装风冷全自动轻机枪。大弹箱配合高韧性弹链，持续泼洒的重弹火网能将整条街区的掩体削成碎屑，把对方整支行动队死死钉在死角不敢抬头；沉重枪身需要过人臂力与稳固重心支撑。",
+      "慢射重口径穿甲轻机枪。单发重弹能把轻装甲车体与混凝土柱打得碎屑横飞，适合中距凿穿工事与硬轰机甲；但枪身沉重、抬枪迟缓，没装力量臂或脚架支撑时极易枪口失控。",
     source: `${W}Ranged-Base_Ma70`,
   },
   {
@@ -599,7 +599,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "rare",
     price: 8500,
     ability:
-      "宪法军工单兵轻机枪。大口径弹药连贯压制，动能足以贯穿掩体和车辆外壳，是街头火拼中最凶狠的移动火力点。",
+      "宪法军工的高射速弹雨轻机枪。大弹箱配合高循环射速，能把整条街口和开阔地铺成密不透风的铅幕，专用来压制集群杂兵与扫落低空无人机；缺点是弹药烧得极快、枪管很快发红。",
   },
   // 刀剑（反应）
   {
@@ -611,7 +611,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 80,
     ability:
-      "贴身隐匿的战术折刀。刃口经碳化处理，易于藏在靴筒或袖口，适合锁喉、刺割缝隙与潜入暗杀，在紧急关头也能当飞刀脱手掷出。",
+      "均衡实用的军用碳化战术折刀。能轻松藏进靴筒袖口，兼顾无声割喉、撬挑电线、割断绑带与中近距离投掷；但刀身短小，正面硬碰长兵器和重甲非常吃亏。",
   },
   {
     id: "kaiken",
@@ -622,7 +622,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 120,
     ability:
-      "传统日式极短怀中匕首。易于隐匿在袖管、内衬或靴侧，出鞘无声，常作为特工与暗杀者在绝境下的贴身底牌。",
+      "无护手极短日式暗杀怀匕。细窄到能缝进领口、袖衬或发髻躲过常规搜身，贴身零距离反手刺咽喉与眼窝毫无前摇；但毫无格挡护手，一旦被拉开一步就完全够不着人。",
     source: `${W}Melee-DisplayName-Preset_Tanto`,
   },
   {
@@ -634,7 +634,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 90,
     ability:
-      "街头手工冲压的粗粝折簧刀。花哨锋利，轻巧易掷，夜之城街头朋克与混混几乎人手一把，挑破动脉放血干脆利索。",
+      "街头轻量化高速飞刀。配重专为连续甩手投掷调校，出手与回手极快、能接连钉伤对方手腕与面部打断施法或举枪；代价是刃薄体轻，几乎无法用来格挡劈砍。",
     source: `${W}Melee-DisplayName-Preset_Knife_Punk`,
   },
   {
@@ -646,7 +646,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 1600,
     ability:
-      "刀刃开槽浸润生化神经毒剂的战术飞刀。割开皮肉或投掷命中瞬间，毒素顺着血液极速蔓延瘫痪肌肉神经，令中招者陷入剧毒虚弱。",
+      "刃槽浸润速效神经毒剂的暗杀飞刀。只要划破表皮哪怕一道浅口，毒素便顺血迅速放倒对手、令其双腿发软视线模糊；但面对全覆盖机械义体或解毒阀则大打折扣。",
     source: `${W}Melee-DisplayName-Preset_Knife_Neurotoxin`,
   },
   {
@@ -658,7 +658,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 110,
     ability:
-      "重型剁骨砍刀。刀背厚重、刃口宽大，势大力沉的劈砍足以斩断肢体，清道夫拆解义体和街头斗殴时很常见。",
+      "清道夫与黑帮审讯室最常见的宽背剁骨刀。攻击距离极短但近身劈骨断指极残暴，亮出来对街头活口极具心理威慑力；因为太短太沉，面对灵活长刃极易被风筝。",
     source: `${W}Melee-DisplayName-Preset_Butchers_Knife`,
   },
   {
@@ -670,7 +670,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 300,
     ability:
-      "重刃砍刀，重心靠前，势大力沉。能轻松劈开铁丝网、灌木与骨肉，是东加利福尼亚帮派街头火拼与清道夫最常用的粗暴利刃。",
+      "东加利福尼亚荒野与巷战通吃的中长重刃砍刀。既能砍铁丝网、劈木门障，近战中距离挥砍势大力沉、皮实不易卷刃；缺点是笨重显眼，完全藏不住身。",
     source: `${W}Melee-DisplayName-Preset_Machete`,
   },
   {
@@ -682,7 +682,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 320,
     ability:
-      "赛博格重工业专用超长机械砍刀。高韧性锰钢锻造，刀身宽阔如门板，挥舞起来带着劈开空气的呼啸，能以蛮力直接劈断敌人格挡的武器。",
+      "赛博格重工业打造的门板级宽刃机械砍刀。沉重锰钢刃能直接硬砸震飞敌人格挡的兵器、劈裂轻型盾牌；但挥动前摇极大，普通人单手抡两下就会脱力露破绽。",
     source: `${W}Melee-DisplayName-Preset_Machete_Borg`,
   },
   {
@@ -694,7 +694,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 450,
     ability:
-      "前倾曲刃战刀。独特的重力前倾弧度让挥砍具备极强的断骨劈砍力，兼顾近身格挡与狭窄空间里的致命挑割。",
+      "内弯前倾的丛林格斗曲刃。贴身缠斗时能顺着内弧钩住敌人武器顺势缴械，挑割膝窝、手筋与防割衣接缝尤为顺手；比武士刀短一截，开阔地带抢不到先手。",
     source: `${W}Melee-DisplayName-Preset_Kukri`,
   },
   {
@@ -706,7 +706,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 500,
     ability:
-      "全钢一体锻造战术斧。单手劈击动能巨大，能劈开防暴头盔与车身铁皮，投掷出手时力道足以贯穿轻型防弹背心。",
+      "全钢一体锻造的可投掷轻战斧。近战能劈裂防暴头盔与车窗，中距离脱手飞斧砸中胸口足以直接放倒未穿重甲的射手；但脱手扔出后若没命中，手里便立刻空门大开。",
     source: `${W}Melee-DisplayName-Preset_Tomahawk`,
   },
   {
@@ -718,7 +718,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 1800,
     ability:
-      "重齿破拆战斧。单面带尖钩刺、单面带淬火厚刃，劈击能撕碎防弹护板，钩刺能强行扒开门板与敌人掩体架势，凶暴原始。",
+      "一侧厚斧刃、一侧倒钩破拆尖的凶残战术斧。不仅能劈碎轻甲，背面尖钩可强行勾开反锁木门、铁窗栏杆，也能在肉搏中死死扯开敌人的防暴盾或外露义体护板。",
     source: `${W}Melee-DisplayName-Preset_Fanged_Axe`,
   },
   {
@@ -730,7 +730,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 1600,
     ability:
-      "日式近身短武士刀。刀身柔韧锐利，在走廊、电梯与车厢等狭小封闭环境内出鞘迅猛，深得虎爪帮杀手偏爱。",
+      "虎爪帮杀手偏爱的短身武士刀。在电梯、车厢与窄楼道里挥砍绝不卡墙，拔刀抢攻比长武士刀更快半拍，还能勉强藏在大衣内衬里；代价是缺少长刀的横扫范围。",
     source: `${W}Melee-DisplayName-Preset_Wakizashi`,
   },
   {
@@ -742,7 +742,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2000,
     ability:
-      "荒坂标准单分子刃武士刀。高频震荡刀锋能轻易切开轻型防弹装甲；神经反应出色的使用者配合特定体态，甚至能挥刃偏折来袭子弹。",
+      "荒坂制式单分子高频武士刀。长刃挥斩干脆利落，神经反应够快者可架刀斜格偏折来袭手枪弹与冲锋枪流弹；但长刀显眼难藏、在极狭小门洞内施展受限。",
     source: `${W}Melee-DisplayName-Preset_Katana`,
   },
   {
@@ -754,7 +754,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "uncommon",
     price: 2200,
     ability:
-      "搭载小型双冲程引擎的双刃手持链锯剑。拉动引线后高转速金刚石链齿发出骇人尖啸，无论骨肉、防弹背心还是机械外骨骼，一旦接触都会在瞬间被绞碎撕烂。",
+      "双冲程燃油驱动的金刚石链锯剑。拉绳启动瞬间嘶吼震耳，连重甲插板、铁门锁与义体机械臂都能硬生生锯碎；但噪音大到整条街都听见，拉绳启动空当极易挨枪。",
     source: `${W}Melee-DisplayName-Preset_Chainsword`,
   },
   // 钝器（肉体）
@@ -767,7 +767,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 45,
     ability:
-      "修车厂后备箱随处可见的锻钢撬胎棒。带弯角与扁头，既能撬下装甲轮胎轮毂，顺手轮圆砸碎敌人的膝盖骨也毫不含糊。",
+      "恶土车手后备箱标配的锻钢撬胎棒。平日修车卸胎毫不惹眼，遇事反手抽膝盖与撬开轻型车门锁扣两不误，进检查站几乎不会被当成管制武器没收。",
     source: `${W}Melee-DisplayName-Preset_Tire_Iron`,
   },
   {
@@ -779,7 +779,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 55,
     ability:
-      "重型铸铁管子扳手。沉重结实的咬合钳口足以当作手握短锤，重重闷在后脑或面门上足以打裂头骨并造成重度震荡昏厥。",
+      "沉重铸铁管钳。既能在工业区强拧锈死阀门、破坏液压管路制造蒸汽掩护，近身一记短锤闷砸太阳穴也足以让人当场震荡昏厥；但长度短，对付长兵器很被动。",
     source: `${W}Melee-DisplayName-Preset_Pipe_Wrench`,
   },
   {
@@ -791,7 +791,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 60,
     ability:
-      "铝合金或加固木质球棒。简单结实，挥击破风，砸膝盖或闷棍敲后脑足以让人当场休克昏厥，是街头流氓收保护费的标准教具。",
+      "街头帮派收账标配的加固球棒。比铁管扳手更轻更长、挥速快且横扫面广，群架中扫退多名混混或闷棍打晕活口极其顺手，但敲在厚重义体钢板上会震麻虎口。",
     source: `${W}Melee-DisplayName-Preset_Baseball_Bat`,
   },
   {
@@ -803,7 +803,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 50,
     ability:
-      "高碳钢锻造撬棍。物理破坏工具里的常青树，能撬开锈蚀的气密门和装甲箱锁扣，反手抡击也能砸裂颅骨与金属外骨骼。",
+      "高碳钢破拆撬棍。潜入与搜刮的万用硬工具，能无声撬开木箱、通风栅格与老旧铁门锁舌；危急时反手砸关节也极结实，但手感笨重、挥动不够灵巧。",
     source: `${W}Melee-DisplayName-Preset_Crowbar`,
   },
   {
@@ -815,7 +815,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 40,
     ability:
-      "工地上随处可见的镀锌重型钢管。沉重生锈，毫无科技含量，但顺手抡下去的纯粹物理打击足以把义体关节敲到变形脱臼。",
+      "夜之城工地随手可捡的镀锌重铁管。毫无辨识度、打完随手扔进阴沟不留任何追查线索，势大力沉足以把廉价义肢关节敲到变形卡死。",
     source: `${W}Melee-DisplayName-Preset_Iron_Pipe`,
   },
   {
@@ -827,7 +827,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 150,
     ability:
-      "硬质合金冲压指虎。套在指关节上挥拳，将力量高度集中于一点，击碎面骨与下颌，揣在口袋里难以被金属探测轻易察觉。",
+      "碳纤合金袖珍指虎。揣在裤兜里极易混过普通搜身与酒吧安检，贴身一拳直接敲碎颧骨与下颌，也能在不暴露武装的情况下保留空手翻越与攀爬能力。",
     source: `${W}Melee-DisplayName-Preset_Knuckles`,
   },
   {
@@ -839,7 +839,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 600,
     ability:
-      "军用级高压防暴电警棍。击打瞬间释放高频脉冲电流，能使目标全身肌肉瞬间痉挛昏厥，迅速制服目标而不造成致命穿透。",
+      "NCPD 与企业保安制式防暴电棍。高频低致命脉冲专用来迅速电晕活口抓俘虏且不留血腥现场，挂在腰间外观合规、不易在街头引起路人恐慌；但打重甲义体人电流难透。",
     source: `${W}Melee-DisplayName-Preset_Baton_Alpha`,
   },
   {
@@ -851,7 +851,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     rarity: "common",
     price: 500,
     ability:
-      "恶土牧场与动物帮常用的高压放电长棍。触头释放足以让数吨肉牛瘫软抽搐的凶猛电弧，近身一戳便能令对手全身神经痉挛失去反抗能力。",
+      "恶土牧场与动物帮魔改的超高压长柄放电棍。电弧狂暴到连重装壮汉和廉价安保义体都能一戳抽搐短路，长度也占优；但粗笨显眼，在积水或大雨天乱戳容易反电自己。",
     source: `${W}Melee-DisplayName-Preset_Cattle_Prod`,
   },
   {
@@ -918,7 +918,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     price: 45000,
     ability:
-      "威尔逊在第二修正案武器店为 V 量身定制的莱克星顿。加重枪管配人体工学握把，大幅加快换弹速度并提高爆头时的致命穿透暴击伤害。",
+      "威尔逊在第二修正案武器店定制的加重型莱克星顿。快拔配重握把与加长弹匣井让空仓换弹几乎一气呵成，近距短连射专打头面与义体薄弱面甲，但持续全自动倾泻仍容易枪管发烫。",
     source: `${W}Ranged-DisplayName-Base_Lexington_Wilson`,
   },
   {
@@ -974,7 +974,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     price: 65000,
     ability:
-      "来生女王罗格佩戴一生的金质自由手枪。第一发弹丸具备极高的首发要害伤害与暴击率，对生命体征处于低谷的目标拥有无情的终结制止力。",
+      "来生女王罗格佩戴一生的金质自由手枪。枪膛经极端精调，满态拔枪的第一发弹道笔直冷酷，专攻一枪掀翻头目护甲或当场震慑全场；连续狂扣后的后续散布则回归普通重枪。",
     source: `${W}Ranged-DisplayName-Preset_Liberty_Rogue`,
   },
   {
@@ -1156,7 +1156,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     price: 68000,
     ability:
-      "亚历克斯移交的潜行特工统一手枪。搭载特化消音器与光学反射，在光学迷彩激活期间射击必定触发绝对暴击，冷酷处决目标而不留一丝声息。",
+      "亚历克斯移交的联情局特工级静默手枪。定制气密消音管连击针脆响都近乎吞没，配合光学迷彩贴近暗杀时连两步外的同伴都察觉不到枪声；正面硬碰重甲防线时威力明显偏软。",
     source: `${W}Ranged-DisplayName-Preset_Unity_Agent`,
   },
   {
@@ -1198,7 +1198,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     price: 75000,
     ability:
-      "荒坂三郎随身佩戴的传世武士刀。刃薄如蝉翼，寒芒刺骨，出鞘极快且切削暴击时断金切玉；任何认得刀铭的荒坂特工见到此刀都会脸色煞白。",
+      "荒坂三郎随身佩戴的传世名刀。刃薄如蝉翼，拔刀居合斩切开动脉与轻甲毫不滞涩，留下极难止血的深长撕裂伤；任何认得刀铭的荒坂特工见到此刀都会瞬间变脸，极易招来最高级别追杀。",
     source: `${W}Melee-Preset_Katana_Saburo`,
   },
   {
@@ -1211,7 +1211,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     price: 72000,
     ability:
-      "小田三太夫使用的精工武士刀，可在击败小田后取得。光学迷彩激活时斩击更容易命中要害，连斩末段的攻击尤其凶狠。",
+      "小田三太夫的荒坂亲卫精工武士刀。哑光黑刃在光学迷彩下完全不反光，隐身突袭第一刀极易切入护甲接缝，连斩收尾的重劈足以斩断普通义肢；但对重型机甲外壳仍需找散热缝。",
     source: `${W}Melee-DisplayName-Preset_Katana_Takemura`,
   },
   {
@@ -1224,7 +1224,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     price: 68000,
     ability:
-      "冈田和歌子交付的精工武士刀。适合迅速突进到敌人近前斩击，击倒敌人后可继续展开更快的连斩；突进仍须有可通行的接近路线。",
+      "冈田和歌子交付的虎爪帮精工武士刀。重心前倾、专为踏步贴身连斩调校，只要有通行路线就能一刀放倒前排后顺势旋身狂斩下一目标；停下站桩对砍时优势不再明显。",
     source: `${W}Melee-DisplayName-Preset_Katana_Wakako`,
   },
   {
@@ -1237,7 +1237,7 @@ export const items = inventoryRules.ItemCatalogSchema.parse([
     iconic: true,
     price: 70000,
     ability:
-      "熔解炉深处打捞出的热能过载武士刀。整把刀刃处于赤红炽热状态，劈砍时直接灼烧割开伤口，对处于燃烧状态的敌人必定打出致死暴击。",
+      "熔炉深处打捞出的赤热过载武士刀。整条刃身持续发红灼烫，挥砍时直接熔切防弹织物并引燃衣物伤口，对已经起火的目标斩击更是焦裂见骨；代价是在暗处亮如霓虹灯管，完全无法用来暗巷潜行。",
     source: `${W}Melee-DisplayName-Preset_Katana_E3`,
   },
   {

@@ -113,6 +113,27 @@ function textRoleProblems(profile: PublicProfile | undefined): string[] {
   return out;
 }
 
+function embeddingRoleProblems(profile: PublicProfile | undefined): string[] {
+  const out = problems(profile);
+  if (
+    profile &&
+    profile.type !== "openai" &&
+    profile.type !== "ollama" &&
+    profile.type !== "gemini"
+  ) {
+    out.push(`${profile.type} 暂不支持向量嵌入（请使用 OpenAI 兼容、Ollama 或 Gemini 连接）`);
+  }
+  return out;
+}
+
+function rerankerRoleProblems(profile: PublicProfile | undefined): string[] {
+  const out = problems(profile);
+  if (profile && profile.type !== "openai" && profile.type !== "ollama") {
+    out.push(`${profile.type} 暂不支持 /rerank 重排接口（请使用 OpenAI 兼容或 Ollama 连接）`);
+  }
+  return out;
+}
+
 function useRefresh() {
   const client = useQueryClient();
   return async () => {
@@ -142,7 +163,11 @@ export function ModelSettings({
       setNotice(
         variables.image === null
           ? "已停用文生图模型，后续不会自动生图，也可删除该连接。"
-          : "使用方案已更新。没有发送模型请求，后续回合使用新选择。",
+          : variables.embedding === null
+            ? "已停用独立向量模型，若对话方案未附挂向量模型则回退规则检索。"
+            : variables.reranker === null
+              ? "已停用语义重排模型，后续回合将跳过二阶段精排。"
+              : "使用方案已更新。没有发送模型请求，后续回合使用新选择。",
       );
       await refresh();
     },
@@ -240,6 +265,16 @@ export function ModelSettings({
   const narrator = data.profiles.find((p) => p.name === data.narrator);
   const aux = data.profiles.find((p) => p.name === data.aux);
   const image = data.profiles.find((p) => p.name === data.image);
+  const embedding = data.profiles.find((p) => p.name === data.embedding);
+  const reranker = data.profiles.find((p) => p.name === data.reranker);
+  const attachedEmbedding = !data.embedding
+    ? aux?.embeddingModel
+      ? aux
+      : narrator?.embeddingModel
+        ? narrator
+        : undefined
+    : undefined;
+  const activeEmbedding = embedding ?? attachedEmbedding;
   const narratorProblems = textRoleProblems(narrator);
   const auxProblems = textRoleProblems(aux);
   const ready = narratorProblems.length === 0 && auxProblems.length === 0;
@@ -252,7 +287,7 @@ export function ModelSettings({
   const selected = data.profiles.find((p) => p.name === requested) ?? narrator ?? data.profiles[0];
 
   const roleSlots: readonly {
-    readonly key: "narrator" | "aux" | "image";
+    readonly key: "narrator" | "aux" | "image" | "embedding" | "reranker";
     readonly code: string;
     readonly label: string;
     readonly name: string | undefined;
@@ -282,6 +317,34 @@ export function ModelSettings({
       name: data.image,
       model: image?.model,
       state: data.image ? (problems(image).length === 0 ? "ok" : "warn") : "optional",
+    },
+    {
+      key: "embedding",
+      code: "EMBEDDING",
+      label: "向量检索",
+      name: activeEmbedding?.name,
+      model: embedding
+        ? embedding.embeddingModel || embedding.model
+        : attachedEmbedding?.embeddingModel
+          ? `${attachedEmbedding.embeddingModel}（附挂）`
+          : undefined,
+      state: activeEmbedding
+        ? embeddingRoleProblems(activeEmbedding).length === 0
+          ? "ok"
+          : "warn"
+        : "optional",
+    },
+    {
+      key: "reranker",
+      code: "RERANKER",
+      label: "语义重排",
+      name: data.reranker,
+      model: reranker?.model,
+      state: data.reranker
+        ? rerankerRoleProblems(reranker).length === 0
+          ? "ok"
+          : "warn"
+        : "optional",
     },
   ];
 
@@ -430,6 +493,8 @@ export function ModelSettings({
                   const isNarrator = data.narrator === profile.name;
                   const isAux = data.aux === profile.name;
                   const isImage = data.image === profile.name;
+                  const isEmbedding = data.embedding === profile.name;
+                  const isReranker = data.reranker === profile.name;
                   return (
                     <li key={profile.name}>
                       <button
@@ -457,7 +522,7 @@ export function ModelSettings({
                             {profile.model || "未填模型名"}
                           </span>
                         </div>
-                        {(isNarrator || isAux || isImage) && (
+                        {(isNarrator || isAux || isImage || isEmbedding || isReranker) && (
                           <div className={styles.roles}>
                             {isNarrator && (
                               <span className={styles.rolePill} data-role="narrator">
@@ -468,6 +533,16 @@ export function ModelSettings({
                             {isImage && (
                               <span className={styles.rolePill} data-role="image">
                                 文生图
+                              </span>
+                            )}
+                            {isEmbedding && (
+                              <span className={styles.rolePill} data-role="embedding">
+                                向量模型
+                              </span>
+                            )}
+                            {isReranker && (
+                              <span className={styles.rolePill} data-role="reranker">
+                                重排模型
                               </span>
                             )}
                           </div>
@@ -588,6 +663,54 @@ export function ModelSettings({
                     >
                       {data.image === selected.name ? "文生图使用中（点击停用）" : "设为文生图模型"}
                     </Button>
+                    <Button
+                      primary
+                      pressed={data.embedding === selected.name}
+                      disabled={
+                        dirty ||
+                        assign.isPending ||
+                        (data.embedding !== selected.name &&
+                          embeddingRoleProblems(selected).length > 0)
+                      }
+                      reason={
+                        dirty
+                          ? "请先保存连接"
+                          : data.embedding === selected.name
+                            ? "点击停用独立向量模型"
+                            : embeddingRoleProblems(selected).join("；")
+                      }
+                      onClick={() =>
+                        assign.mutate({
+                          embedding: data.embedding === selected.name ? null : selected.name,
+                        })
+                      }
+                    >
+                      {data.embedding === selected.name ? "向量使用中（点击停用）" : "设为向量模型"}
+                    </Button>
+                    <Button
+                      primary
+                      pressed={data.reranker === selected.name}
+                      disabled={
+                        dirty ||
+                        assign.isPending ||
+                        (data.reranker !== selected.name &&
+                          rerankerRoleProblems(selected).length > 0)
+                      }
+                      reason={
+                        dirty
+                          ? "请先保存连接"
+                          : data.reranker === selected.name
+                            ? "点击停用语义重排模型"
+                            : rerankerRoleProblems(selected).join("；")
+                      }
+                      onClick={() =>
+                        assign.mutate({
+                          reranker: data.reranker === selected.name ? null : selected.name,
+                        })
+                      }
+                    >
+                      {data.reranker === selected.name ? "重排使用中（点击停用）" : "设为重排模型"}
+                    </Button>
                   </div>
                   {data.image && (
                     <div className={styles.roleMetaRow}>
@@ -604,6 +727,38 @@ export function ModelSettings({
                       </Button>
                     </div>
                   )}
+                  {data.embedding && (
+                    <div className={styles.roleMetaRow}>
+                      <span className={styles.help}>
+                        当前独立向量模型：{data.embedding}
+                        （旧记忆语义检索已启用本地持久化缓存，停用后可删除该连接）
+                      </span>
+                      <Button
+                        small
+                        disabled={dirty || assign.isPending}
+                        reason="请先保存连接"
+                        onClick={() => assign.mutate({ embedding: null })}
+                      >
+                        停用向量模型
+                      </Button>
+                    </div>
+                  )}
+                  {data.reranker && (
+                    <div className={styles.roleMetaRow}>
+                      <span className={styles.help}>
+                        当前语义重排模型：{data.reranker}
+                        （可与向量模型配合做「粗排 + 精排」，也可单独使用，如 Qwen3-Reranker）
+                      </span>
+                      <Button
+                        small
+                        disabled={dirty || assign.isPending}
+                        reason="请先保存连接"
+                        onClick={() => assign.mutate({ reranker: null })}
+                      >
+                        停用重排模型
+                      </Button>
+                    </div>
+                  )}
                 </section>
                 <span
                   className={shared.thinLine}
@@ -617,12 +772,14 @@ export function ModelSettings({
                   inUse={
                     data.narrator === selected.name ||
                     data.aux === selected.name ||
-                    data.image === selected.name
+                    data.image === selected.name ||
+                    data.embedding === selected.name ||
+                    data.reranker === selected.name
                   }
                   inUseReason={
                     data.narrator === selected.name || data.aux === selected.name
                       ? "先将叙事或辅助模型改用其他连接，再删除此连接"
-                      : "先点击上方「停用文生图模型」，再删除此连接"
+                      : "先点击上方停用对应的可选模型，再删除此连接"
                   }
                   onDuplicate={() => duplicate(selected)}
                   onDeleted={() => select("@new")}
@@ -793,7 +950,7 @@ function ConnectionForm({
       if (embeddingModel.trim()) {
         patch.embeddingModel = embeddingModel.trim();
       } else if (profile?.embeddingModel !== undefined) {
-        throw new Error("当前接口不支持通过留空删除向量模型，请填写一个值或撤销修改。");
+        patch.embeddingModel = null;
       }
       if (url) patch.baseUrl = url;
       if (temperature.trim()) {
@@ -837,6 +994,9 @@ function ConnectionForm({
           ...(copyFrom?.comfyWorkflow !== undefined
             ? { comfyWorkflow: copyFrom.comfyWorkflow }
             : {}),
+          ...(copyFrom && copyFrom.keyStatus === "configured" && !key.trim()
+            ? { copyKeyFrom: copyFrom.name }
+            : {}),
         });
         persisted.current = connectionName;
       }
@@ -878,7 +1038,7 @@ function ConnectionForm({
     // 不把密钥放进 mutation variables，避免留在 React Query 内存状态里
     mutationFn: async () => {
       const trimmedBase = baseUrl.trim();
-      const profileName = persisted.current;
+      const profileName = persisted.current ?? copyFrom?.name ?? null;
       const type = profile?.type ?? copyFrom?.type ?? PRESETS[preset].type;
       return api.fetchModels({
         ...(profileName ? { profileName } : {}),
@@ -957,9 +1117,11 @@ function ConnectionForm({
   const keyBadge =
     profile?.keyStatus === "configured"
       ? { label: "已保存密钥", tone: "ok" as const }
-      : isLocalNoKey
-        ? { label: "本地免密钥", tone: "dim" as const }
-        : { label: "未填写", tone: "warn" as const };
+      : !profile && copyFrom?.keyStatus === "configured"
+        ? { label: "将沿用原密钥", tone: "ok" as const }
+        : isLocalNoKey
+          ? { label: "本地免密钥", tone: "dim" as const }
+          : { label: "未填写", tone: "warn" as const };
   const advSummaryParts = [
     `窗口 ${contextWindow.trim() ? Number(contextWindow).toLocaleString() : "—"}`,
     `温度 ${temperature.trim() || "默认"}`,
@@ -981,7 +1143,11 @@ function ConnectionForm({
       </div>
       {copyFrom && (
         <div className={styles.notice}>
-          <p>已复制连接参数，API 密钥需要重新填写。</p>
+          <p>
+            {copyFrom.keyStatus === "configured"
+              ? `已复制连接参数；保存时会在本地自动沿用「${copyFrom.name}」的 API 密钥（留空即可，填新密钥则会替换）。`
+              : "已复制连接参数；原连接尚未保存 API 密钥。"}
+          </p>
         </div>
       )}
       {profile && problems(profile).length > 0 && (
@@ -1191,7 +1357,9 @@ function ConnectionForm({
                 placeholder={
                   profile?.keyStatus === "configured"
                     ? "留空保留现有密钥；填新密钥则替换"
-                    : "在这里粘贴密钥，保存后不会回显"
+                    : copyFrom?.keyStatus === "configured"
+                      ? `留空沿用「${copyFrom.name}」已保存的密钥；填新密钥则替换`
+                      : "在这里粘贴密钥，保存后不会回显"
                 }
               />
             </FrameBox>
@@ -1289,20 +1457,29 @@ function ConnectionForm({
                   />
                 </FrameBox>
               </label>
-              {(currentType === "openai" || currentType === "ollama") && (
+              {(currentType === "openai" ||
+                currentType === "ollama" ||
+                currentType === "gemini") && (
                 <label className={styles.field}>
-                  <span>向量嵌入模型（可选，用于记忆检索）</span>
+                  <span>向量嵌入模型（可选，留空可清除）</span>
                   <FrameBox>
                     <input
                       name="cp-embedding-model"
                       autoComplete="off"
                       data-lpignore="true"
-                      placeholder="如 text-embedding-3-small"
+                      placeholder={
+                        currentType === "gemini"
+                          ? "如 gemini-embedding-001"
+                          : "如 text-embedding-3-small / BAAI/bge-m3"
+                      }
                       value={embeddingModel}
                       onChange={(e) => setEmbeddingModel(e.target.value)}
                     />
                   </FrameBox>
-                  <small>留空则仅使用规则检索，支持 OpenAI 兼容 /v1/embeddings。</small>
+                  <small>
+                    独立设为「向量模型」时可直接复用上方模型名；此处用于在同一对话连接里附挂不同向量模型，支持
+                    OpenAI 兼容、Ollama 与 Gemini 原生向量，且自动缓存旧记忆向量。
+                  </small>
                 </label>
               )}
             </div>

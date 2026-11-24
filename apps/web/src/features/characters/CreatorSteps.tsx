@@ -5,6 +5,7 @@ import {
   CASH_TIERS,
   type CashTier,
   type CharacterCard,
+  CUSTOM_EDDIES_MAX,
   cyberwareRules,
   FLAW_MAX,
   inventoryRules,
@@ -681,12 +682,11 @@ const CLASS_LABELS: Readonly<Record<string, string>> = {
   moto: "摩托",
 };
 
-const CASH_TIER_DELTA: Readonly<Record<CashTier, string>> = {
-  broke: "0 €",
-  standard: "出身基准",
-  stash: "+2,500 €",
-  windfall: "+6,000 €",
-};
+function cashTierDeltaText(tier: CashTier): string {
+  if (tier === "broke") return "0 €";
+  if (tier === "standard") return "出身基准";
+  return `+${CASH_TIER_INFO[tier].eddiesDelta.toLocaleString("en-US")} €`;
+}
 
 type WeaponGroup = "all" | "pistol" | "smg" | "rifle" | "shotgun" | "sniper" | "melee";
 const WEAPON_GROUPS: readonly {
@@ -760,7 +760,9 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
           出身默认行装{base.labels.length > 0 ? ` · ${base.labels.join(" + ")}` : ""}
         </strong>
         <Line k="启动资金">
-          基准 {base.baseEddies} € → 实际进场 <b>{base.finalEddies} €</b>
+          基准 {base.baseEddies.toLocaleString("en-US")} € → 实际进场{" "}
+          <b>{base.finalEddies.toLocaleString("en-US")} €</b>
+          {kit.customEddies !== null ? "（自定义覆盖）" : ""}
         </Line>
         {base.gearNames.length > 0 && <Line k="随身装备">{base.gearNames.join("、")}</Line>}
         {customVehicle ? (
@@ -782,14 +784,47 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
           <Button
             key={t}
             small
-            pressed={kit.cashTier === t}
-            onClick={() => setKit({ cashTier: t })}
+            pressed={kit.customEddies === null && kit.cashTier === t}
+            onClick={() => setKit({ cashTier: t, customEddies: null })}
           >
-            {CASH_TIER_INFO[t].label} · {CASH_TIER_DELTA[t]}
+            {CASH_TIER_INFO[t].label} · {cashTierDeltaText(t)}
           </Button>
         ))}
       </fieldset>
-      <p className={styles.note}>{CASH_TIER_INFO[kit.cashTier].desc}</p>
+      <div className={styles.slotTools}>
+        <FrameBox className={styles.searchBox}>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={CUSTOM_EDDIES_MAX}
+            step={1000}
+            value={kit.customEddies ?? ""}
+            placeholder="或直接输入任意开局欧元（如 50000）覆盖档位…"
+            aria-label="自定义开局启动资金（欧元）"
+            onChange={(e) => {
+              const raw = e.target.value.trim();
+              if (raw === "") {
+                setKit({ customEddies: null });
+                return;
+              }
+              const parsed = Math.floor(Number(raw));
+              if (!Number.isFinite(parsed)) return;
+              setKit({ customEddies: Math.max(0, Math.min(CUSTOM_EDDIES_MAX, parsed)) });
+            }}
+          />
+        </FrameBox>
+        {kit.customEddies !== null && (
+          <Button small onClick={() => setKit({ customEddies: null })}>
+            改回档位
+          </Button>
+        )}
+      </div>
+      <p className={styles.note}>
+        {kit.customEddies !== null
+          ? `已自定义开局启动资金为 ${kit.customEddies.toLocaleString("en-US")} 欧元（覆盖出身基准与档位加成，上限 ${CUSTOM_EDDIES_MAX.toLocaleString("en-US")} €）。`
+          : CASH_TIER_INFO[kit.cashTier].desc}
+      </p>
 
       {weapons.length > 0 && (
         <>

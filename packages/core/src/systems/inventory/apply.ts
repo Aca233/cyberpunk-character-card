@@ -464,6 +464,7 @@ export function applyItem(
   now = 0,
   location: string | null = null,
   npcs: NpcState["npcs"] = {},
+  options: { readonly shopTransfer?: boolean } = {},
 ): ApplyOutcome {
   let def = catalog.get(command.id) ?? draft.objects[command.id]?.definition;
   if (command.weaponState !== undefined && command.action !== "gain") {
@@ -542,12 +543,16 @@ export function applyItem(
       }
     }
   }
-  const fromNpc = object
-    ? Object.values(npcs).find((n) => n.id === object.holder || n.name === object.holder)
-    : undefined;
-  const toNpc = command.recipient
-    ? Object.values(npcs).find((n) => n.id === command.recipient || n.name === command.recipient)
-    : undefined;
+  const isShopHolder = (holder: string) =>
+    options.shopTransfer === true || holder.startsWith("shop:");
+  const fromNpc =
+    object && !isShopHolder(object.holder)
+      ? Object.values(npcs).find((n) => n.id === object.holder || n.name === object.holder)
+      : undefined;
+  const toNpc =
+    command.recipient && !isShopHolder(command.recipient)
+      ? Object.values(npcs).find((n) => n.id === command.recipient || n.name === command.recipient)
+      : undefined;
   if (command.action === "lose" && toNpc) {
     if (toNpc.location !== null && toNpc.location !== location)
       return fail(`${toNpc.name}不在这里，不能隔空交付物品`);
@@ -563,6 +568,9 @@ export function applyItem(
       object.holder.startsWith("place:")
     ) {
       return fail("这件物件留在了别处，在现场用 itemPlace take 取回");
+    }
+    if (object.holder.startsWith("shop:") && !options.shopTransfer) {
+      return fail("这件物件目前在商店货架上，需要通过商店交易购入");
     }
     const sourceLocation = fromNpc?.location ?? object.location;
     if (sourceLocation !== null && sourceLocation !== location)

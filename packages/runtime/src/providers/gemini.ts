@@ -220,10 +220,24 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
     .join("\n\n");
   const contents = request.messages
     .filter((m) => m.role !== "system")
-    .map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
+    .map((m) => {
+      const parts: Array<
+        | { readonly text: string }
+        | { readonly inlineData: { readonly mimeType: string; readonly data: string } }
+      > = [];
+      if (m.role === "user" && m.images?.length) {
+        for (const img of m.images) {
+          parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+        }
+      }
+      if (m.content || parts.length === 0) {
+        parts.push({ text: m.content });
+      }
+      return {
+        role: m.role === "assistant" ? "model" : "user",
+        parts,
+      };
+    });
   if (contents.length === 0) throw new UpstreamError("Gemini 请求里没有对话内容");
   const maxOutputTokens = request.maxOutputTokens ?? profile.maxOutputTokens;
   const temperature = request.temperature ?? profile.temperature;
@@ -332,8 +346,29 @@ export function geminiClient(profile: Profile, apiKey: string): LlmClient {
           yield { type: "blocked", reason: blockedMessage };
           return;
         }
-        // 用量是到目前为止的累计值：后面的块覆盖前面的，不相加
-        if (chunk.usageMetadata) tokens = { ...tokens, ...chunk.usageMetadata };
+        // 用量是到目前为止的累计值：各字段取最大值，防止部分中转站尾包把 cachedContentTokenCount 归零冲掉前值
+        if (chunk.usageMetadata) {
+          const prev = tokens;
+          const next = chunk.usageMetadata;
+          const pickMax = (a?: number, b?: number) =>
+            a === undefined ? b : b === undefined ? a : Math.max(a, b);
+          const promptTokenCount = pickMax(prev?.promptTokenCount, next.promptTokenCount);
+          const cachedContentTokenCount = pickMax(
+            prev?.cachedContentTokenCount,
+            next.cachedContentTokenCount,
+          );
+          const candidatesTokenCount = pickMax(
+            prev?.candidatesTokenCount,
+            next.candidatesTokenCount,
+          );
+          const thoughtsTokenCount = pickMax(prev?.thoughtsTokenCount, next.thoughtsTokenCount);
+          tokens = {
+            ...(promptTokenCount !== undefined ? { promptTokenCount } : {}),
+            ...(cachedContentTokenCount !== undefined ? { cachedContentTokenCount } : {}),
+            ...(candidatesTokenCount !== undefined ? { candidatesTokenCount } : {}),
+            ...(thoughtsTokenCount !== undefined ? { thoughtsTokenCount } : {}),
+          };
+        }
         const candidate = chunk.candidates?.find((c) => (c.index ?? 0) === 0);
         if (!candidate) continue;
         const reason = candidate.finishReason;

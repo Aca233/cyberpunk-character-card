@@ -45,7 +45,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 3000,
     humanityCost: 2,
     ability:
-      "加装辅助神经缓存单元，加快神经突触的数据吞吐与散热，让接入仓在连续上传快速破解时更稳、更不易积热过载。",
+      "廉价耐用的脑部辅助散热缓存。日常连续黑门禁、切摄像头或上传基础干扰时不易发烫卡顿，但算力有限，硬撞公司军用黑冰依然会迅速过热。",
     checks: ["intelligence"],
     attributes: { intelligence: 1 },
   },
@@ -57,7 +57,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 9000,
     humanityCost: 4,
     ability:
-      "调控大脑杏仁核与边缘回路，在激战中压制恐慌并激发猎杀本能，直觉捕捉敌方动作破绽，更容易对致命要害打出重创暴击。",
+      "改写杏仁核应激回路的猎杀直觉芯片。交火中压死恐慌，能在对方拔枪抬肩前零点几秒捕捉重心破绽抢先下手；代价是一旦见血极易亢奋上头，难以克制力道留活口。",
     checks: ["cool"],
     attributes: { cool: 1 },
   },
@@ -69,7 +69,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 8000,
     humanityCost: 3,
     ability:
-      "强化枕叶视觉中枢的弹道与力学解算，将击中要害时的创伤效果最大化，使致命一击造成的破坏更为暴烈。",
+      "在枕叶视觉区叠合人体解剖与义体接缝网格，瞄准时直接标出颈动脉、膝腱与外骨骼液压管路，专攻精准断筋失能与一枪毙命；但不提供透视穿墙或夜视功能。",
     checks: ["cool"],
   },
   {
@@ -80,60 +80,60 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 18000,
     humanityCost: 5,
     ability:
-      "额叶植入合成战术数据库，实时高亮机械单位的伺服电机、外露线缆与散热盲区，使攻击对无人机、机甲和自动炮塔造成毁灭性破坏。",
+      "额叶内嵌军工机械解剖库。遭遇无人机、安保机甲、自动炮塔与义体车辆时，视野直接标出伺服电机、散热格栅与裸露线束死穴，小口径枪械也能点爆机械关节；对纯肉身目标无效。",
     checks: ["tech"],
     attributes: { tech: 2 },
   },
   {
     id: "ex-disk",
     deckTraits: ["recovery"],
-    deckProfile: "神经协处理器扩展盘，让接入仓上传更快、更不易过载",
+    deckProfile: "预编译脱机扩展盘，切入目标瞬间省去读条延迟",
     name: "外接盘",
     slot: "frontalCortex",
     rarity: "rare",
     price: 25000,
     humanityCost: 3,
     ability:
-      "植入式神经协处理器扩展盘，为网络接入仓提供额外并行算力与缓冲余量，大幅缩短快速破解程序的神经上传延迟并降低过载风险。",
+      "脑内脱机预编译协处理器。把常用快速破解预先载入高速缓存，切入联网目标时省去冗长编解码读条，能抢在守卫回头或探头转正前瞬间完成上传。",
     checks: ["intelligence"],
   },
   {
     id: "memory-boost",
     deckTraits: ["recovery"],
-    deckProfile: "回收敌方神经余波，长战里接入仓缓冲更足",
+    deckProfile: "汲取敌方脑机衰减余波，越是连环暗杀越不用停机散热",
     name: "内存加强",
     slot: "frontalCortex",
     rarity: "legendary",
     price: 85000,
     humanityCost: 6,
     ability:
-      "内置敌方神经信号衰减回收模块，每当一名被接入仓标记的敌人断气或瘫痪，其逸散的神经信号余波即被回收用来稳压降温，让接入仓在长战里维持充足缓冲。",
+      "敌方神经信号汲取模块。每当被你侵入或标记的联网敌人倒下断气，模块便反向抽干其脑机逸散的残余电势用来稳压降温，让黑客在连环清场中几乎无需停手散热；但对脱网机械或单一头目持久战毫无补给。",
     checks: ["intelligence"],
   },
   {
     id: "camillo-ram-manager",
     deckTraits: ["recovery"],
-    deckProfile: "过载应急旁路，接入仓濒临烧毁时紧急补足缓冲",
+    deckProfile: "黑客过载熔断保险丝，濒临烧脑时强行旁路泄压",
     name: "卡米略 RAM 管理器",
     slot: "frontalCortex",
     rarity: "legendary",
     price: 80000,
     humanityCost: 3,
     ability:
-      "卡米略神经应急管理套件，当接入仓在高强度入侵中濒临过热过载时，紧急启动备用神经旁路分流泄压，迅速拉回稳定运行区间。",
+      "卡米略神经应急熔断套件。接入仓在黑冰反噬或高烈度对攻中濒临烧脑锁死的刹那，自动切断主路并切入备用冷却旁路强行拉回稳态；触发后会伴随数分钟金属焦糊幻味，单场恶战中无法反复触发。",
     checks: ["intelligence"],
   },
   {
     id: "self-ice",
     deckTraits: ["antiIce"],
-    deckProfile: "脑内硬化防黑矩阵，完好时能拦下对自身的入侵",
+    deckProfile: "一次性脑内硬防火墙，完好时自动烧断敌方黑客入侵链路",
     name: "自我 ICE",
     slot: "frontalCortex",
     rarity: "legendary",
     price: 75000,
     humanityCost: 2,
     ability:
-      "脑内硬化入侵防御矩阵，监测到敌对网络黑客向自身上传快速破解时，自动引发反制阻断烧断攻击链路，提供单次绝对防火墙拦截。",
+      "脑内硬化反入侵陷阱。侦测到敌对网络黑客向自己上传快速破解或定位追踪时，自动触发熔断反制、直接烧毁对方本轮攻击链路；但每次拦下攻击后需要数分钟重构防线，连续遭多名黑客集火仍会被撕开。",
     checks: ["intelligence"],
   },
   {
@@ -144,7 +144,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 3500,
     humanityCost: 5,
     ability:
-      "动力学神经反馈模块，击杀敌人时将神经亢奋转化为全身植入件的散热加速信号，缩短所有已过载义体的冷却循环时间。",
+      "战果驱动的液冷排气阀。每当你亲手放倒一名敌人，神经亢奋脉冲会顺势驱动全身过热义体加速排热复位，专为快节奏连斩清场打造；若陷入掩体僵持打不出击杀，则毫无作用。",
     checks: ["reflexes"],
   },
   {
@@ -155,7 +155,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 10000,
     humanityCost: 5,
     ability:
-      "高导电率合成神经束网络，全面提升生物电信号传递效率，使所有战斗义体的重置冷却周期显著压缩。",
+      "用高导银碳合成神经束重排全身信号干线，稳定加快光学迷彩、血泵、射弹等主动义体的重启自检节奏；副作用是全身导电率变高，一旦挨了 EMP 或高压电击，麻痹与痛感会比常人剧烈得多。",
     checks: ["tech"],
   },
   {
@@ -166,7 +166,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 22000,
     humanityCost: 4,
     ability:
-      "在承受肉体创伤瞬间，痛觉神经反冲转化为针对该攻击者的战术索敌标记，短时间内对该目标的还击造成更惨烈反噬。",
+      "受创逆向溯源锁敌仪。一旦中弹或挨袭，创口痛觉信号会在零点一秒内反推射弹来向与枪口热源，把藏在烟雾、二楼暗窗或掩体缝隙里的偷袭者死死标红在视野里，方便立刻反手压制。",
     checks: ["reflexes"],
   },
   {
@@ -177,7 +177,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 75000,
     humanityCost: 1,
     ability:
-      "深度接驳克伦齐科夫的突触过载核心，在滑铲或闪躲触发时将主观时间流速压缩至极限，赋予射手在弹雨间隙从容微调准星与致命点射的绝对空隙。",
+      "专为克伦齐科夫打造的突触超频插件。仅在安装克伦齐科夫并触发滑铲/侧闪减速时生效：把慢动作视野压得更稳更透，让你能在飞身跃过门框的瞬间从容点射两三个目标的眉心或武器扳机。",
     checks: ["reflexes"],
   },
   {
@@ -188,8 +188,40 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 95000,
     humanityCost: 15,
     ability:
-      "尖端量子态突触重构装置，当关键义体进入漫长冷却时，强行重置其微通道状态，赋予即刻再次使用的战术重置机会，同时平稳优化全身体系义体运转效率。",
+      "荒坂实验室流出的量子态硬复位核。当你的王牌义体（如斯安威斯坦、光学迷彩或狂暴）刚用完进入过热冷却时，可强行把微通道瞬间清空复位，破格连开第二次扭转生死局；代价是极高神经排异，强行复位后常伴随耳鸣与鼻血。",
     checks: ["tech"],
+  },
+  {
+    id: "neural-translator",
+    name: "多语实时神经翻译器",
+    slot: "frontalCortex",
+    rarity: "common",
+    price: 3200,
+    humanityCost: 1,
+    ability:
+      "植入听觉皮质边缘的实时语意桥接芯片。能将日语、西班牙语、海地克里奥尔语、俄语与夜之城各帮派暗语同步转译为清晰语意，并辅助矫正口音以应对跨区交涉；但高度加密的私有暗号或罕见古语仍需结合语境辨识。",
+  },
+  {
+    id: "mood-stabilizer",
+    name: "情绪稳态阻尼器",
+    slot: "frontalCortex",
+    rarity: "uncommon",
+    price: 9000,
+    humanityCost: 2,
+    ability:
+      "企业高管、审讯官与老练中间人常用的边缘情绪平抑芯片。可在高压谈判、持枪对峙或惨烈现场中主动压低肾上腺素失控与微表情泄露，维持冷静克制的判断力与扑克脸；长时间强行锁死情绪会带来短暂的情感钝化。",
+  },
+  {
+    id: "black-ice-sniffer",
+    name: "黑冰嗅探协处理器",
+    slot: "frontalCortex",
+    rarity: "rare",
+    price: 23000,
+    humanityCost: 4,
+    deckTraits: ["antiIce"],
+    deckProfile: "额叶预警探针，接入子网前提前嗅探潜伏黑冰与追踪陷阱",
+    ability:
+      "专为潜网渗透打造的额叶探测协处理器。在正式建立神经连接前发射低功率试探报文，提前识别目标子网的加密等级、潜伏黑冰与蜜罐陷阱，为黑客抢出绕行或应急拔线的缓冲余地。",
   },
   // 眼部
   {
@@ -268,6 +300,66 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     ability:
       "反潜入与要人保卫专用型号。扫描时迅速过滤环境杂波，锁定并标出附近所有闭路监控视界与自动防卫炮塔射界，为潜网黑客规划入侵路线。",
     checks: ["cool"],
+  },
+  {
+    id: "behavioral-faceplate",
+    name: "行为印记同步面板",
+    slot: "eyes",
+    rarity: "epic",
+    price: 48000,
+    humanityCost: 6,
+    ability:
+      "植入面部的全息微肌与声纹同步面板。扫描或载入预录目标的生物印记后，可在短时间内将容貌、微表情与面部热特征覆写为该人物，用于混入高戒备禁区或脱离追查与监控人脸比对；持续运行会产生明显面部发热，遭剧烈外力击打或强电磁干扰时伪装会闪烁失效。",
+  },
+  {
+    id: "arasaka-optics",
+    name: "荒坂战术义眼",
+    slot: "eyes",
+    rarity: "rare",
+    price: 22000,
+    humanityCost: 4,
+    ability:
+      "荒坂特勤与安保部配发的低特征军规义眼。具备高精度激光测距、微光静默观察与目标枪械/义体型号快速辨识能力，主动扫描时的电磁外泄极低，不易触发敌方反侦察告警。",
+  },
+  {
+    id: "militech-thermal-optics",
+    name: "军用科技热成像义眼",
+    slot: "eyes",
+    rarity: "rare",
+    price: 24000,
+    humanityCost: 4,
+    ability:
+      "军用级多波段红外热成像与防眩光义眼。在浓烟、沙尘暴、致盲闪光与漆黑室内都能看清人体热源轮廓、刚熄火的引擎余温与墙内隐蔽电缆走向，但面对隔热涂层或低温光学迷彩时辨识度会下降。",
+  },
+  {
+    id: "zetatech-net-optics",
+    name: "泽塔科技数据流义眼",
+    slot: "eyes",
+    rarity: "uncommon",
+    price: 11000,
+    humanityCost: 3,
+    ability:
+      "黑客与情报掮客常用的增强现实光学物镜。视野会自动标注周边局域网无线热点、隐蔽光纤节点与未加密的短距广播信号，帮助快速定位现场可切入的物理或无线终端。",
+  },
+  {
+    id: "street-mod-optics",
+    name: "街头改装夜视义眼",
+    slot: "eyes",
+    rarity: "common",
+    price: 2200,
+    humanityCost: 2,
+    ability:
+      "歌舞伎地下诊所拼装的实用改装义眼。砍掉了华而不实的商业广告滤镜，只保留高增益微光夜视与基础倍率缩放；在强霓虹或闪光灯下偶尔泛起绿斑噪点，但皮实耐操、维修便宜。",
+  },
+  {
+    id: "biometric-polygraph-optics",
+    name: "微表情测谎物镜",
+    slot: "eyes",
+    rarity: "rare",
+    price: 19000,
+    humanityCost: 3,
+    ability:
+      "企业谈判官与老练中间人私藏的社交分析物镜。近距离交谈时捕捉对方瞳孔微张、皮温起伏与颈动脉搏动频率，辅助察觉紧张、隐瞒或蓄意敌意；但面对重度面部改造、情绪阻尼芯片或久经训练的间谍时容易误判。",
   },
   // 神经系统
   {
@@ -358,7 +450,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 45000,
     humanityCost: 4,
     ability:
-      "专门针对短刃与飞刀运动轨迹优化的神经微调芯片，在近战挥刃与投掷飞刀瞬间微调肌肉发力，大幅提升对动脉与关节弱点的重创暴击概率。",
+      "专为短刀与飞刀调校的腕肘微肌神经芯片。挥刺或甩出飞刀的瞬间自动修正抖动与出刃角度，极易贴着防弹衣缝隙直插喉管、眼窝与韧带；对枪械和重锤毫无加成。",
     checks: ["reflexes"],
   },
   {
@@ -369,7 +461,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 72000,
     humanityCost: 2,
     ability:
-      "交火爆发神经整流器。交火打响的头数十秒内，高浓度肾上腺素刺激下肢运动神经，提升冲刺速度，便于抢占掩体或撕开火线。",
+      "开战先手抢点爆发阀。枪声炸响的头几秒内将高浓肾上腺素直灌双腿肌群，方便第一时间扑进唯一掩体、抢占高点或贴脸缴械；但持续缠斗十余秒后便回落至常速。",
     checks: ["reflexes"],
   },
   {
@@ -382,6 +474,26 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     ability:
       "重力突触矢量协调器。突破地面摩擦力束缚，允许操作者在起跳凌空、下落或滑铲半空中强行进行二次侧向空中闪避与突进步伐，极大拓展空中战术机动性。",
     checks: ["reflexes"],
+  },
+  {
+    id: "voice-modulator",
+    name: "声带频段调制器",
+    slot: "nervous",
+    rarity: "uncommon",
+    price: 7500,
+    humanityCost: 2,
+    ability:
+      "植入咽喉与声带运动神经的声纹合成器。能实时切换男女声线、模拟粗哑烟嗓或复刻已采样的他人语调，并可在喧闹交火中开启低噪定向骨传导通讯，是卧底潜入、伪装通话与街头欺诈的利器。",
+  },
+  {
+    id: "sleep-skip-regulator",
+    name: "节律清醒调节器",
+    slot: "nervous",
+    rarity: "common",
+    price: 4000,
+    humanityCost: 2,
+    ability:
+      "长途走私客、夜班佣兵与加班公司狗常用的松果体神经调节片。可短时压缩深度睡眠需求并抑制连续熬夜后的反应迟钝与视线发虚，适合通宵蹲守与连轴奔袭；但透支过久仍会积累真实的神经疲惫与偏头痛。",
   },
   // 操作系统：网络接入仓、斯安威斯坦、狂暴三选一
   {
@@ -436,7 +548,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 30000,
     humanityCost: 8,
     ability:
-      "泽塔科技的经典斯安威斯坦脊柱植入体。启动瞬间接管中枢神经，世界陷入近乎静止的迟缓，唯有你在慢动作的弹道与人群中破风疾驰。",
+      "主打空中机动与高性价比的入门级脊柱加速义体。在起跳、飞跃门窗或高处扑击的滞空瞬间减速最为顺滑，减速倍率虽比不上军用旗舰，但神经发热温和、街头维修配件好找。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -448,7 +560,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 55000,
     humanityCost: 10,
     ability:
-      "迪纳拉出品的高耐久军规斯安威斯坦。优化了神经突触的散热过载结构，大幅延长感知放缓的维持时间，赋予操作者在停滞时空中更多的战术支配权。",
+      "迪纳拉出品的持久军规斯安威斯坦。单次开启维持时间极长且散热循环规整，适合常规长线巷战反复开启穿插掩体与连射点名，是老牌佣兵最稳妥的全面型主轴。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -460,7 +572,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 25000,
     humanityCost: 8,
     ability:
-      "摩尔科技军规狂暴中枢。启动时向循环系统泵入大剂量合成类固醇与痛觉阻断剂，大幅强化肉体耐受力与近战打击动能，并可在下落重击时向地面释放冲击波。",
+      "摩尔科技的基础硬扛型狂暴中枢。开启后泵入合成类固醇与镇痛剂，徒手破门、顶着轻武器强冲与钝器砸甲都皮实耐用，但开启期间双手震颤剧烈，基本无法精细瞄准开枪。",
     checks: ["body"],
   },
   {
@@ -535,7 +647,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 80000,
     humanityCost: 12,
     ability:
-      "千替工业顶级时间膨胀装置。大幅拉高神经反射流速，在极限减速中强化机动回避与卸力，并借助绝缘与过滤涂层提升对燃烧、中毒与电击的抗性。",
+      "千替工业的闪避抗性特化斯安威斯坦。开启后身形快到在敌方义眼里只剩拖影，极难被火力锁定，并自带绝缘隔热过滤膜，专为顶着火海、毒雾与高压电网强突禁区打造。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -547,7 +659,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 90000,
     humanityCost: 12,
     ability:
-      "军用科技战术斯安威斯坦。支持随时开关的神经超频，在减速状态下提升弱点命中与暴击伤害；击杀目标后通过神经接口回收冷却时间并稳定生命体征。",
+      "支持随开随关的战术点射型斯安威斯坦。不必一口气耗干电池，可零碎点开半秒用来闪一刀、拐角抢开一枪便立刻关机，且每放倒一名目标都能回收电量并平复心率，续航冠绝全场。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -559,7 +671,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 99000,
     humanityCost: 15,
     ability:
-      "军用科技原型斯安威斯坦。超频时将视觉与神经反射压至极慢，大幅强化要害暴击与弱点穿透；每次击杀目标都能快速重置加速循环并恢复部分体力。",
+      "军用科技最危险的原型时间定格装置。开启瞬间把主观流速压到极致，飞驰的子弹像悬停半空，足以绕着整个房间挨个点完眉心再收刀归鞘；但高额神经负荷与滚烫脊柱排异极易把普通人烧疯。",
     checks: ["reflexes"],
     accelerator: true,
   },
@@ -571,7 +683,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 50000,
     humanityCost: 9,
     ability:
-      "生物动力重装狂暴。超频期间锁死痛觉中枢并提供暂时的濒死免疫，大幅提高近战挥砍频率；超频结束后，根据期间消灭的敌人数量折算恢复体力。",
+      "以战养战的嗜血续航型狂暴。超频期间强行锁死致死休克、怎么挨枪都不会立刻倒地，但只能在近战厮杀里靠放倒人头把体能和止血因子攒回来——一旦空手耗完药效，所有滞后创伤会瞬间反扑。",
     checks: ["body"],
   },
   {
@@ -582,7 +694,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 80000,
     humanityCost: 11,
     ability:
-      "泽塔科技重装狂暴。启动后近战攻速显著提升且免疫坠落伤害，可自高处下砸地面释放动能冲击波，震退并击倒周遭敌人。",
+      "专为高空空降破阵打造的重装震荡狂暴。开启期间彻底免疫坠落碎骨，可直接从天台或高架纵身砸进敌群中心，靠落地动能冲击波把防暴阵线与掩体掀翻；但在平地远距对枪时毫无优势。",
     checks: ["body"],
   },
   {
@@ -593,8 +705,81 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 90000,
     humanityCost: 12,
     ability:
-      "军用科技旗舰型狂暴系统。开启后硬化体表装甲，大幅减免所受伤害，同时拉高移速与挥砍速率；自身伤势越重，神经回馈激发的近战破坏力越高。",
+      "军用科技旗舰级越伤越疯狂暴。开启后全身肌皮硬化成重甲，挨的刀枪越狠，神经痛觉反馈泵出的反击力道越狂暴，能硬撕轻型机甲装甲；代价是彻底丧失精细持枪瞄准能力，只能贴身肉搏碾压。",
     checks: ["body"],
+  },
+  {
+    id: "fuyutsuki-deck",
+    name: "冬月电子 3 型接入仓",
+    slot: "os",
+    rarity: "common",
+    price: 4500,
+    humanityCost: 3,
+    deckTraits: ["recovery"],
+    deckSlots: 4,
+    deckProfile: "冬月入门稳压仓（4 存储插槽）：皮实低发热、连续上传稳定，适合街头新手黑客",
+    ability:
+      "冬月电子面向自由技术员与街头新手推出的平价稳压接入仓。可同时挂载 4 款常用程序芯片，虽然算力不适合硬撼公司高阶黑冰，但散热回路皮实耐用，连续操控摄像头、电子门禁与街头安保设备时不易过载死机。",
+  },
+  {
+    id: "seocho-deck",
+    name: "瑞草轻量化接入仓",
+    slot: "os",
+    rarity: "uncommon",
+    price: 8500,
+    humanityCost: 2,
+    deckTraits: ["stealth", "recovery"],
+    deckSlots: 4,
+    deckProfile: "瑞草轻载仓（4 存储插槽）：神经负荷极低且隐蔽轻量，适合非专职黑客兼修",
+    ability:
+      "瑞草电子主打低排异、低功耗的轻量级接入仓。保留 4 个常规程序槽位，大幅减轻大脑神经占用，非常适合独狼、特工或中间人兼修基础监控干扰、致盲与潜行切入而不拖累整体义体负荷。",
+  },
+  {
+    id: "biodyne-deck",
+    name: "生物动力 2 型接入仓",
+    slot: "os",
+    rarity: "uncommon",
+    price: 11000,
+    humanityCost: 4,
+    deckTraits: ["spread"],
+    deckSlots: 5,
+    deckProfile: "生物动力均衡仓（5 存储插槽）：擅长快速扩散辅助程序与监控切入，适合街头多面手",
+    ability:
+      "生物动力出品的多用途中阶接入仓。支持 5 款热待命程序芯片，针对局域网多节点转发做了专门调校，便于在帮派据点或工厂内快速联动多个摄像头、炮塔与敌方义体制造混乱。",
+  },
+  {
+    id: "stephenson-deck",
+    name: "史蒂芬森科技 4 型接入仓",
+    slot: "os",
+    rarity: "epic",
+    price: 46000,
+    humanityCost: 7,
+    deckTraits: ["combat", "recovery"],
+    deckSlots: 7,
+    deckProfile: "史蒂芬森高阶仓（7 存储插槽）：7 槽高吞吐快上传，兼顾强攻与快速降温恢复",
+    ability:
+      "史蒂芬森科技引以为傲的高吞吐军商两用接入仓。配备 7 个热待命程序槽位与高频编解码总线，快速破解上传速度极快且具备出色的战中散热恢复能力，是资深潜网黑客在正面交火中连续压制敌阵的利器。",
+  },
+  {
+    id: "arasaka-sandevistan",
+    name: "荒坂“影步”斯安威斯坦",
+    slot: "os",
+    rarity: "epic",
+    price: 52000,
+    humanityCost: 9,
+    accelerator: true,
+    ability:
+      "荒坂隐秘行动组定制的静音型脊柱加速系统。激活时在压慢主观时间的同时抑制步态震动与伺服噪音，非常适合在守卫转头的刹那无声潜入、绕背处决或抢在探头扫描前穿过监控盲区。",
+  },
+  {
+    id: "animals-berserk",
+    name: "动物帮改装狂暴",
+    slot: "os",
+    rarity: "uncommon",
+    price: 13500,
+    humanityCost: 7,
+    ability:
+      "太平洲动物帮地下诊所流出的粗暴改装狂暴中枢。拆除了公司原厂的神经保护限流阀，激活时以极猛烈的肾上腺素与合成激素冲刷肌群，显著强化徒手摔跤、冲撞破门与重钝器挥击爆发力；但结束后的脱力与躁动感也格外强烈。",
   },
   // 循环系统
   {
@@ -719,6 +904,26 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
       "生化代谢逆转过滤器。当体表或血液遭受生化毒素腐蚀侵袭时，微型生化工厂瞬间将毒性成分逆转分解为高效细胞营养液，非但不扣减生命，反而转化为持续自愈回复。",
     checks: ["tech"],
   },
+  {
+    id: "toxin-cleanser",
+    name: "血液毒素净化阀",
+    slot: "circulatory",
+    rarity: "uncommon",
+    price: 8500,
+    humanityCost: 2,
+    ability:
+      "肝静脉旁路植入式生化滤芯。主动拦截并分解血液里的烈性酒精、致幻药、迷药与刺激性毒气残留，既能在毒雾弥漫的工业区里多撑一口气，也能在酒局谈判中千杯不倒保持头脑清醒。",
+  },
+  {
+    id: "auto-suppressant-injector",
+    name: "免疫抑制自动泵",
+    slot: "circulatory",
+    rarity: "rare",
+    price: 19000,
+    humanityCost: 1,
+    ability:
+      "重度镀铬者常用的血管内稳态监测泵。持续监测神经排异峰值与感官幻听先兆，一旦读数逼近赛博精神病临界线，便自动缓释随身预装的免疫抑制剂以压住躁狂与失控抽搐（需要随身备有抑制剂药匣才能起效）。",
+  },
   // 皮肤
   {
     id: "subdermal-armor",
@@ -728,7 +933,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 8000,
     humanityCost: 5,
     ability:
-      "植入真皮层下方的六边形凯夫拉复合陶瓷装甲板，在不改变体表外观的前提下抵御枪弹破片与利刃穿刺，有效削减肉身受到的直接创伤。",
+      "植入真皮层下的六边形凯夫拉陶瓷微甲。外表与常人无异，日常可稳妥挡下街头小口径手枪弹、匕首划伤与玻璃破片；但面对重口径步枪穿甲弹或近距霰弹轰击依然会被撕裂内伤。",
     checks: ["body"],
     armor: true,
   },
@@ -740,7 +945,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 3000,
     humanityCost: 2,
     ability:
-      "皮下微胶囊防火阻燃凝胶。体表接触高温与明火时纳米胶囊瞬间破裂碳化，形成隔热保护层，使你免受火焰附着与烧灼持续伤害。",
+      "皮下微胶囊阻燃凝胶层。遭遇燃烧瓶、热能武器、管道爆燃或火场突围时微囊瞬间碳化隔热，防止表皮起火与持续烧伤；但无法阻隔浓烟窒息，也不防实弹穿刺。",
     checks: ["body"],
   },
   {
@@ -751,7 +956,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 3000,
     humanityCost: 2,
     ability:
-      "皮下植入分布式石墨烯导电微网，遭高压电击或 EMP 扫过时瞬间将电流疏导至地面或外骨骼，彻底免疫电击麻痹与电弧灼伤。",
+      "皮下石墨烯导流微网。遭高压电警棍、电磁武器或强电弧击中时瞬间把电流疏导泄地，彻底免疫电击抽搐与义体短路死机；代价是全身含金属网，极易被安检磁门扫出异常。",
     checks: ["body"],
   },
   {
@@ -762,7 +967,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 24000,
     humanityCost: 6,
     ability:
-      "表皮下微型棱镜与自适应全息涂层。激活后偏折可见光与红外热源，将身体融入环境背景，提供数秒的高效光学隐形。",
+      "表皮微棱镜与自适应全息隐身膜。主动开启后在数秒内偏折可见光与部分热辐射，能贴着守卫鼻尖溜过走廊或在枪口下瞬间消失；但高速奔跑、雨雪水渍与强光照射下会泛起水波畸变轮廓，开启期间几乎零物理防弹力。",
     checks: ["cool"],
   },
   {
@@ -773,7 +978,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 42000,
     humanityCost: 4,
     ability:
-      "额定神经网架联动装甲。当网络接入仓连续上传破解进入高负载与散热间隙时，表皮纳米纤维自动硬化收缩，为专注潜网或对攻中的黑客提供额外防护屏障。",
+      "与网络接入仓神经总线联动的潜网硬化壳。平日柔软轻便，唯有深度潜网或接入仓连续上传进入高热空当时，表皮纳米纤维才自动锁硬成防弹硬壳，专防蹲掩体施法时被冷枪点杀；不装接入仓则毫无用处。",
     checks: ["intelligence"],
   },
   {
@@ -784,7 +989,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 55000,
     humanityCost: 7,
     ability:
-      "外层真皮纳米排斥格栅。在受到枪击时有几率弹开弹丸，并在完成滑铲突进或极限闪避的瞬间形成刚性偏折场，极大概率偏折来袭的子弹。",
+      "外层真皮反磁偏折格栅。必须在滑铲、急转翻滚或疾跑突进的瞬间才会激发切向偏折场，把擦身飞来的子弹斜着弹飞溅出火星；一旦站桩对枪或被按在角落里，偏折场根本起不来。",
     checks: ["reflexes"],
   },
   {
@@ -795,7 +1000,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 60000,
     humanityCost: 10,
     ability:
-      "痛觉神经分流缓冲器。将遭重创时骤然爆发的致命峰值伤害转化为缓释神经信号，在数秒内分段释放，避免被暴烈的一击当场打死。",
+      "创伤休克延迟分流器。挨下足以当场致命或令人昏厥的重创时，先强行把神经休克与剧痛冲峰截留下来、拖后数秒再分段释放，让你在倒下前硬挺着打完绝命一枪或扎进倾力治；但伤口本身并不会消失，拖过头依旧会失血倒地。",
     checks: ["body"],
   },
   {
@@ -806,7 +1011,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 72000,
     humanityCost: 3,
     ability:
-      "微型近场斥力偏折层。敌方与你距离越近，贴身攻击受到的微波偏折力道越强，在狭窄走廊肉搏与近身缠斗中大幅化解来自眼前的创伤。",
+      "贴身三步内触发的近场斥力气囊膜。面对扑咬、贴脸霰弹轰击、匕首捅刺或重拳砸胸时，体表瞬间爆出短促斥力波卸去大部分近距冲击；但对中远距离冷枪与狙击毫无防护效果。",
     checks: ["body"],
   },
   {
@@ -817,7 +1022,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 76000,
     humanityCost: 4,
     ability:
-      "应急创伤被动反应硬化层。在短时间内承受剧烈伤害后自动进入过饱和防护态，暂时巨幅提高对后续连续追击的缓冲与抵御能力。",
+      "受创激活的二次硬化装甲皮。第一发重击挨实后，皮下非牛顿流体在瞬间交联锁死，接下来数秒全身硬如防暴钢板，专防被冲锋枪连射或多人集火秒杀；代价是锁死期间关节僵硬、转身迟缓。",
     checks: ["body"],
   },
   {
@@ -828,7 +1033,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 78000,
     humanityCost: 5,
     ability:
-      "战术站位动态防护。当周围一定范围内没有近战敌人逼近时，皮下装甲板维持最严密的覆盖结构，为依托掩体中远距离对射提供额外护甲减伤。",
+      "掩体对射专用的定向正面偏折甲。只要周身数步内没有敌人贴脸逼近，整张皮甲的微场便全数集中到胸腹正面硬扛中远距离枪弹；一旦被近战杀手突到脸上，正面护场就会瞬间失衡瓦解。",
     checks: ["body"],
   },
   {
@@ -839,7 +1044,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 80000,
     humanityCost: 5,
     ability:
-      "针对后背与盲区强化的全向复合护甲板，在遭遇十字交叉火力包夹或背后偷袭时，重点分担来自侧翼与后方的偷袭贯通伤害。",
+      "专防背后偷袭与十字火力的背脊龟甲覆板。重点加厚后背、颈后与两侧肋腹的复合护板，遭冷枪打背、暗杀背刺或穿街撤离时抗打力极强，正面轻便不碍事，但也意味着正面硬冲不如重甲扎实。",
     checks: ["body"],
   },
   {
@@ -850,7 +1055,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 82000,
     humanityCost: 7,
     ability:
-      "与克伦齐科夫协同的动能吸收网。感知加速结束回到正常时空后的致命空当里，皮下装甲过载运转，极大比例化解来袭伤害的冲击。",
+      "专配克伦齐科夫的减速收尾护盾网。每次滑铲或闪避加速结束、人从慢动作跌回常速最容易挨黑枪的瞬间，表皮过载撑起一两秒的高强吸能层替你兜底；未安装克伦齐科夫时完全不会触发。",
     checks: ["reflexes"],
   },
   {
@@ -861,7 +1066,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 85000,
     humanityCost: 8,
     ability:
-      "受击高压放电皮层。肉体遭受打击时有几率瞬间激发体内蓄电池，向周围数米无差别释放耀眼的高压电弧，震飞并电殛贴近的围攻者。",
+      "受击触发的无差别高压反伤皮层。挨打破皮瞬间体表电容器爆出刺眼电弧，把贴身围殴的敌人震飞电麻；隐患是放电不分敌我，极易电翻身旁队友、引燃漏油现场或烧毁贴身脆弱电子物证。",
     checks: ["tech"],
   },
   {
@@ -872,8 +1077,49 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 95000,
     humanityCost: 12,
     ability:
-      "军用级中枢痛觉阻断芯片。直接过滤掉大脑神经系统接收到的所有痛觉信号，肉体无论遭受何种重创都能从容化解部分震荡，保持绝对冷静。",
+      "军用级中枢痛觉全断阀。直接切断痛觉信号上传，断肋中弹也能面不改色稳手扣扳机，遭遇严刑拷打照样面无表情不松口；致命隐患是极易察觉不到体内大出血或脏器破裂，一不小心就硬撑到失血昏死。",
     checks: ["body"],
+  },
+  {
+    id: "personal-sound-silencer",
+    name: "个人声学消音膜",
+    slot: "integumentary",
+    rarity: "rare",
+    price: 20000,
+    humanityCost: 4,
+    ability:
+      "植入表皮下的微型反相声波阵列。激活后在体表周边形成局部降噪包络，大幅压低脚步、衣物摩擦、拉动枪栓与低声交谈向外传播的声响，极适合近距潜入与室内窃听。",
+  },
+  {
+    id: "smuggler-cavity",
+    name: "皮下屏蔽走私腔",
+    slot: "integumentary",
+    rarity: "uncommon",
+    price: 9500,
+    humanityCost: 3,
+    ability:
+      "在肋下或侧腹植入带法拉第屏蔽层的皮下暗格，外表经仿真人造皮肤无缝掩盖。可隐蔽携带数张加密芯片、小型药剂、微型工具或关键证物，避开常规手工搜身与浅层安检门扫描（深度医用 X 光或军用级穿透安检仍可能察觉）。",
+  },
+  {
+    id: "chrome-plating-skin",
+    name: "镀铬装饰装甲皮",
+    slot: "integumentary",
+    rarity: "uncommon",
+    price: 11000,
+    humanityCost: 4,
+    armor: true,
+    ability:
+      "夜之城潮流狂人与老派赛博朋克偏爱的镜面金属覆皮。兼具轻度防割耐磨的皮表防护与极高的视觉辨识度，在夜店、帮派谈判或高调社交场合自带压迫气场，但也让你在暗巷藏身时更显眼。",
+  },
+  {
+    id: "holo-disguise-weave",
+    name: "全息伪装覆膜",
+    slot: "integumentary",
+    rarity: "epic",
+    price: 44000,
+    humanityCost: 6,
+    ability:
+      "进阶电致变色与微全息表皮织网。可随时切换肤色、遮掩显眼的帮派纹身与旧伤疤，并在监控摄像头低光视野中制造轮廓模糊失真，大幅提高混入人群甩掉盯梢的成功率。",
   },
   // 骨骼
   {
@@ -896,7 +1142,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 8000,
     humanityCost: 3,
     ability:
-      "多孔碳化硅骨髓增厚涂层，极大增强四肢挥舞与下劈时的动量与骨密度，令每一次钝击与大猩猩拳头都带着砸碎装甲的沉重打击感。",
+      "向四肢骨腔灌注高密度碳化硅配重骨髓，挥拳抡锤如砸实心铁砣，徒手就能捶裂防暴盾与门锁；代价是整副身架明显增重，涉水极易下沉、在老旧木板或薄屋顶潜行也容易踩出异响。",
     checks: ["body"],
     attributes: { body: 1 },
   },
@@ -908,7 +1154,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 6000,
     humanityCost: 3,
     ability:
-      "液压缓冲仿生骨关节，精准吸收大威力枪械开火时传递至腕部与肩部的暴虐后坐力，令枪口在连续射击后瞬间归位回正。",
+      "肩肘腕三级液压稳枪关节，专门吃掉大口径左轮、霰弹枪与重步枪开火时的剧烈上跳，连射时枪口像焊在三脚架上般回正；不增加肉体抗打力，只管端得稳。",
     checks: ["body"],
   },
   {
@@ -919,7 +1165,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 20000,
     humanityCost: 5,
     ability:
-      "全面替换并强化人体骨架与内脏支撑结构，大幅度拔高肉体的整体生理耐久上限与承伤生命极限。",
+      "给胸腔、骨盆与脏器加装全套内嵌式防撞骨笼。面对高处坠落、车祸飞撞或穿透伤时，能硬生生保住心肺与主干骨不被震碎，是极厚的保命底盘；但整套手术排异感重、术后复健期长。",
     checks: ["body"],
     attributes: { body: 2 },
   },
@@ -931,7 +1177,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 4500,
     humanityCost: 8,
     ability:
-      "骨骼生物药剂吸收增幅骨架。在注射治疗药剂时顺势激活全身肌骨微循环，在数秒内大幅提高护甲韧性并降低体力消耗，连续使用效果递增。",
+      "专打嗑药拼命流的骨髓吸收增幅架。平日与常人无异，唯有扎进倾力治或战斗兴奋剂后的十几秒内，全身骨节充血锁紧、力气与抗击打暴涨；若身上断药，这套沉重骨架便毫无用处。",
     checks: ["body"],
   },
   {
@@ -942,7 +1188,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 10000,
     humanityCost: 5,
     ability:
-      "多层记忆合金弹性关节，在成功格挡或卸力化解来袭攻击的瞬间将冲击力柔性吸收扩散，极大减轻穿透至体内的残留震荡伤害。",
+      "多层记忆合金卸力格挡关节。近战招架重锤、刀劈或硬接扫腿的瞬间，关节像高弹减震器般吃掉震荡并顺势反震弹开对手兵器，替你抢出反击空当；但不防子弹正面直击。",
     checks: ["body"],
   },
   {
@@ -953,7 +1199,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 11000,
     humanityCost: 5,
     ability:
-      "神经骨骼应急电容。当网络接入仓在高强度对攻中濒临过载锁死时，骨骼内嵌的辅助神经束紧急介入分流散热，加快神经回路恢复稳态。",
+      "把整根脊柱改造成黑客大号散热片的神经骨电容。接入仓烧到临界红线即将锁死时，骨骼导热束瞬间分流泄压、救下脑机免于烧毁；泄压时后背会明显发烫冒汗。",
     checks: ["intelligence"],
   },
   {
@@ -964,7 +1210,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 24000,
     humanityCost: 5,
     ability:
-      "压电骨骼能量收集器。骨骼承受物理打击与冲击波形变时，压电晶体将机械应力转化为稳压电脉冲，反哺网络接入仓缓冲过载压力。",
+      "压电骨骼受击发电模块。前排硬顶枪弹、挨拳或吃冲击波时，骨骼形变会直接把机械震荡转化成稳压电流反哺接入仓，专为边扛火力边放破解的战斗黑客续命。",
     checks: ["intelligence"],
   },
   {
@@ -975,7 +1221,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 45000,
     humanityCost: 5,
     ability:
-      "外骨骼重甲蹲姿锁固结构。采取蹲伏战术姿态时，骨骼液压插销与护甲咬合形成重盾堡垒，以牺牲移速为代价大幅提升正面护甲抗性。",
+      "蹲姿锁固型外骨骼重盾架。一旦半蹲或伏低架枪，骨节液压插销咔哒咬合成人体移动掩体，正面硬扛常规步枪点射不退半步；代价是蹲姿锁固期间挪步慢如蜗牛，侧面极易被绕后。",
     checks: ["body"],
   },
   {
@@ -986,7 +1232,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 50000,
     humanityCost: 7,
     ability:
-      "濒危骨骼应急硬化系统。生命体征跌破半数警戒线时，骨骼微通道释放高分子硬化剂锁紧受损部位，在生死关头提供极高额的护甲屏障。",
+      "重伤急救型自动凝骨骨架。伤势跌破警戒线、骨裂见红时，微通道瞬间喷出快凝高分子树脂把断骨临时焊死固定，让你断了肋骨或小腿也能咬牙杀出重围；脱险后必须找义体医生清创拆胶。",
     checks: ["body"],
   },
   {
@@ -997,7 +1243,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 78000,
     humanityCost: 5,
     ability:
-      "动能循环自适应骨骼。在体力充沛未受衰竭影响时，骨架处于最佳机械吸收角度，大幅提升化解与弹开重击的概率。",
+      "体能驱动的高频共振偏折骨。只要体力充沛、保持冲刺跑位，全身骨架会维持高频微振，大幅提高斜向弹开流弹与重击的概率；一旦力竭喘气或被迫站桩死守，防护便立刻回落。",
     checks: ["body"],
   },
   {
@@ -1008,9 +1254,30 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 88000,
     humanityCost: 8,
     ability:
-      "重型装甲级钛钽复合全身骨架。骨密度与结构强度提升至战车防护等级，为全身提供极其厚重坚实的护甲提升。",
+      "军用装甲级钛钽复合全身重骨。把人体骨架替换成战车防滚架级别的死沉硬骨，正面硬吃重口径扫射与破门撞墙照样站得笔直；代价是自重极大，脚步沉重难潜行、落入深水几乎立刻下沉。",
     checks: ["body"],
     attributes: { body: 1 },
+  },
+  {
+    id: "cargo-spine-frame",
+    name: "工业负重脊柱架",
+    slot: "skeleton",
+    rarity: "common",
+    price: 4800,
+    humanityCost: 3,
+    ability:
+      "码头搬运工与恶土拾荒者常用的工业合金脊椎承重支架，可额外从容背负重型大件装备（已计入【当前状态】携带上限），便于拆搬报废机甲零件或背负伤员撤离；代价是弯腰钻狭缝与翻滚不够灵便。",
+  },
+  {
+    id: "shock-disperser-ribs",
+    name: "肋骨防爆缓冲架",
+    slot: "skeleton",
+    rarity: "rare",
+    price: 21000,
+    humanityCost: 4,
+    armor: true,
+    ability:
+      "在胸廓内外加装蜂窝吸能钛合金肋骨与减震软骨。面对近距离手雷冲击波、高速车祸撞击或重钝器捶胸时能有效分散胸腔震荡，显著降低内脏出血与肋骨骨折风险。",
   },
   // 手部
   {
@@ -1076,8 +1343,68 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     price: 45000,
     humanityCost: 3,
     ability:
-      "战术握柄记忆蒙皮，在抓握飞刀或短刃脱手投掷的刹那精准修正指尖微动，大幅提升飞刀命中要害时的致命暴击率。",
+      "掌心记忆防滑蒙皮与指尖配重微调垫。脱手掷出飞刀、战斧或小刀的刹那稳住旋转重心，让飞刃极易钉进敌方喉颈、手腕或面甲缝隙；对热兵器无额外收益。",
     checks: ["reflexes"],
+  },
+  {
+    id: "tyger-claws-tattoo",
+    name: "虎爪帮智能联锁纹身",
+    slot: "hands",
+    rarity: "uncommon",
+    price: 7500,
+    humanityCost: 1,
+    ability:
+      "日本街与歌舞伎一带虎爪帮秘传的皮下导墨智能纹身。既能像智能连接一样无缝对接智能武器的雷达追踪锁敌，又自带信号扰频回路，让虎爪帮制式智能枪械难以锁定佩戴者；不过这副纹身在虎爪帮地盘外也自带敏感帮派印记。",
+  },
+  {
+    id: "power-grip",
+    name: "强力液压握持",
+    slot: "hands",
+    rarity: "uncommon",
+    price: 8500,
+    humanityCost: 3,
+    ability:
+      "掌骨与指节植入微型液压增压缸与防滑微刺，抓握力远超血肉之躯。单手攀附飞驰车门、硬拧生锈阀杆、拉住坠落同伴或近身夺枪锁腕时都牢不可破，也能单手稳稳控住大口径重型枪械。",
+  },
+  {
+    id: "tech-diagnostic-palm",
+    name: "掌心工程诊断接口",
+    slot: "hands",
+    rarity: "common",
+    price: 4200,
+    humanityCost: 2,
+    ability:
+      "虎口与掌心内嵌多协议物理诊断针脚与绝缘测电探针。手掌贴上电子门禁、载具电控盒、无人机外壳或受损义体即可读取底层故障码与电路走向，极大便利现场拆解、跨接点火与硬件抢修。",
+  },
+  {
+    id: "palm-jammer",
+    name: "近场干扰掌模",
+    slot: "hands",
+    rarity: "rare",
+    price: 21000,
+    humanityCost: 4,
+    ability:
+      "掌心隐蔽集成微型定向电磁脉冲发生器。近身贴靠或拍击监控摄像头、门禁读卡器、对讲耳麦或敌方外露义体接口时，可令短距内的未屏蔽电子设备陷入短暂雪花干扰或失灵，但每次放电后需要数分钟重新充能。",
+  },
+  {
+    id: "precision-manipulators",
+    name: "精密稳定机械手",
+    slot: "hands",
+    rarity: "rare",
+    price: 17000,
+    humanityCost: 3,
+    ability:
+      "搭载陀螺仪消抖关节与高灵敏触觉压力传感器，彻底消除手指在肾上腺素飙升、失血或严寒下的细微震颤。无论拆除精密引信、显微改枪、清创缝合还是无声顺走目标贴身物品都稳如外科机械臂。",
+  },
+  {
+    id: "concealed-razor-knuckles",
+    name: "暗藏指节微刃",
+    slot: "hands",
+    rarity: "common",
+    price: 3800,
+    humanityCost: 2,
+    ability:
+      "指关节缝隙内隐藏可瞬间弹出的碳化钨短微刃，平时收拢后与常人双手无异，能轻松躲过目视检查。贴身肉搏、遭人挟持反制或割断扎带绳索时能打对手一个措手不及。",
   },
   // 手臂
   {
@@ -1134,6 +1461,146 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
       "前臂内置微型重武器发射导轨。手臂翻开即化为微型榴弹炮，轰出高爆弹丸撕裂掩体与密集敌群，提供即时可用的单兵重型爆破火力。",
     checks: ["tech"],
   },
+  {
+    id: "thermal-gorilla-arms",
+    name: "热能大猩猩手臂",
+    slot: "arms",
+    rarity: "rare",
+    price: 24000,
+    humanityCost: 8,
+    ability:
+      "加装高温热感指节电池的重型液压义臂。既保留徒手撬门砸甲的狂暴蛮力，挥拳蓄力时拳面还会亮起炽红高温，重击可引燃目标衣物、焦化皮下软组织并软化轻质金属锁扣。",
+  },
+  {
+    id: "electric-gorilla-arms",
+    name: "电磁大猩猩手臂",
+    slot: "arms",
+    rarity: "rare",
+    price: 24000,
+    humanityCost: 8,
+    ability:
+      "内置高压电容储能核心的液压义臂。重拳砸落瞬间释放强电流脉冲，击碎护甲的同时麻痹敌方神经并干扰无人机、机甲与重度义体对手的伺服系统。",
+  },
+  {
+    id: "toxic-gorilla-arms",
+    name: "化学大猩猩手臂",
+    slot: "arms",
+    rarity: "rare",
+    price: 24000,
+    humanityCost: 8,
+    ability:
+      "指节暗藏高压生化毒剂微喷孔的重型义臂。重击破防的同时将腐蚀性神经毒素压入创口，令对手迅速陷入反胃、虚弱与持续化学灼伤，在持久肉搏中瓦解强壮目标的战力。",
+  },
+  {
+    id: "thermal-mantis-blades",
+    name: "热能螳螂刀",
+    slot: "arms",
+    rarity: "rare",
+    price: 28000,
+    humanityCost: 9,
+    ability:
+      "刀脊嵌入高频加热丝的赤热单分子螳螂刀。展开时双刃灼红发烫，高速斩击与飞跃扑杀能轻易切开复合防弹衣并造成严重高温烧灼与引燃，代价是挥舞时在黑暗中极易暴露自身位置。",
+  },
+  {
+    id: "electric-mantis-blades",
+    name: "电磁螳螂刀",
+    slot: "arms",
+    rarity: "rare",
+    price: 28000,
+    humanityCost: 9,
+    ability:
+      "沿单分子刃口缠绕高压电弧导轨的电磁螳螂刀。每次斩击与格挡都伴随噼啪蓝电，对重度镀铬佣兵、安保机器人与炮塔的电子关节具有极强过载麻痹效果。",
+  },
+  {
+    id: "toxic-mantis-blades",
+    name: "化学螳螂刀",
+    slot: "arms",
+    rarity: "rare",
+    price: 28000,
+    humanityCost: 9,
+    ability:
+      "前臂储液囊与刃槽相连的生化剧毒螳螂刀。锋锐单分子刃切开防线的同时向伤口渗入烈性神经毒液，即便未能一击毙命也能迅速令对手肢体僵麻、战力崩盘。",
+  },
+  {
+    id: "thermal-monowire",
+    name: "热能单分子线",
+    slot: "arms",
+    rarity: "rare",
+    price: 27000,
+    humanityCost: 8,
+    ability:
+      "通电灼红的高温单分子切割鞭。挥舞时如炽烈火鞭横扫数米范围，在切割多目标并上传快速破解的同时点燃可燃物、留下焦灼创面，极其适合在狭窄走廊压制围攻敌群。",
+  },
+  {
+    id: "electric-monowire",
+    name: "电磁单分子线",
+    slot: "arms",
+    rarity: "rare",
+    price: 27000,
+    humanityCost: 8,
+    ability:
+      "加载高压电磁脉冲发生器的导电单分子线。横扫瞬间不仅能切开轻甲并经物理链路上载破解，还能沿金属线束向复数敌人与机械哨兵同步灌入电击麻痹电流。",
+  },
+  {
+    id: "toxic-monowire",
+    name: "化学单分子线",
+    slot: "arms",
+    rarity: "rare",
+    price: 27000,
+    humanityCost: 8,
+    ability:
+      "表面微孔浸润挥发性生化腐蚀液的单分子切割线。甩击范围广且动静隐蔽，割裂血肉的同时将化学毒雾与腐蚀剂顺着浅表伤迅速扩散，令成片敌人陷入中毒虚弱。",
+  },
+  {
+    id: "thermal-projectile-launch",
+    name: "热能射弹发射系统",
+    slot: "arms",
+    rarity: "rare",
+    price: 26000,
+    humanityCost: 8,
+    ability:
+      "装填微型铝热燃烧榴弹的前臂发射导轨。轰击命中后在目标区域炸开猛烈火海与高温飞溅，擅长逼出掩体后的射手、焚毁易燃货栈与封锁狭窄通道。",
+  },
+  {
+    id: "electric-projectile-launch",
+    name: "电磁射弹发射系统",
+    slot: "arms",
+    rarity: "rare",
+    price: 26000,
+    humanityCost: 8,
+    ability:
+      "装填微型 EMP 电磁震荡弹的前臂发射导轨。引爆时释放局部强电磁脉冲，能瞬间瘫痪炮塔、无人机、监控探头与重甲敌人的义体回路，兼具强效控场与破盾能力。",
+  },
+  {
+    id: "toxic-projectile-launch",
+    name: "化学射弹发射系统",
+    slot: "arms",
+    rarity: "rare",
+    price: 26000,
+    humanityCost: 8,
+    ability:
+      "装填高压生化腐蚀毒气弹的前臂发射导轨。弹头炸裂后迅速弥漫刺激性腐蚀毒雾，令封闭房间或掩体后的肉身敌人剧烈呛咳中毒、视线模糊，便于强攻清场。",
+  },
+  {
+    id: "tech-utility-arm",
+    name: "技师工程义臂",
+    slot: "arms",
+    rarity: "uncommon",
+    price: 11000,
+    humanityCost: 4,
+    ability:
+      "深受流浪者技师与地下改装师喜爱的模块化工具义臂。前臂收纳微型等离子焊枪、折叠棘轮扳手、绝缘剥线钳与精密撬杆，无论荒野抢修载具、切开铁丝网与锁芯、改装枪械部件都能信手拈来；危急时焊枪也可贴身灼烧逼退敌人。",
+  },
+  {
+    id: "surgical-prosthetic-arm",
+    name: "战地外科义臂",
+    slot: "arms",
+    rarity: "rare",
+    price: 19000,
+    humanityCost: 5,
+    ability:
+      "创伤小组退役医护与地下义体医生青睐的精密医疗义臂。前臂内置折叠显微手术剪、高频止血电凝针、无菌缝合器与创伤凝胶喷口，可在枪林弹雨间隙或简陋安全屋里稳手取弹头、清创缝合与应急拆装受损义体。",
+  },
   // 腿部
   {
     id: "prosthetic-legs",
@@ -1188,6 +1655,56 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
       "足底消音聚合物软垫与吸震步态调节器。消除奔跑、落地与潜行时的脚步声，即便贴着守卫背后移动也不会引发警觉。",
     checks: ["cool"],
   },
+  {
+    id: "mag-grip-legs",
+    name: "磁吸攀爬足",
+    slot: "legs",
+    rarity: "rare",
+    price: 18000,
+    humanityCost: 4,
+    ability:
+      "足底与胫骨嵌入高磁通电磁吸盘与防滑合金微爪。激活后可在钢铁建筑外墙、集装箱侧面、飞驰货车车顶与雨夜湿滑脚手架上稳步攀行，大幅拓展垂直潜入与绝境脱身路线；在非磁性混凝土或玻璃墙面上仅能依靠微爪提供常规防滑。",
+  },
+  {
+    id: "anchor-hydraulic-legs",
+    name: "重装液压锚定腿",
+    slot: "legs",
+    rarity: "rare",
+    price: 21000,
+    humanityCost: 6,
+    ability:
+      "脚跟与小腿配备展开式液压地锚与反冲阻尼柱。开启锚定后瞬间扎稳下盘，能单兵稳稳压住重机枪、狙击炮的狂暴后坐力，也能正面顶住车辆低速剐蹭、狂暴冲撞与近距爆破气浪而不被掀翻。",
+  },
+  {
+    id: "drop-damper-legs",
+    name: "高空缓冲义腿",
+    slot: "legs",
+    rarity: "uncommon",
+    price: 12000,
+    humanityCost: 3,
+    ability:
+      "膝踝串联多级氮气减震筒与碳纤弹性胫骨。可从数层高楼、高架桥或天台直接纵身跃下并大幅吸收冲击、无声滚翻卸力，避免腿骨断裂，极适合高空撤离与屋顶空降突袭。",
+  },
+  {
+    id: "badlands-runner-legs",
+    name: "恶土全地形义腿",
+    slot: "legs",
+    rarity: "uncommon",
+    price: 10000,
+    humanityCost: 3,
+    ability:
+      "流浪者氏族偏爱的防沙密封耐磨义腿。强化足弓推进力与防尘自洁关节，在恶土流沙、碎石坡、垃圾场泥泞与崎岖岩壁上长途奔袭不易打滑、卡沙或机械故障。",
+  },
+  {
+    id: "holster-calf-legs",
+    name: "暗藏快拔义腿",
+    slot: "legs",
+    rarity: "rare",
+    price: 16000,
+    humanityCost: 4,
+    ability:
+      "小腿外侧改造为液压弹出式法拉第屏蔽暗匣，外表被仿真皮肤与裤管遮盖。可暗藏一把紧凑型手枪、折叠短刃、备用弹匣或机密芯片，避开常规手工搜身与浅层安检，俯身微屈膝即可弹手快拔抢占先机。",
+  },
   // 不朽义体：军用级和原型，只从剧情获得
   {
     id: "maxtac-mantis-blades",
@@ -1226,7 +1743,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 13,
     iconic: true,
     ability:
-      "军工原型电磁回收中枢。技术武器蓄力弹丸命中敌人时，逆向感应脉冲可刺激神经系统并回收能量，迅速恢复生命值与体力。",
+      "军工原型脉冲吸血中枢。必须配合技术武器电磁蓄满射击才有效：弹丸洞穿敌人瞬间，逆向感应电流会沿手臂电缆回流，同时稳住心率、止血回气并冲散连射疲劳；用普通威能枪或冷兵器时完全是死重。",
     checks: ["tech"],
   },
   {
@@ -1238,7 +1755,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 12,
     iconic: true,
     ability:
-      "军规级动能配重与力学整流器。重塑双手力学传导，大幅压低挥舞重型钝器与掌控重武器连发时的体力消耗。",
+      "军规级重械配重整流掌。把双手力矩重排成重武器专用炮架，端轻机枪、反器材狙击炮或双手重锤时稳如焊死，甚至能抵着掩体单臂扫射压制；代价是高额神经负荷且双掌沉重，做撬锁拆弹等精细活极其笨拙。",
     checks: ["body"],
   },
   {
@@ -1250,7 +1767,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 17,
     iconic: true,
     ability:
-      "转基因高密度生物几丁质皮下护层。提供接近重型装甲的被动防护硬度，并在脱离火线后加速伤口凝血与组织修复。",
+      "生物技术禁忌的转基因几丁质硬壳。皮下长出昆虫甲壳般的致密生物重甲，正面抗弹直逼防弹插板且脱战后自动凝血结痂；代价是极高神经排异、皮肤触感冰硬粗糙，安检与贴身接触极易露馅。",
     checks: ["body"],
     armor: true,
   },
@@ -1263,7 +1780,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 2,
     iconic: true,
     ability:
-      "深度改装的过载运动神经韧带。持续向腿部肌群输送高频脉冲，在各种地形与复杂交火中提供更高的常驻奔跑速度。",
+      "拆掉安全限频的常驻高频冲刺韧带。不同于火车王肌腱只在起步冲一下，只要双脚落地就能持续保持猎犬般的变态奔跑与侧移速度，极难被火力封锁；但高速过弯惯性极大，在窄巷急停容易撞墙打滑。",
     checks: ["reflexes"],
   },
   {
@@ -1275,7 +1792,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 15,
     iconic: true,
     ability:
-      "超密合金外置仿生骨架。钛合金支撑架直接铆接在核心骨骼上，大幅强化躯干承重并提供强劲的物理减伤。",
+      "直接铆接在主干骨上的外露超密合金防弹撑架。便宜、粗暴、极度扛揍，硬顶街头乱枪与撞击都纹丝不动；代价是极重的人性消耗，且肩背和锁骨处留有藏不住的狰狞外露铆钉，进高档场所必遭盘查。",
     checks: ["body"],
   },
   {
@@ -1287,7 +1804,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 0,
     iconic: true,
     ability:
-      "彻底放弃传统接入仓、斯安威斯坦或狂暴系统的极端改装中枢。以腾出的中枢神经带宽为代价，大幅拔高角色的整体义体负荷上限，允许在全身加装更多重型战斗义体。",
+      "彻底放弃接入仓、斯安威斯坦与狂暴三大操作系统的极端军用分流器。腾出全部中枢神经带宽换取极高的全身义体承载耐受，专为浑身塞满重甲、重臂与战斗骨骼的铁皮怪物打造。",
     checks: ["tech"],
   },
   {
@@ -1299,13 +1816,13 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 14,
     iconic: true,
     ability:
-      "美西螈仿生皮下纳米修复再生层。每当在战场上击杀一名敌方目标，强力神经刺激信号瞬间流转全身，显著缩短所有处于过载冷却中的义体就绪周期。",
+      "美西螈仿生战果再生皮层。每当你在枪林弹雨中亲手放倒一名敌人，皮下微腺便释放强效神经修复信号，瞬间帮全身进入过热冷却的王牌义体大幅回温；若陷入僵持打不出击杀，只相当于普通覆皮。",
     checks: ["body"],
   },
   {
     id: "ram-reallocator",
     deckTraits: ["recovery"],
-    deckProfile: "神经运算总线应急重置，接入仓缓冲见底时可强制回稳",
+    deckProfile: "军工双轨应急配平核，危急关头挪用感官算力瞬间清零接入仓积热",
     name: "RAM 配平",
     slot: "frontalCortex",
     rarity: "legendary",
@@ -1313,7 +1830,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 8,
     iconic: true,
     ability:
-      "额叶神经应急缓存重置芯片。当网络接入仓逼近热过载临界点时，瞬间强制分流重构神经运算总线，短时间内清空积压噪点并恢复满载稳态。",
+      "军工级双轨神经应急配平核。接入仓过热见底时，可强行把非核心听觉与味觉神经带宽瞬间抽调过去清零积热、满血续放一轮高阶破解；触发后的数秒内世界会短暂失声发白。",
     checks: ["intelligence"],
   },
   {
@@ -1325,7 +1842,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 10,
     iconic: true,
     ability:
-      "生体神经突触优化器。连通接入仓快速破解与视觉解算系统，允许针对要害上传的攻击性快速破解造成暴击伤害。",
+      "把快速破解与视觉微表情同步的脑波共振核心。趁目标惊愕、失神或换弹分心的神经空隙强行击穿其脑内防火墙与痛觉中枢，令常规电磁/熔断破解打出致命烧脑重创；连续超频极易引发剧烈偏头痛与鼻血。",
     checks: ["intelligence"],
   },
   {
@@ -1337,7 +1854,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 9,
     iconic: true,
     ability:
-      "近场逆向偏折装甲。目标与自身的距离越近，皮下装甲激发的偏折力场越强，在贴身近战时提供更高的伤害减免。",
+      "狗镇黑市流出的近战逆向力场皮。敌我距离贴得越近，表皮反向电磁偏折场就越狂暴——贴脸挥刀顶着霰弹枪口也能硬吃半数冲击；但拉开中远距离对枪时力场几乎衰减归零。",
     checks: ["body"],
   },
   {
@@ -1349,7 +1866,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 8,
     iconic: true,
     ability:
-      "神经应急过载芯片。当生命体征跌破临界红线时，瞬间超频运动神经，触发极高倍率的时间膨胀，为脱身或绝境反击争取关键窗口。",
+      "绝境反杀用的原型时间裂隙芯片。不同于反应调谐器只帮你保命逃跑，当生命跌破死线瞬间它会把周遭时间近乎彻底冻结，足够你反手挨个点杀围攻者逆转生死；结束后伴随短暂视线雪花与双耳轰鸣。",
     checks: ["reflexes"],
   },
   {
@@ -1361,7 +1878,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 6,
     iconic: true,
     ability:
-      "远距战术弹道解算中枢。目标距离自身越远，视觉系统提供的弱点穿透与风偏补偿越精准，在中长距离狙杀与掩体对射时暴击伤害获得显著增幅。",
+      "专为天台狙击与跨街点射打造的弹道气象解算中枢。自动换算高空横风、雨幕折射与百米下坠，拉得越远落点越致命；但在狭小室内近身混战时，频繁长短焦切换反而容易令人眩晕。",
     checks: ["cool"],
   },
   {
@@ -1373,7 +1890,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 8,
     iconic: true,
     ability:
-      "手腕与手掌肌腱等距力矩稳定器。重塑每一次握持与发力力矩，大幅度降低挥舞冷兵器重击、空手搏击以及全自动重武器扫射压制时的体力与耐力消耗。",
+      "专精持久贴身肉搏与连斩的等距锁力腕。无论挥舞武士刀狂斩、大猩猩臂连续重拳还是端着冲锋枪长连射，双腕肌腱都像装了棘轮锁般极难酸软脱力，专克体力耗尽的拉锯恶战。",
     checks: ["body"],
   },
   {
@@ -1385,7 +1902,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 5,
     iconic: true,
     ability:
-      "岐路司光学不朽原型义眼。搭载超高帧率战术扫描仪，在交火中持续标记目标的防弹薄弱点，显著提升全局暴击概率。",
+      "岐路司未公开的超高帧率弱点猎杀原型眼。交火中实时拆解敌方护甲接缝、关节裸露缆线与颈动脉搏动点并在准星高亮，让普通手枪也能专挑致命死穴一击放倒重装目标；但不带透视穿墙能力。",
     checks: ["cool"],
   },
   {
@@ -1397,7 +1914,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 7,
     iconic: true,
     ability:
-      "战斗触发神经导引。从潜行被发现或主动开火打响战斗时，向肌群注入兴奋剂，提供数十秒的高速冲刺加成。",
+      "狗镇特工的暴露突围狂飙针。潜行刚败露或刚开第一枪的刹那，直接向肌群注入军用鸡尾酒兴奋剂，数十秒内跑跳翻越如猎犬脱缰且无视轻伤减速；药效退去后心跳狂躁，短时间内难以稳手静默狙击。",
     checks: ["reflexes"],
   },
   {
@@ -1409,7 +1926,7 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
     humanityCost: 12,
     iconic: true,
     ability:
-      "全身真皮自适应重塑矩阵。根据安装者的技术专长动态调节皮下分子结构，提升物理护甲、元素抗性与防爆减伤。",
+      "全天候环境自适应分子重塑皮。随所处险境主动调整表皮结构——进火场隔热、入毒雾闭孔、遭爆破吸震、遇流弹硬化，宛如长在身上的全能防护服；但在极端温差或毒火齐袭下切换需要数秒适应空当。",
     checks: ["tech"],
   },
 ]);

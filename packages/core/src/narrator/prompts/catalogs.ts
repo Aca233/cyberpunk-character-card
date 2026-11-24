@@ -32,9 +32,11 @@ export function worldObjectsIndexSection(world: WorldState): string | undefined 
       const holder =
         obj.holder === "player"
           ? "玩家持有"
-          : obj.holder.startsWith("npc:")
-            ? `人物 ${obj.holder.slice(4)} 持有`
-            : `存放于 ${obj.location ?? obj.holder}`;
+          : obj.holder.startsWith("shop:")
+            ? `商店 ${obj.holder.slice(5)} 在库`
+            : obj.holder.startsWith("npc:")
+              ? `人物 ${obj.holder.slice(4)} 持有`
+              : `存放于 ${obj.location ?? obj.holder}`;
       return `- ${id} ${def.name}（${holder}；来源：${obj.origin}）`;
     });
   return `【本存档已登记的独立物件索引】（复用同一 id，禁止重复新建）\n${lines.join("\n")}`;

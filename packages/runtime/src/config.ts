@@ -64,15 +64,23 @@ export const ProfileSchema = ProfileBase.refine(
 );
 export type Profile = z.infer<typeof ProfileSchema>;
 
-export const ProfilePatchSchema = z.strictObject(tunables).partial();
+export const ProfilePatchSchema = z
+  .strictObject({
+    ...tunables,
+    /** 传 null 表示清空已保存的附挂向量模型 */
+    embeddingModel: z.string().min(1).nullable().optional(),
+  })
+  .partial();
 
-/** 设置页新建方案：名字要能放进网址；密钥建好以后另外填 */
+/** 设置页新建方案：名字要能放进网址；密钥建好以后另外填，或由 copyKeyFrom 在本地直接复制原连接密钥 */
 export const NewProfileSchema = ProfileBase.omit({ apiKey: true, apiKeyEnv: true }).extend({
   name: z
     .string()
     .min(1)
     .max(40)
     .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "方案名只能用字母、数字、点、下划线和短横线"),
+  /** 复制已有连接时，在本地运行时直接继承其 apiKey / apiKeyEnv，不向前端回传密钥 */
+  copyKeyFrom: z.string().min(1).max(40).optional(),
 });
 
 const RolesSchema = z.strictObject({
@@ -80,6 +88,10 @@ const RolesSchema = z.strictObject({
   aux: z.string().min(1).optional(),
   /** 传 null 表示停用/卸载文生图模型 */
   image: z.string().min(1).nullable().optional(),
+  /** 传 null 表示停用独立向量模型（回退到对话方案附挂或规则检索） */
+  embedding: z.string().min(1).nullable().optional(),
+  /** 传 null 表示停用语义重排模型 */
+  reranker: z.string().min(1).nullable().optional(),
 });
 
 /** 旧版 config.json 用 gm 记叙事模型的方案：读的时候当成 narrator，下次保存就写成新键 */
@@ -101,6 +113,10 @@ export const ConfigSchema = z.preprocess(
       aux: z.string().min(1).optional(),
       /** 文生图模型（角色立绘、NPC 肖像、回合场景插图）用哪个方案 */
       image: z.string().min(1).optional(),
+      /** 独立向量嵌入模型（旧记忆语义检索）用哪个方案 */
+      embedding: z.string().min(1).optional(),
+      /** 语义重排模型（Reranker，用于二阶段记忆精排）用哪个方案 */
+      reranker: z.string().min(1).optional(),
     })
     .superRefine((config, ctx) => {
       const names = new Set<string>();
@@ -114,7 +130,7 @@ export const ConfigSchema = z.preprocess(
         }
         names.add(profile.name);
       }
-      for (const role of ["narrator", "aux", "image"] as const) {
+      for (const role of ["narrator", "aux", "image", "embedding", "reranker"] as const) {
         const name = config[role];
         if (name !== undefined && !names.has(name)) {
           ctx.addIssue({ code: "custom", path: [role], message: `没有叫 ${name} 的方案` });
@@ -284,6 +300,8 @@ export class ConfigService {
       narrator: config.narrator,
       aux: config.aux,
       image: config.image,
+      embedding: config.embedding,
+      reranker: config.reranker,
       profiles: config.profiles.map((p) => this.publicProfile(p)),
     };
   }
@@ -317,7 +335,17 @@ export class ConfigService {
       return Promise.resolve(fail(400, formatIssues(parsed.error).join("；")));
     }
     return this.edit(
-      (config) => withProfile(config, name, (p) => ({ ...p, ...parsed.data })),
+      (config) =>
+        withProfile(config, name, (p) => {
+          const { embeddingModel, ...rest } = parsed.data;
+          const next: Record<string, unknown> = { ...p, ...rest };
+          if (embeddingModel === null) {
+            delete next.embeddingModel;
+          } else if (embeddingModel !== undefined) {
+            next.embeddingModel = embeddingModel;
+          }
+          return next;
+        }),
       (config) => this.publicOf(config, name),
     );
   }
@@ -353,12 +381,23 @@ export class ConfigService {
     if (!parsed.success) {
       return Promise.resolve(fail(400, formatIssues(parsed.error).join("；")));
     }
-    const profile = parsed.data;
+    const { copyKeyFrom, ...profile } = parsed.data;
     return this.edit(
-      (config) =>
-        config.profiles.some((p) => p.name === profile.name)
-          ? fail(409, `已经有叫 ${profile.name} 的方案了`)
-          : { draft: { ...config, profiles: [...config.profiles, profile] } },
+      (config) => {
+        if (config.profiles.some((p) => p.name === profile.name)) {
+          return fail(409, `已经有叫 ${profile.name} 的方案了`);
+        }
+        let keyFields: { apiKey?: string; apiKeyEnv?: string } = {};
+        if (copyKeyFrom !== undefined) {
+          const source = config.profiles.find((p) => p.name === copyKeyFrom);
+          if (!source) return fail(404, `找不到要复制密钥的连接「${copyKeyFrom}」`);
+          if (source.apiKey !== undefined) keyFields = { apiKey: source.apiKey };
+          else if (source.apiKeyEnv !== undefined) keyFields = { apiKeyEnv: source.apiKeyEnv };
+        }
+        return {
+          draft: { ...config, profiles: [...config.profiles, { ...profile, ...keyFields }] },
+        };
+      },
       (config) => this.publicOf(config, profile.name),
     );
   }
@@ -373,14 +412,17 @@ export class ConfigService {
           config.narrator === name ? "叙事模型" : null,
           config.aux === name ? "辅助" : null,
           config.image === name ? "文生图" : null,
+          config.embedding === name ? "向量模型" : null,
+          config.reranker === name ? "重排模型" : null,
         ]
           .filter((r) => r !== null)
           .join("和");
         if (roles !== "") {
-          const hint =
-            config.image === name && config.narrator !== name && config.aux !== name
-              ? "先停用文生图模型或换成别的方案再删"
-              : "先换成别的方案再删";
+          const onlyOptional =
+            config.narrator !== name &&
+            config.aux !== name &&
+            (config.image === name || config.embedding === name || config.reranker === name);
+          const hint = onlyOptional ? "先停用该可选模型或换成别的方案再删" : "先换成别的方案再删";
           return fail(409, `「${name}」正在当${roles}，${hint}`);
         }
         return { draft: { ...config, profiles: config.profiles.filter((p) => p.name !== name) } };
@@ -389,20 +431,38 @@ export class ConfigService {
     );
   }
 
-  /** 换角色 / 辅助 / 文生图用的方案 */
-  setRoles(body: unknown): Promise<Result<{ narrator?: string; aux?: string; image?: string }>> {
+  /** 换角色 / 辅助 / 文生图 / 向量检索 / 语义重排用的方案 */
+  setRoles(body: unknown): Promise<
+    Result<{
+      narrator?: string;
+      aux?: string;
+      image?: string;
+      embedding?: string;
+      reranker?: string;
+    }>
+  > {
     const parsed = RolesSchema.safeParse(body);
     if (!parsed.success) {
       return Promise.resolve(fail(400, formatIssues(parsed.error).join("；")));
     }
     return this.edit(
       (config) => {
-        const { image, ...rest } = parsed.data;
+        const { image, embedding, reranker, ...rest } = parsed.data;
         const next: Record<string, unknown> = { ...config, ...rest };
         if (image === null) {
           delete next.image;
         } else if (image !== undefined) {
           next.image = image;
+        }
+        if (embedding === null) {
+          delete next.embedding;
+        } else if (embedding !== undefined) {
+          next.embedding = embedding;
+        }
+        if (reranker === null) {
+          delete next.reranker;
+        } else if (reranker !== undefined) {
+          next.reranker = reranker;
         }
         return { draft: next };
       },
@@ -410,6 +470,8 @@ export class ConfigService {
         ...(config.narrator === undefined ? {} : { narrator: config.narrator }),
         ...(config.aux === undefined ? {} : { aux: config.aux }),
         ...(config.image === undefined ? {} : { image: config.image }),
+        ...(config.embedding === undefined ? {} : { embedding: config.embedding }),
+        ...(config.reranker === undefined ? {} : { reranker: config.reranker }),
       }),
     );
   }

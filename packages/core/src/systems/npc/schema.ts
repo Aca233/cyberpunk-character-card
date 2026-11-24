@@ -10,6 +10,76 @@ import { NeuralSymptomSchema } from "../humanity";
 export const NO_FACTION = "none";
 export const NO_FACTION_LABEL = "无";
 
+/** 夜之城世界角色 7 大圈层分类：贯穿人物库、捏人旧识选择器与局内「人物」页 */
+export const NPC_CIRCLES = [
+  "fixers",
+  "merc",
+  "gang",
+  "nomad",
+  "corpo",
+  "service",
+  "celeb",
+] as const;
+export const NpcCircleSchema = z.enum(NPC_CIRCLES);
+export type NpcCircle = z.infer<typeof NpcCircleSchema>;
+
+export const NPC_CIRCLE_LABELS: Readonly<Record<NpcCircle, string>> = {
+  fixers: "城区中间人",
+  merc: "来生与佣兵",
+  gang: "帮派与地下场子",
+  nomad: "恶土流浪者",
+  corpo: "巨企、政要与情报",
+  service: "义体医生与店主",
+  celeb: "名流与都市传奇",
+};
+
+const GANG_FACTIONS = new Set([
+  "maelstrom",
+  "tyger-claws",
+  "valentinos",
+  "sixth-street",
+  "animals",
+  "voodoo-boys",
+  "mox",
+  "scavengers",
+  "wraiths",
+]);
+
+const CORPO_FACTIONS = new Set([
+  "arasaka",
+  "militech",
+  "kang-tao",
+  "biotechnica",
+  "netwatch",
+  "trauma-team",
+  "ncpd",
+  "maxtac",
+  "barghest",
+  "nusa",
+]);
+
+/** 未显式标注 circle 的动态人物或旧存档人物，按势力与身份关键字给出稳定圈层归类 */
+export function inferNpcCircle(npc: {
+  readonly circle?: NpcCircle | undefined;
+  readonly faction?: string | undefined;
+  readonly role?: string | undefined;
+}): NpcCircle {
+  if (npc.circle) return npc.circle;
+  const role = npc.role ?? "";
+  const faction = npc.faction ?? NO_FACTION;
+  if (/中间人/.test(role)) return "fixers";
+  if (faction === "aldecaldos" || /流浪者|恶土/.test(role)) return "nomad";
+  if (
+    CORPO_FACTIONS.has(faction) ||
+    /荒坂|军用科技|联情局|网监|总统|议员|市长|警探|暴恐/.test(role)
+  )
+    return "corpo";
+  if (GANG_FACTIONS.has(faction) || /云顶|玩偶|性偶|黑超梦|帮/.test(role)) return "gang";
+  if (/义体医生|店主|老板|摊主|调酒师|通灵|出租车/.test(role)) return "service";
+  if (/巨星|歌星|主唱|偶像|乐队|记者/.test(role)) return "celeb";
+  return "merc";
+}
+
 export const AFFINITY_MIN = -100;
 export const AFFINITY_MAX = 100;
 /** 单条好感变化的上限，超出的截断 */
@@ -113,6 +183,8 @@ export const NpcCardSchema = z.object({
     .describe(
       "所属势力：势力 id（和 faction 指令一致，如 maelstrom、tyger-claws、arasaka）；无势力写 none",
     ),
+  /** 夜之城圈层分类（中间人/佣兵/帮派/流浪者/公司政要/医生店主/名流），未写时按势力与身份自动推算 */
+  circle: NpcCircleSchema.optional(),
   /**
    * 长相：不会随换衣服变的部分（身材、发型、脸、纹身、义体、伤疤）。
    * 用户定的（2026-11-02，"长相 + 当前穿着"）：衣着拆到 outfit；旧卡没拆时 look 里还带着衣着，照旧能用
@@ -778,7 +850,7 @@ export const NpcCompanionSchema = z
     reason: z.string().trim().min(1).max(NPC_NOTE_CHARS).optional().describe("同行或分开的原因"),
   })
   .describe(
-    "标记有卡人物是否正与玩家结伴同行：剧情里谈妥一起走、组队干活或护送时设 following:true；分开、留守、谈崩或各忙各的设 following:false",
+    "标记有卡人物是否正与玩家结伴同行：仅在明确一起转场、同车出行或护送时设 following:true（同一地点短暂碰面/交易/交谈不设）；只要分开、告别、留守、任务交接完或玩家独自离开，务必设 following:false",
   );
 export type NpcCompanion = z.infer<typeof NpcCompanionSchema>;
 

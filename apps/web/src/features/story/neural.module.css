@@ -702,6 +702,40 @@
   right: 3px;
 }
 
+/* 元素手臂变体微光与右下角紧凑角标（热能橙红 / 电磁电青 / 化学毒绿），与右上角损坏标错开不遮挡 */
+.cyberCell:where([data-element="thermal"]) {
+  --element-color: #ff6a2b;
+}
+
+.cyberCell:where([data-element="electrical"]) {
+  --element-color: #2ce8ff;
+}
+
+.cyberCell:where([data-element="chemical"]) {
+  --element-color: #6ce838;
+}
+
+.cyberCell:where([data-element]) .cyberArt {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--element-color) 72%, transparent));
+}
+
+.cyberElementBadge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 2;
+  padding: 0 3px;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #0b0c10;
+  background: var(--element-color);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--element-color) 70%, transparent);
+  pointer-events: none;
+}
+
 /* 中间人体：完整系统视图互斥显示，局部图按原作坐标对齐，不能把全图当透明解剖层混叠。 */
 .cyberBody {
   position: absolute;

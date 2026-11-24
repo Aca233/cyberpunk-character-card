@@ -1364,6 +1364,164 @@
         "id": "cyberArt.leeroyLigament",
         "atlas": "common/item_icons6",
         "slot": "cw_legs_speed_iconic"
+      },
+      { "id": "cyberArt.faceplate", "atlas": "common/item_icons19", "slot": "cw_facemask" },
+      { "id": "cyberArt.tygerTattoo", "atlas": "common/item_icons16", "slot": "icon_tattoo_tyger" },
+      { "id": "cyberArt.powerGrip", "atlas": "common/item_icons7", "slot": "cw_hands_powergrip" },
+      {
+        "id": "cyberArt.biodyneDeck",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_biodynecyberdeck"
+      },
+      {
+        "id": "cyberArt.fuyutsukiDeck",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_fuyutsuicyberdeck"
+      },
+      {
+        "id": "cyberArt.seochoDeck",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_seachocyberdeck"
+      },
+      {
+        "id": "cyberArt.stephensonDeck",
+        "atlas": "common/item_icons6",
+        "slot": "cw_system_stephensoncyberdeck"
+      },
+      {
+        "id": "cyberArt.eyesCriticalIconic",
+        "atlas": "common/item_icons6",
+        "slot": "cw_eyes_critical_iconic"
+      },
+      {
+        "id": "cyberArt.fastAccessMemory",
+        "atlas": "common/item_icons6",
+        "slot": "cw_frontalcortex_fastaccessmemory"
+      },
+      {
+        "id": "cyberArt.nervousDischarge",
+        "atlas": "common/item_icons7",
+        "slot": "cw_nervoussystem_nervoussystemdischarge"
+      },
+      {
+        "id": "cyberArt.osCapacityBooster",
+        "atlas": "common/item_icons7",
+        "slot": "cw_os_capacity_booster"
+      },
+      {
+        "id": "cyberArt.soundSilencer",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_personalsoundsilencer"
+      },
+      {
+        "id": "cyberArt.metalSkin",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_metalcoveredskin"
+      },
+      {
+        "id": "cyberArt.holographicCamo",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_holographiccamo"
+      },
+      {
+        "id": "cyberArt.heatBooster",
+        "atlas": "common/item_icons5",
+        "slot": "cw_integumentary_heatusingbooster"
+      },
+      {
+        "id": "cyberArt.toxinCleanser",
+        "atlas": "common/item_icons6",
+        "slot": "cw_immunesystem_toxincleanser"
+      },
+      {
+        "id": "cyberArt.reverseMetabolic",
+        "atlas": "common/item_icons13",
+        "slot": "cw_immunesystem_reversemetabolicenhancer"
+      },
+      {
+        "id": "cyberArt.reversePowerInductor",
+        "atlas": "common/item_icons13",
+        "slot": "cw_immunesystem_reversepowerinductor"
+      },
+      {
+        "id": "cyberArt.resistancesBooster",
+        "atlas": "common/item_icons14",
+        "slot": "cw_immunesystem_resistancesbooster"
+      },
+      {
+        "id": "cyberArt.painReductor",
+        "atlas": "common/item_icons9",
+        "slot": "cw_immunesystem_painreductor"
+      },
+      {
+        "id": "cyberArt.skeletonBoneMarrow",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_bonemarrowcells"
+      },
+      {
+        "id": "cyberArt.skeletonCharge",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_chargesystem"
+      },
+      {
+        "id": "cyberArt.skeletonEsns",
+        "atlas": "common/item_icons5",
+        "slot": "cw_skeleton_esns"
+      },
+      {
+        "id": "cyberArt.skeletonEnhancedTissue",
+        "atlas": "common/item_icons6",
+        "slot": "cw_skeleton_enhancedtissue"
+      },
+      {
+        "id": "cyberArt.skeletonShock",
+        "atlas": "common/item_icons15",
+        "slot": "cw_skeleton_shockabsorber"
+      },
+      {
+        "id": "cyberArt.bloodDepleter",
+        "atlas": "common/item_icons9",
+        "slot": "cw_skeleton_blooddepleter"
+      },
+      {
+        "id": "cyberArt.circulatoryMicrogen",
+        "atlas": "common/item_icons14",
+        "slot": "cw_circulatory_microgenerator"
+      },
+      {
+        "id": "cyberArt.tyrosineV2",
+        "atlas": "common/item_icons6",
+        "slot": "cw_circulatory_tyrosineinjector"
+      },
+      {
+        "id": "cyberArt.arasakaSandevistan",
+        "atlas": "common/item_icons7",
+        "slot": "cwf_arasakasandevistan"
+      },
+      {
+        "id": "cyberArt.animalsBerserk",
+        "atlas": "common/item_icons5",
+        "slot": "cwf_animalsberserk"
+      },
+      {
+        "id": "cyberArt.kiroshiAlt1",
+        "atlas": "common/item_icons10",
+        "slot": "cwf_kiroshioptics1"
+      },
+      {
+        "id": "cyberArt.kiroshiAlt2",
+        "atlas": "common/item_icons10",
+        "slot": "cwf_kiroshioptics2"
+      },
+      {
+        "id": "cyberArt.kiroshiAlt3",
+        "atlas": "common/item_icons10",
+        "slot": "cwf_kiroshioptics3"
+      },
+      {
+        "id": "cyberArt.armRotor",
+        "atlas": "common/item_icons16",
+        "slot": "cwf_tygerclawsmantisbladesrotor"
       }
     ],
     "items": [
@@ -1962,7 +2120,67 @@
       { "id": "portrait.padre", "atlas": "common/avatars1", "slot": "padre" },
       { "id": "portrait.panam", "atlas": "common/avatars1", "slot": "panam" },
       { "id": "portrait.river", "atlas": "common/avatars1", "slot": "river" },
-      { "id": "portrait.kerry", "atlas": "common/avatars1", "slot": "kerry" }
+      { "id": "portrait.kerry", "atlas": "common/avatars1", "slot": "kerry" },
+      { "id": "portrait.takemura", "atlas": "common/avatars2", "slot": "takemura" },
+      { "id": "portrait.hanako", "atlas": "common/avatars0", "slot": "hanako" },
+      { "id": "portrait.yorinobu", "atlas": "common/avatars2", "slot": "yorinobu" },
+      {
+        "id": "portrait.smasher",
+        "atlas": "fullscreen/photomode_npc_icons_atlas",
+        "slot": "adam_smasher"
+      },
+      {
+        "id": "portrait.myers",
+        "atlas": "fullscreen/photomode_npc_icons_atlas",
+        "slot": "president_myers"
+      },
+      {
+        "id": "portrait.hansen",
+        "atlas": "fullscreen/photomode_npc_icons_atlas",
+        "slot": "kurt_hansen"
+      },
+      { "id": "portrait.meredith", "atlas": "common/avatars1", "slot": "meredith" },
+      { "id": "portrait.bryceMosley", "atlas": "common/avatars0", "slot": "bryce" },
+      { "id": "portrait.songbird", "atlas": "common/avatars2", "slot": "songbird" },
+      { "id": "portrait.reed", "atlas": "common/avatars_ep1", "slot": "ep1_reed1" },
+      { "id": "portrait.alex", "atlas": "common/avatars_ep1", "slot": "ep1_alex" },
+      { "id": "portrait.dino", "atlas": "common/avatars0", "slot": "dino" },
+      { "id": "portrait.elCapitan", "atlas": "common/avatars1", "slot": "muamar" },
+      { "id": "portrait.mrHands", "atlas": "common/avatars_tooltips", "slot": "c_mr_hands" },
+      { "id": "portrait.dakota", "atlas": "common/avatars0", "slot": "dakota" },
+      { "id": "portrait.evelyn", "atlas": "common/avatars0", "slot": "evelyn" },
+      { "id": "portrait.tBug", "atlas": "common/avatars2", "slot": "t-bug" },
+      { "id": "portrait.mamaWelles", "atlas": "common/avatars1", "slot": "mama" },
+      { "id": "portrait.claire", "atlas": "common/avatars0", "slot": "claire" },
+      { "id": "portrait.nix", "atlas": "common/avatars1", "slot": "nix" },
+      { "id": "portrait.saul", "atlas": "common/avatars2", "slot": "saul" },
+      { "id": "portrait.mitch", "atlas": "common/avatars1", "slot": "mitch" },
+      { "id": "portrait.carol", "atlas": "common/avatars0", "slot": "carol" },
+      { "id": "portrait.placide", "atlas": "common/avatars1", "slot": "placide" },
+      { "id": "portrait.brigitte", "atlas": "common/avatars1", "slot": "maman" },
+      { "id": "portrait.wilson", "atlas": "common/avatars2", "slot": "wilson" },
+      { "id": "portrait.fingers", "atlas": "common/avatars_tooltips", "slot": "ripper_fingers" },
+      {
+        "id": "portrait.cassiusRyder",
+        "atlas": "common/avatars_tooltips",
+        "slot": "ripper_cassius"
+      },
+      { "id": "portrait.jeffersonPeralez", "atlas": "common/avatars0", "slot": "jefferson" },
+      { "id": "portrait.elizabethPeralez", "atlas": "common/avatars0", "slot": "elizabeth" },
+      { "id": "portrait.delamain", "atlas": "common/avatars0", "slot": "delamain" },
+      { "id": "portrait.blueMoon", "atlas": "common/avatars0", "slot": "blue_moon" },
+      { "id": "portrait.lizzyWizzy", "atlas": "common/avatars1", "slot": "lizzy" },
+      { "id": "portrait.mrBlueEyes", "atlas": "common/avatars1", "slot": "mr_blue_eyes" },
+      { "id": "portrait.ozob", "atlas": "common/avatars1", "slot": "ozob" },
+      { "id": "portrait.coachFred", "atlas": "common/avatars0", "slot": "coach" },
+      { "id": "portrait.scorpion", "atlas": "common/avatars2", "slot": "scorpion" },
+      { "id": "portrait.cassidy", "atlas": "common/avatars0", "slot": "cassidy" },
+      { "id": "portrait.nancy", "atlas": "common/avatars1", "slot": "nancy" },
+      { "id": "portrait.emmerick", "atlas": "common/avatars0", "slot": "emmerick" },
+      { "id": "portrait.weyland", "atlas": "common/avatars2", "slot": "weyland" },
+      { "id": "portrait.pepe", "atlas": "common/avatars1", "slot": "pepe" },
+      { "id": "portrait.kirk", "atlas": "common/avatars1", "slot": "kirk" },
+      { "id": "portrait.redMenace", "atlas": "common/avatars1", "slot": "red_menace" }
     ],
     "vehicles": [
       {

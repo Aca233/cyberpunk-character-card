@@ -125,12 +125,15 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     if (command.type === "npc.offscreenDoing") {
       return applyOffscreenDoing(draft, command, ctx.now);
     }
-    return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data);
+    const currentLocation = ctx.read<WorldClockState>("world").location ?? null;
+    return applyNpc(draft, command, ctx.now, ctx.facts, ctx.data, currentLocation);
   },
   on: {
     "world.arrived": (draft, ctx) => {
       const loc = ctx.read<WorldClockState>("world").location ?? null;
-      moveFollowingNpcs(draft, loc, ctx.now);
+      const from =
+        typeof ctx.facts.actionStartLocation === "string" ? ctx.facts.actionStartLocation : null;
+      moveFollowingNpcs(draft, loc, ctx.now, from);
     },
   },
   rules: [npcRules, adultServicesRules],

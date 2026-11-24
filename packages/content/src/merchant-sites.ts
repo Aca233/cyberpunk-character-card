@@ -363,19 +363,37 @@ function clinicShelf(point: ServicePoint, dogtownIndex: number): string[] {
   if (point.district === "city_center" || point.district === "westbrook") {
     return [
       "kiroshi-mk2",
+      "arasaka-optics",
+      "biometric-polygraph-optics",
+      "behavioral-faceplate",
+      "mood-stabilizer",
       "bioconductor",
       "visual-cortex-support",
       "militech-paraline",
+      "seocho-deck",
+      "stephenson-deck",
+      "arasaka-sandevistan",
+      "chrome-plating-skin",
+      "holo-disguise-weave",
       "smart-link",
+      "precision-manipulators",
     ];
   }
   if (point.district === "dogtown") {
     const base = [
       "kiroshi-mk2",
+      "militech-thermal-optics",
+      "behavioral-faceplate",
       "neofiber",
       "subdermal-armor",
+      "personal-sound-silencer",
+      "auto-suppressant-injector",
       "biotech-sigma",
       "reinforced-tendons",
+      "mag-grip-legs",
+      "thermal-gorilla-arms",
+      "electric-mantis-blades",
+      "toxic-projectile-launch",
     ];
     // 将 18 件狗镇不朽义体均匀分摊至狗镇 4 家黑市诊所（百灵鸟个人军用改造除外）
     const chunkSize = Math.ceil(DOGTOWN_ICONIC_CHROME.length / 4);
@@ -383,9 +401,43 @@ function clinicShelf(point: ServicePoint, dogtownIndex: number): string[] {
     return [...base, ...DOGTOWN_ICONIC_CHROME.slice(start, start + chunkSize)];
   }
   if (point.district === "pacifica" || point.district === null) {
-    return ["kiroshi-mk1", "neofiber", "subdermal-armor", "biotech-sigma", "reinforced-tendons"];
+    return [
+      "kiroshi-mk1",
+      "street-mod-optics",
+      "neofiber",
+      "sleep-skip-regulator",
+      "subdermal-armor",
+      "toxin-cleanser",
+      "cargo-spine-frame",
+      "biotech-sigma",
+      "animals-berserk",
+      "reinforced-tendons",
+      "badlands-runner-legs",
+      "anchor-hydraulic-legs",
+      "tech-utility-arm",
+      "surgical-prosthetic-arm",
+    ];
   }
-  return ["kiroshi-mk1", "ram-upgrade", "newton-module", "nanorelays", "smart-link"];
+  return [
+    "kiroshi-mk1",
+    "zetatech-net-optics",
+    "ram-upgrade",
+    "neural-translator",
+    "black-ice-sniffer",
+    "newton-module",
+    "nanorelays",
+    "voice-modulator",
+    "fuyutsuki-deck",
+    "biodyne-deck",
+    "smuggler-cavity",
+    "shock-disperser-ribs",
+    "smart-link",
+    "tyger-claws-tattoo",
+    "power-grip",
+    "tech-diagnostic-palm",
+    "palm-jammer",
+    "drop-damper-legs",
+  ];
 }
 
 let dogtownClinicCounter = 0;

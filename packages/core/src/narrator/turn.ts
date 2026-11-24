@@ -7,6 +7,7 @@ import type {
   LlmMessage,
   LlmRequest,
   LlmUsage,
+  Reranker,
   Rng,
 } from "../kernel/ports";
 import type { AppliedCommand, Command } from "../kernel/system";
@@ -14,7 +15,7 @@ import type { LogRecord } from "../kernel/turnlog";
 import { effectiveTurns } from "../kernel/turnlog";
 import type { WorldState } from "../kernel/world";
 import type { NarrativeIntensity } from "../physics";
-import type { TurnStage } from "../schemas/turn";
+import type { TurnStage, TurnStageUsage } from "../schemas/turn";
 import { BraindanceStateSchema, braindanceWork } from "../systems/braindance";
 import {
   CharacterStateSchema,
@@ -115,6 +116,7 @@ import {
   judgeCandidates,
   type MemoryEntry,
   memoryPool,
+  scoreMemories,
 } from "./retrieve";
 import { sceneTitle } from "./scene";
 import { readSceneMemory, summaryFromExtract } from "./scene-memory";
@@ -268,6 +270,8 @@ export interface NarratorTurn {
   readonly usage: LlmUsage | undefined;
   /** 辅助模型的用量（判断、抽取、场外推演和场景摘要） */
   readonly auxUsage: LlmUsage;
+  /** 分阶段用量明细（判断 / 正文 / 抽取 / 其他），供上下文查看器精确排查各步缓存命中率 */
+  readonly stageUsage?: TurnStageUsage | undefined;
   /** 修格式用的辅助模型调用次数和用量 */
   readonly repairs: number;
   readonly repairUsage: LlmUsage;
@@ -305,6 +309,8 @@ export interface NarratorDeps {
   readonly llm: LlmClient;
   /** 可选向量嵌入客户端：用于旧记忆语义检索，未配置或失败时自动退化为规则检索 */
   readonly embedder?: Embedder | undefined;
+  /** 可选语义重排客户端：对粗排前 20 条候选做精排，可与向量模型共用或单独使用 */
+  readonly reranker?: Reranker | undefined;
   readonly rng: Rng;
   /** 静态数据表（content 包） */
   readonly data?: Readonly<Record<string, unknown>>;
@@ -642,27 +648,60 @@ async function computeVectorScores(
 ): Promise<ReadonlyMap<string, number> | undefined> {
   if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
   if (!embedder || pool.length === 0 || queryText.trim() === "") return undefined;
-  let vectors: readonly (readonly number[])[];
+  const docTexts = pool.map((e) => `${e.title}\n${e.text}`.slice(0, 600));
+  let qVectors: readonly (readonly number[])[];
+  let docVectors: readonly (readonly number[])[];
   try {
-    vectors = await embedder.embed(
-      [queryText, ...pool.map((e) => `${e.title}\n${e.text}`.slice(0, 600))],
-      signal,
-    );
+    [qVectors, docVectors] = await Promise.all([
+      embedder.embed([queryText], { signal, task: "query" }),
+      embedder.embed(docTexts, { signal, task: "document" }),
+    ]);
   } catch {
     if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
     return undefined;
   }
   if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
-  if (vectors.length !== pool.length + 1) return undefined;
-  const qVec = vectors[0];
-  if (!qVec || qVec.length === 0) return undefined;
+  const qVec = qVectors[0];
+  if (!qVec || qVec.length === 0 || docVectors.length !== pool.length) return undefined;
   const map = new Map<string, number>();
   for (let i = 0; i < pool.length; i += 1) {
     const entry = pool[i];
-    const vec = vectors[i + 1];
+    const vec = docVectors[i];
     if (!entry || !vec || vec.length === 0) continue;
     const sim = cosineSimilarity(qVec, vec);
     if (sim > 0) map.set(entry.id, sim);
+  }
+  return map.size > 0 ? map : undefined;
+}
+
+/** 第二阶段精排：只把粗排最靠前的候选送给重排模型，兼顾速度、成本与准度 */
+const RERANK_TOP_K = 20;
+
+async function computeRerankScores(
+  reranker: Reranker | undefined,
+  candidates: readonly MemoryEntry[],
+  queryText: string,
+  signal?: AbortSignalLike,
+): Promise<ReadonlyMap<string, number> | undefined> {
+  if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
+  if (!reranker || candidates.length === 0 || queryText.trim() === "") return undefined;
+  const shortlist = candidates.slice(0, RERANK_TOP_K);
+  const documents = shortlist.map((e) => `${e.title}\n${e.text}`.slice(0, 600));
+  let ranked: readonly { readonly index: number; readonly score: number }[];
+  try {
+    ranked = await reranker.rerank(queryText, documents, { topN: documents.length, signal });
+  } catch {
+    if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
+    return undefined;
+  }
+  if (signal?.aborted) throw new NarratorAbortedError("已停止生成");
+  if (ranked.length === 0) return undefined;
+  const map = new Map<string, number>();
+  for (const row of ranked) {
+    const entry = shortlist[row.index];
+    if (!entry || !Number.isFinite(row.score)) continue;
+    const clamped = Math.max(0, Math.min(1, row.score));
+    if (clamped > 0) map.set(entry.id, clamped);
   }
   return map.size > 0 ? map : undefined;
 }
@@ -719,11 +758,14 @@ export async function runNarratorTurn(
     b.checkAborted();
   };
 
+  let judgeUsage: LlmUsage | undefined;
+  let extractUsage: LlmUsage | undefined;
   let preparedData: PreparedCheckpointData;
   if (deps.checkpoint) {
     const cp = deps.checkpoint.prepared;
     preparedData = cp;
     b.auxUsage = cp.auxUsage;
+    judgeUsage = cp.judgeUsage;
     b.repairs = cp.repairs;
     b.repairUsage = cp.repairUsage;
     b.notes.push(...cp.notes);
@@ -764,9 +806,24 @@ export async function runNarratorTurn(
       plan.kind === "action" && !legacyOoc
         ? await computeVectorScores(deps.embedder, pool, plan.input.text, deps.signal)
         : undefined;
+    const coarseForRerank =
+      plan.kind === "action" && !legacyOoc && deps.reranker && pool.length > 0
+        ? scoreMemories(pool, world, { input: plan.input.text, context: lately, vectorScores })
+            .slice(0, RERANK_TOP_K)
+            .map((s) => s.entry)
+        : [];
+    const rerankScores =
+      coarseForRerank.length > 0
+        ? await computeRerankScores(deps.reranker, coarseForRerank, plan.input.text, deps.signal)
+        : undefined;
     const memories: Memory[] =
       plan.kind === "action"
-        ? judgeCandidates(pool, world, { input: plan.input.text, context: lately, vectorScores })
+        ? judgeCandidates(pool, world, {
+            input: plan.input.text,
+            context: lately,
+            vectorScores,
+            rerankScores,
+          })
         : [];
     if (plan.kind === "action" && !legacyOoc) {
       deps.onStage?.({
@@ -780,10 +837,12 @@ export async function runNarratorTurn(
         temperature: JUDGE_TEMPERATURE,
         responseFormat: responseJsonSchema("judge", JudgeDocSchema),
         messages: prompt.messages,
-        ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:judge` } : {}),
+        // 同存档各阶段共用同一粘性会话 key，避免多号聚合中转站按阶段拆路由到不同上游账号导致掉缓存
+        ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
       });
       if ("blocked" in reply) return { kind: "blocked", reason: reply.blocked };
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
+      if (reply.usage) judgeUsage = addUsage(judgeUsage ?? ZERO, reply.usage);
       judge = await b.readJudge(reply.text);
       if (b.dropped.some((d) => d.where === "判断"))
         return {
@@ -884,7 +943,12 @@ export async function runNarratorTurn(
             world,
             promptRecords,
             hot,
-            { input: [plan.input.text, read ?? ""].join("\n"), context: lately, vectorScores },
+            {
+              input: [plan.input.text, read ?? ""].join("\n"),
+              context: lately,
+              vectorScores,
+              rerankScores,
+            },
             recalled,
             deps.data ?? {},
           )
@@ -1128,6 +1192,7 @@ export async function runNarratorTurn(
       },
       presetName: preset?.name,
       auxUsage: b.auxUsage,
+      ...(judgeUsage ? { judgeUsage } : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       notes: [...b.notes],
@@ -1200,6 +1265,14 @@ export async function runNarratorTurn(
       ooc,
       usage,
       auxUsage: b.auxUsage,
+      ...(judgeUsage || usage
+        ? {
+            stageUsage: {
+              ...(judgeUsage ? { judge: judgeUsage } : {}),
+              ...(usage ? { narrate: usage } : {}),
+            },
+          }
+        : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       messages: narrateMessages,
@@ -1254,7 +1327,7 @@ export async function runNarratorTurn(
           ...(sampling.topP !== undefined ? { topP: sampling.topP } : {}),
           ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
           maxOutputTokens,
-          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:narrate` } : {}),
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
         },
         deps.signal,
       )) {
@@ -1340,6 +1413,7 @@ export async function runNarratorTurn(
   if (deps.checkpoint?.extracted) {
     extractedData = deps.checkpoint.extracted;
     b.auxUsage = extractedData.auxUsage;
+    extractUsage = extractedData.extractUsage;
     b.repairs = extractedData.repairs;
     b.repairUsage = extractedData.repairUsage;
     b.notes.splice(0, b.notes.length, ...extractedData.notes);
@@ -1402,7 +1476,7 @@ export async function runNarratorTurn(
             : {}),
           responseFormat: responseJsonSchema("extract"),
           messages: extract.messages,
-          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:extract` } : {}),
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
         });
       } catch (error) {
         b.checkAborted();
@@ -1426,6 +1500,7 @@ export async function runNarratorTurn(
         );
       }
       b.auxUsage = addUsage(b.auxUsage, reply.usage);
+      if (reply.usage) extractUsage = addUsage(extractUsage ?? ZERO, reply.usage);
       shape = await b.readExtract(reply.text);
       const extractDrop = b.dropped.find((entry) => entry.where === "抽取");
       if (extractDrop) {
@@ -1855,6 +1930,7 @@ export async function runNarratorTurn(
       title: computedTitle,
       unsettled: computedUnsettled,
       auxUsage: b.auxUsage,
+      ...(extractUsage ? { extractUsage } : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       notes: [...b.notes],
@@ -1965,7 +2041,7 @@ export async function runNarratorTurn(
               maxOutputTokens: macroBatch.maxOutputTokens,
               messages: macroBatch.messages,
               responseFormat: responseJsonSchema("offscreen_macro", MacroOffscreenDocSchema),
-              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-macro` } : {}),
+              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
             })
           : Promise.resolve(undefined),
         socialBatch?.kind === "ready"
@@ -1975,7 +2051,7 @@ export async function runNarratorTurn(
               maxOutputTokens: socialBatch.maxOutputTokens,
               messages: socialBatch.messages,
               responseFormat: responseJsonSchema("offscreen_social", SocialOffscreenDocSchema),
-              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-social` } : {}),
+              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
             })
           : Promise.resolve(undefined),
       ]);
@@ -2228,7 +2304,7 @@ export async function runNarratorTurn(
           temperature: SUMMARY_TEMPERATURE,
           messages,
           responseFormat: responseJsonSchema("summary", SummaryDocSchema),
-          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:summary` } : {}),
+          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}` } : {}),
         });
         summaryTrace = {
           prompt: messages[messages.length - 1]?.content ?? "",
@@ -2255,6 +2331,40 @@ export async function runNarratorTurn(
       }
     }
   }
+  const nonCoreAuxIn =
+    b.auxUsage.inputTokens - (judgeUsage?.inputTokens ?? 0) - (extractUsage?.inputTokens ?? 0);
+  const nonCoreAuxOut =
+    b.auxUsage.outputTokens - (judgeUsage?.outputTokens ?? 0) - (extractUsage?.outputTokens ?? 0);
+  const nonCoreAuxCached =
+    (b.auxUsage.cachedInputTokens ?? 0) -
+    (judgeUsage?.cachedInputTokens ?? 0) -
+    (extractUsage?.cachedInputTokens ?? 0);
+  const nonCoreAuxWrite =
+    (b.auxUsage.cacheWriteTokens ?? 0) -
+    (judgeUsage?.cacheWriteTokens ?? 0) -
+    (extractUsage?.cacheWriteTokens ?? 0);
+  const extraAux: LlmUsage | undefined =
+    nonCoreAuxIn > 0 || nonCoreAuxOut > 0
+      ? {
+          inputTokens: Math.max(0, nonCoreAuxIn),
+          outputTokens: Math.max(0, nonCoreAuxOut),
+          ...(nonCoreAuxCached > 0 ? { cachedInputTokens: nonCoreAuxCached } : {}),
+          ...(nonCoreAuxWrite > 0 ? { cacheWriteTokens: nonCoreAuxWrite } : {}),
+        }
+      : undefined;
+  const otherUsage =
+    extraAux || b.repairUsage.inputTokens > 0 || b.repairUsage.outputTokens > 0
+      ? addUsage(extraAux ?? ZERO, b.repairUsage)
+      : undefined;
+  const stageUsage: TurnStageUsage | undefined =
+    judgeUsage || usage || extractUsage || otherUsage
+      ? {
+          ...(judgeUsage ? { judge: judgeUsage } : {}),
+          ...(usage ? { narrate: usage } : {}),
+          ...(extractUsage ? { extract: extractUsage } : {}),
+          ...(otherUsage ? { other: otherUsage } : {}),
+        }
+      : undefined;
   return {
     kind: "done",
     turn: {
@@ -2288,6 +2398,7 @@ export async function runNarratorTurn(
       ooc,
       usage,
       auxUsage: b.auxUsage,
+      ...(stageUsage ? { stageUsage } : {}),
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       // 返回实际发送的消息，包含预设条目和展开后的宏，供上下文检查与测评使用

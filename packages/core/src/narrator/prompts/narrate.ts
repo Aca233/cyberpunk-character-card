@@ -23,14 +23,17 @@ import {
   stageModules,
 } from "./context";
 import {
+  ALWAYS_ON_MODULE_IDS,
   BASE_CONSTRAINTS,
   DEFAULT_WORLD_STYLE,
   estimateTokens,
   modulesBlock,
+  staticAlwaysOnModules,
+  staticBaseData,
   systemMessage,
   userMessage,
 } from "./layers";
-import { npcEquipmentReference } from "./npc-equipment";
+import { npcEquipmentRepeatHint, staticNpcEquipmentReference } from "./npc-equipment";
 
 /**
  * ③ 写正文：纯文本，边收边放。
@@ -188,11 +191,25 @@ export function buildNarratorPrompt(
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = stageModules(world, plan.input, extras);
-  // 系统层只放跨回合完全不变的静态核心规则与静态剧情素材表，动态激活的场景模块放进本轮用户消息，
-  // 防止某轮切换模块时把系统提示词连同整段对话历史的前缀缓存一并打穿。
-  const staticRules = systemMessage("narrate", [coreRules(extras.hasPreset)]);
-  const activeModulesText = modulesBlock("narrate", modules);
-  const system = [staticRules, ...narrateTablesOf(view, extras)].join("\n\n");
+  // 系统层只放跨回合 100% 字节一致的静态核心规则、常驻叙事模块、静态剧情素材表与静态新人物装备参考；
+  // 条件触发的动态场景模块与轻量的重复型号提醒放在本轮用户消息，防止打穿系统与对话历史的前缀缓存。
+  const staticData = staticBaseData(extras.data);
+  const dynamicModules = modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
+  const staticModulesText = staticAlwaysOnModules("narrate");
+  const dynamicModulesText = modulesBlock("narrate", dynamicModules);
+  const staticEquipment =
+    extras.includeNpcEquipment === false || plan.input.mode === "ooc"
+      ? undefined
+      : staticNpcEquipmentReference(staticData, false);
+  const staticRules = systemMessage("narrate", [
+    coreRules(extras.hasPreset),
+    ...(staticModulesText ? [staticModulesText] : []),
+  ]);
+  const system = [
+    staticRules,
+    ...narrateTablesOf(view, { ...extras, data: staticData }),
+    ...(staticEquipment ? [staticEquipment] : []),
+  ].join("\n\n");
   const messages: LlmMessage[] = [{ role: "system", content: system }];
   const hot = extras.history ?? HISTORY_TURNS;
   let history = 0;
@@ -227,13 +244,13 @@ export function buildNarratorPrompt(
   const pacingHint = extras.hasPreset
     ? ""
     : resolveDynamicWordCountBudget(extras.intensity ?? "dialogue").directive.replace(/^- /, "");
-  const equipment =
+  const equipmentRepeatHint =
     extras.includeNpcEquipment === false || plan.input.mode === "ooc"
       ? undefined
-      : npcEquipmentReference(world, extras.data);
+      : npcEquipmentRepeatHint(world, extras.data);
   const content = userMessage({
     recap,
-    modules: activeModulesText,
+    modules: dynamicModulesText,
     scene,
     decided: extras.decided,
     recall,
@@ -245,12 +262,12 @@ export function buildNarratorPrompt(
           names,
         ),
     input: formatInput(plan.input),
-    after: [equipment, boostNote(view, plan, "narrate")],
+    after: [equipmentRepeatHint, boostNote(view, plan, "narrate")],
     reminder: pacingHint ? `（${pacingHint}只写正文，纯文本。）` : "（只写正文，纯文本。）",
   });
   messages.push({ role: "user", content });
   const tokens = (s: string | undefined) => (s === undefined ? 0 : estimateTokens(s));
-  const moduleTokens = tokens(activeModulesText);
+  const moduleTokens = tokens(dynamicModulesText);
   const hotTokens = tokens(scene.join("\n\n")) + tokens((extras.decided ?? []).join("\n"));
   const parts = {
     rules: tokens(system) + moduleTokens,
@@ -272,7 +289,7 @@ export function buildNarratorPrompt(
   return {
     messages,
     modules: modules.map((m) => m.id),
-    rules: staticRules.length + (activeModulesText?.length ?? 0),
+    rules: staticRules.length + (dynamicModulesText?.length ?? 0),
     parts,
   };
 }

@@ -102,10 +102,10 @@
   font-size: var(--fs-label);
 }
 
-/* 三格战术角色槽位矩阵 */
+/* 五格战术角色槽位矩阵 */
 .roleSlots {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -476,6 +476,18 @@
   border-color: rgb(255 97 88 / 42%);
   background: rgb(255 97 88 / 15%);
   color: var(--cp-red);
+}
+
+.rolePill[data-role="embedding"] {
+  border-color: rgb(62 232 165 / 42%);
+  background: rgb(62 232 165 / 14%);
+  color: #5ef2b7;
+}
+
+.rolePill[data-role="reranker"] {
+  border-color: rgb(196 125 255 / 44%);
+  background: rgb(196 125 255 / 15%);
+  color: #d6a4ff;
 }
 
 /* ———— 右侧编辑工作台 ———— */
@@ -1035,7 +1047,19 @@
   color: var(--cp-yellow);
 }
 
-@media (width < 1040px) {
+@media (width < 1320px) {
+  .roleSlots {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (width < 900px) {
+  .roleSlots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width < 600px) {
   .roleSlots {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -87,6 +87,21 @@ export type TradeQuote =
   | { ok: false; reason: string; price?: number };
 
 /** 稳定 ID 优先；名字只接受唯一匹配，绝不从玩家所在店铺猜交易对象。 */
+function shopForKeeper(
+  shops: readonly Shop[],
+  data: Readonly<Record<string, unknown>>,
+  npcId: string,
+  location: string | null,
+): Shop | undefined {
+  const owned = shops.filter((s) => s.keeperNpc === npcId || s.serviceNpcs.includes(npcId));
+  if (owned.length === 0) return undefined;
+  if (location !== null) {
+    const here = owned.filter((s) => merchantAt(data, s.id, s.location, location));
+    if (here.length === 1) return here[0];
+  }
+  return owned.length === 1 ? owned[0] : undefined;
+}
+
 function counterparty(
   world: WorldState,
   data: Readonly<Record<string, unknown>>,
@@ -98,8 +113,11 @@ function counterparty(
     ? ripperdocList(data, CyberwareStateSchema.parse(world.slices.cyberware ?? {}))
     : [];
   const npcs = Object.values((world.slices.npc as NpcState).npcs);
-  const shop = shops.find((s) => s.id === id);
+  const location = (world.slices.world as WorldClockState).location;
   const npc = npcs.find((n) => n.id === id);
+  const shop =
+    shops.find((s) => s.id === id) ??
+    (!service && npc ? shopForKeeper(shops, data, npc.id, location) : undefined);
   const clinic = clinics.find((doc) => doc.id === id);
   const party = registeredParty(world, id);
   const exact: Counterparty[] = [
@@ -204,13 +222,26 @@ export function quoteTrade(
       ok: false,
       reason: request.action === "service" ? "服务不存在" : `未登记物件 ${request.item ?? ""}`,
     };
-  const match = agreedQuote(world, {
-    seller: party.id,
-    kind: request.action === "service" ? "service" : "item",
+  const quoteSelector = {
+    kind: request.action === "service" ? ("service" as const) : ("item" as const),
     action: request.action,
     target: request.action === "service" ? (request.service as string) : (item?.id as string),
     ...(request.offer ? { offer: request.offer } : {}),
-  });
+  };
+  let match = agreedQuote(world, { seller: party.id, ...quoteSelector });
+  // 谈价时可能把 seller 写成了店主人物 id（例如 atao），成交解析到店铺（kabuki-arms）后仍兼容对应店主报价
+  if (shop && (!match.ok || match.quote === null)) {
+    const aliasSellers = [...(shop.keeperNpc ? [shop.keeperNpc] : []), ...shop.serviceNpcs].filter(
+      (id) => id !== party.id,
+    );
+    for (const seller of aliasSellers) {
+      const candidate = agreedQuote(world, { seller, ...quoteSelector });
+      if (candidate.ok && candidate.quote !== null) {
+        match = candidate;
+        break;
+      }
+    }
+  }
   if (!match.ok) return match;
   if (request.action === "service" && request.service === "adult-service" && party.npc) {
     const subject = party.npc;
@@ -282,13 +313,20 @@ export function quoteTrade(
       if (item.quickhackId && quickhackAlreadyOwned(world, inventory, item.quickhackId)) {
         return fail(`随身芯片盒里已经有「${item.name}」，不用重复购买`);
       }
+      const shopHolderTag = shop ? `shop:${shop.id}` : undefined;
+      const heldByShop = Boolean(
+        shop && object && (object.holder === shop.id || object.holder === shopHolderTag),
+      );
       if (
         object &&
+        !heldByShop &&
         object.holder !== party.id &&
         (!shop?.keeperNpc || object.holder !== shop.keeperNpc)
       )
         return fail(`${item.name}不属于${party.name}，不能从别人的持有记录取得`);
-      const holder = object ? (world.slices.npc as NpcState).npcs[object.holder] : undefined;
+      // 店铺在库商品挂在店铺库存里，不要求同名店主随身携带；只有个人 NPC 持有的物件才检查其 gear
+      const holder =
+        object && !heldByShop ? (world.slices.npc as NpcState).npcs[object.holder] : undefined;
       if (holder && !holder.body?.gear.includes(item.id))
         return fail(`${holder.name}已经不再带着${item.name}，现有归属记录不能证明能够交付`);
       const objectLocation = object ? (holder?.location ?? object.location) : null;
@@ -383,11 +421,18 @@ export function applyTrade(
         });
       }
     } else {
+      const shopHolderTag = quoted.shop ? `shop:${quoted.shop.id}` : undefined;
+      const previousHolder = object?.holder;
+      const heldByShop = Boolean(
+        quoted.shop &&
+          object &&
+          (object.holder === quoted.shop.id || object.holder === shopHolderTag),
+      );
       if (
         command.action === "buy" &&
         quoted.shop &&
         object &&
-        object.holder === quoted.shop.id &&
+        heldByShop &&
         object.location !== null &&
         merchantAt(data, quoted.shop.id, object.location, location)
       ) {
@@ -399,20 +444,41 @@ export function applyTrade(
           type: "item",
           action: command.action === "buy" ? "gain" : "lose",
           id: item.id,
-          ...(command.action === "sell" ? { recipient: quoted.counterparty } : {}),
+          ...(command.action === "sell" ? { recipient: shopHolderTag ?? quoted.counterparty } : {}),
           reason: command.reason,
         },
         itemCatalog(withWorldObjects(data, draft.objects)),
         world.time,
         location,
         npcs,
+        { shopTransfer: Boolean(quoted.shop) },
       );
       if (!result.ok) return result;
       if (command.action === "sell" && quoted.shop) {
         const soldObj = draft.objects[item.id];
-        if (soldObj) soldObj.location = null;
+        if (soldObj) {
+          soldObj.holder = shopHolderTag as string;
+          soldObj.location = null;
+        }
       }
       emitted.push(...(result.emit ?? []));
+      // 兼容旧存档里曾错放进同名店主随身 gear 的店铺物件：买回后同步从店主随身栏移出
+      const legacyKeeperHolder =
+        command.action === "buy" &&
+        quoted.shop?.keeperNpc &&
+        previousHolder !== undefined &&
+        (previousHolder === quoted.shop.keeperNpc || previousHolder === quoted.shop.id) &&
+        npcs[quoted.shop.keeperNpc]?.body?.gear.includes(item.id)
+          ? quoted.shop.keeperNpc
+          : undefined;
+      if (legacyKeeperHolder) {
+        emitted.push({
+          type: "npcGear",
+          id: legacyKeeperHolder,
+          action: "remove",
+          item: item.id,
+        });
+      }
       if (!object && quoted.party.npc && command.action === "buy")
         emitted.push({
           type: "npcGear",

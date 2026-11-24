@@ -26,6 +26,20 @@ export interface HackTopologyCheckInput {
   readonly hasCyberdeck?: boolean;
   /** 目标是否带有军用/企业级硬化冰墙、高阶个人自卫黑冰或敌方网络黑客驻守 */
   readonly hardenedIce?: boolean;
+  /** 目标自身明确装有完好自我 ICE 或脑防线（首道破解极易被截断并触发警报/反烧） */
+  readonly targetSelfIce?: boolean;
+  /** 目标装有接地镀层或抗电涌重型屏蔽（对电磁短路有显著硬件抗性） */
+  readonly targetSurgeShielded?: boolean;
+  /** 目标装有防火涂层或军用级冗余散热（对过热有显著硬件抗性） */
+  readonly targetThermalShielded?: boolean;
+  /** 目标装有史诗/传说级战斗操作系统或重型军用义体（自带稳压熔断与散热冗余，单发入门破解无法一击炸缸） */
+  readonly targetHighTierChrome?: boolean;
+  /** 现场或所属子网存在敌方网络黑客协防（触发双向黑客对垒与反追踪） */
+  readonly enemyNetrunnerPresent?: boolean;
+  /** 现场涉及的电子战高危帮派/公司名称（如虎爪帮、漩涡帮、巫毒帮、荒坂等） */
+  readonly hardenedFaction?: string;
+  /** 侵入方自身接入仓档次：basic(白/绿入门) / pro(蓝/紫专业) / elite(金传说军用) */
+  readonly playerDeckTier?: "basic" | "pro" | "elite";
   /** 本次试图调用但接入仓槽位尚未插装的目录程序名称（提示无法直接上传） */
   readonly missingProgramName?: string;
   /** 试图起手直放终极程序但尚未捅穿目标个人黑冰建立立足点 */
@@ -105,11 +119,19 @@ export function evaluateHackTopology(input: HackTopologyCheckInput): HackTopolog
   }
 
   const notes: string[] = [];
+  const deckGap =
+    input.playerDeckTier === "basic"
+      ? "玩家当前为入门/民用级接入仓，算力与破冰穿透力有限"
+      : input.playerDeckTier === "pro"
+        ? "玩家配备专业级接入仓"
+        : input.playerDeckTier === "elite"
+          ? "玩家配备顶级军用/传说级接入仓"
+          : undefined;
 
   if (input.vector === "directLink") {
     notes.push(
-      input.hardenedIce
-        ? "已通过个人连接线物理直插跳过无线屏障，但对方底层挂着硬化黑冰/个人防火墙，硬切极易引发反烧灼与位置暴露"
+      input.hardenedIce || input.targetSelfIce
+        ? "已通过个人连接线物理直插跳过无线屏障，但对方底层挂着自我 ICE / 硬化黑冰，硬切极易引发反烧灼与位置暴露"
         : "已通过个人连接线物理直插接入硬件节点，跳过外围无线屏障",
     );
   } else {
@@ -117,11 +139,47 @@ export function evaluateHackTopology(input: HackTopologyCheckInput): HackTopolog
       input.vector === "localSubnet"
         ? `经已渗入的「${input.requiredSubnet ?? "局域子网"}」内网路径切入`
         : "经近距无线端口试探切入";
+    if (input.targetSelfIce) {
+      notes.push(
+        `${route}；目标明确装有完好「自我 ICE / 脑防线」：首道直接上传的快速破解会被自卫冰墙自动截断或大幅削弱，并立刻拉响端口告警甚至顺着链路反烧，须先消耗/捅穿其自卫黑冰再打核心破解`,
+      );
+    } else if (input.hardenedIce) {
+      notes.push(
+        `${route}；对面挂有硬化个人黑冰、据点防火墙或驻守黑客${input.hardenedFaction ? `（${input.hardenedFaction}电子战防线）` : ""}，须先侦察/破冰再上传——无掩护硬撞极易被挡回、触发反向追踪或遭反烧`,
+      );
+    } else if (input.hardenedFaction) {
+      notes.push(
+        `${route}；现场属「${input.hardenedFaction}」地盘或武装编组，绝非裸奔民用网，据点子网常带防火墙与自我 ICE 骨干，高调上传伤害破解易拉响警报并引出驻场黑客反制`,
+      );
+    } else {
+      notes.push(
+        `${route}，无线端口可达；仍需先掠过对方个人防火墙（无自我 ICE 的街头散兵或民用端口阻力较低，但高噪伤害破解仍可能惊动同网耳目）`,
+      );
+    }
+  }
+
+  if (input.enemyNetrunnerPresent) {
     notes.push(
-      input.hardenedIce
-        ? `${route}；对面挂有高阶个人自卫黑冰、自我 ICE 或驻守黑客，先捅穿黑冰再上传——硬撞极易被挡回、暴露位置触发反向追踪或遭反烧`
-        : `${route}，无线端口可达；仍需先掠过对方个人防火墙（街头民用端口破冰阻力低）`,
+      "现场/子网存在敌方网络黑客协防：玩家发起高调破解会立刻暴露无线信号特征，敌方黑客将同步发起反追踪或快速破解反制（须在 counterHack 裁决对抗结果）",
     );
+  }
+
+  if (input.targetSurgeShielded) {
+    notes.push(
+      "目标装有接地镀层/抗电涌屏蔽：「电磁短路」类高压电涌会被大幅泄流削弱，无法一发直接瘫痪其核心义体",
+    );
+  }
+
+  if (input.targetThermalShielded) {
+    notes.push("目标装有防火涂层/隔热保护：「过热」类升温灼烧效果明显受抑，难以一发直接烧毁散热件");
+  }
+
+  if (input.targetHighTierChrome) {
+    notes.push(
+      `目标配备高阶军用/传说级战斗义体，自带稳压熔断与冗余散热环${deckGap ? `（${deckGap}）` : ""}：单发「过热」或「电磁短路」至多引发高温告警、短暂降频卡顿或皮表灼痛，绝不会一发直接令顶级义体炸缸报废；需先破冰并多轮压制、高阶强攻接入仓或配合实弹/近战拆毁`,
+    );
+  } else if (deckGap && (input.hardenedIce || input.targetSelfIce || input.enemyNetrunnerPresent)) {
+    notes.push(`${deckGap}，硬撞高阶黑冰或敌方黑客时阻力与积热惩罚更重`);
   }
 
   if (input.thermalLevel === "critical") {

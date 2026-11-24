@@ -166,7 +166,11 @@ export function applyWorld(
   }
   notes.push(...dueNotes(draft, now, target));
   const signals = command.activity === "rest" ? ["rest"] : [];
-  if (draft.location !== beforeLocation) signals.push("world.arrived");
+  if (draft.location !== beforeLocation) {
+    // 玩家换到新地点时开启新场起点，避免前一个地点的非同行人物在模型未标 sceneEnd 时滞留在场
+    draft.sceneStartedAt = target;
+    signals.push("world.arrived");
+  }
   return target > now
     ? { ok: true, notes, advanceTo: target, signals }
     : { ok: true, notes, signals };

@@ -23,7 +23,11 @@ export type ProseBlock = z.infer<typeof ProseBlockSchema>;
 export const PROSE_BLOCK_INFO: Readonly<
   Record<ProseBlock, { readonly label: string; readonly max: number; readonly hint: string }>
 > = {
-  look: { label: "外貌", max: 300, hint: "衣着风格、神态特征、外显义体与身体伤疤细节" },
+  look: {
+    label: "外貌",
+    max: 300,
+    hint: "体态轮廓、五官神态、发型瞳色、外显义体与伤疤纹身等物理体貌",
+  },
   past: { label: "背景故事", max: 800, hint: "生平来历、重大转折经历、失去的事物与未了恩怨" },
   personality: { label: "性格", max: 300, hint: "价值信条、行事底线、高压下的真实反应与深层软肋" },
   voice: { label: "说话方式", max: 300, hint: "语速语气、口头禅、惯用黑话与特定情境下的腔调" },

@@ -10,7 +10,7 @@ type SandevistanView = ReturnType<typeof sandevistanView>;
 type RipperdocView = ReturnType<typeof ripperdocView>;
 type RipperdocDebtsView = ReturnType<typeof ripperdocDebtsView>;
 
-function trimAbility(ability: string | null | undefined, maxChars = 64): string {
+function trimAbility(ability: string | null | undefined, maxChars = 88): string {
   const clean = (ability ?? "").trim().replace(/。$/, "");
   if (!clean) return "";
   if (clean.length <= maxChars) return clean;

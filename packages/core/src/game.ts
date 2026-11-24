@@ -12,7 +12,7 @@ import {
 import type { WorldState } from "./kernel/world";
 import { looseCyberwareView } from "./loose-cyberware-view";
 import { currentOffers } from "./narrator/pending";
-import { customCyberwareDefs } from "./schemas/board";
+import { customCyberwareDefs, resolveStartEddies } from "./schemas/board";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import type { arcCardsView } from "./systems/arcs";
@@ -329,14 +329,7 @@ function applyBoardKit(
   content: GameContent,
 ): Kit {
   if (!boardKit) return base;
-  const eddies =
-    boardKit.cashTier === "broke"
-      ? 0
-      : boardKit.cashTier === "stash"
-        ? (base.eddies ?? 0) + 2500
-        : boardKit.cashTier === "windfall"
-          ? (base.eddies ?? 0) + 6000
-          : base.eddies;
+  const eddies = resolveStartEddies(base.eddies ?? 0, boardKit);
   const gear = [...base.gear];
   const usedSlots = new Set<number>(gear.flatMap((g) => (g.slot !== undefined ? [g.slot] : [])));
   const validItems = content.items ? new Set(content.items.map((i) => i.id)) : null;

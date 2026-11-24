@@ -1,11 +1,10 @@
 /*
- * 2077 开放式五步角色创建工作台（5-Step Open 2077 Workbench）：
+ * 2077 开放式四步角色创建工作台（4-Step Open 2077 Workbench）：
  * - 严格对齐 settings.module.css / workshop.module.css / profile.module.css 的原作 2077 视觉文法：
  *   1. 外框安全留白 padding: 44px 64px 26px，完整避开 panel.frame 顶部及边角装饰文字
  *   2. 居中限宽工作区（max-width: 1560px），杜绝超宽屏拉伸成空洞后台表单
  *   3. 切角几何（chamfered clip-path）、原作 fx.grid 低透明点阵肌理、tab.line 发光底线与鲜明红/青/黄层级
- *   4. Step 02 采用单控制台 7 行紧凑生物扫描表（左部位轨 + 右切角选项芯片流），彻底消除 7 个空心大盒子
- *   5. 右侧 NC LIVE DOSSIER 强化 3:4 切角立绘视觉焦点 + 2×2 遥测矩阵 + 底部固定入城发射台
+ *   4. 右侧 NC LIVE DOSSIER 聚合 3:4 切角立绘焦点 + 上传图片反推外貌描述 + 2×2 遥测矩阵 + 底部固定入城发射台
  * - 严格遵循项目视觉红线：无 CSS 渐变、无 backdrop-filter、使用自定义指针变量、尊重 prefers-reduced-motion。
  */
 
@@ -638,7 +637,7 @@
   overflow-wrap: anywhere;
 }
 
-/* ———— 五步工作台总骨架 ———— */
+/* ———— 四步工作台总骨架 ———— */
 
 .bench {
   display: grid;
@@ -649,7 +648,7 @@
   color: var(--cp-text);
 }
 
-/* ———— 顶部五步进度轨（2077 切角任务轨 + 高对比数字索引） ———— */
+/* ———— 顶部四步进度轨（2077 切角任务轨 + 高对比数字索引） ———— */
 
 .railBar {
   display: flex;
@@ -661,7 +660,7 @@
 .stepRail {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
 }
@@ -1309,330 +1308,7 @@
   line-height: 1.35;
 }
 
-/* ———— Step 02：2077 生物扫描控制台（统一单面板 7 行紧凑表，彻底消除 7 个空心大盒） ———— */
-
-.bioWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-
-.bioToolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding: 10px 16px;
-  border: 1px solid rgb(94 246 255 / 26%);
-  border-left: 3px solid var(--cp-cyan);
-  background: rgb(8 23 30 / 86%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
-}
-
-.bioToolbarInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.bioStatus {
-  color: var(--cp-cyan);
-  font-family: var(--font-mono);
-  font-size: 0.84rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.bioStatus b {
-  color: var(--cp-yellow);
-  font-size: 0.94rem;
-}
-
-.slotTools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.bioConsole {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border: 1px solid rgb(255 97 88 / 26%);
-  border-left: 3px solid var(--cp-red);
-  background: rgb(16 10 19 / 84%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
-}
-
-.bioConsole > :not(.hudGridBg) {
-  position: relative;
-  z-index: 1;
-}
-
-.bioRow {
-  display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-  gap: 12px 18px;
-  align-items: start;
-  padding: 11px 16px;
-  border-bottom: 1px solid rgb(255 97 88 / 15%);
-  transition: background-color var(--dur-flash);
-}
-
-.bioRow:last-child {
-  border-bottom: 0;
-}
-
-.bioRow:hover {
-  background: rgb(255 97 88 / 4%);
-}
-
-.bioRow[data-locked] {
-  background: rgb(252 238 10 / 6%);
-  box-shadow: inset 3px 0 0 var(--cp-yellow);
-}
-
-.bioRowRail {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-  padding-right: 12px;
-  border-right: 1px solid rgb(255 255 255 / 9%);
-}
-
-.bioRowTitleLine {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-}
-
-.bioIndex {
-  color: var(--cp-red);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-
-.bioRow[data-locked] .bioIndex {
-  color: var(--cp-yellow);
-}
-
-.bioTitle {
-  margin: 0;
-  color: var(--cp-text);
-  font-size: 0.92rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.bioSub {
-  color: var(--cp-text-dim);
-  font-size: 0.72rem;
-  line-height: 1.3;
-}
-
-.bioLockBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 3px;
-  padding: 2px 9px;
-  border: 1px solid rgb(255 255 255 / 16%);
-  background: rgb(9 8 15 / 78%);
-  color: var(--cp-text-dim);
-  font: inherit;
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  cursor: var(--cp-cursor-hand);
-}
-
-.bioLockDot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  background: rgb(255 255 255 / 28%);
-}
-
-.bioLockBtn:hover {
-  border-color: var(--cp-cyan-dim);
-  color: var(--cp-text);
-}
-
-.bioLockBtn[aria-pressed="true"] {
-  border-color: var(--cp-yellow);
-  background: rgb(252 238 10 / 16%);
-  color: var(--cp-yellow);
-  font-weight: 600;
-}
-
-.bioLockBtn[aria-pressed="true"] .bioLockDot {
-  background: var(--cp-yellow);
-}
-
-.bioLockBtn:focus-visible,
-.bioOption:focus-visible {
-  outline: 2px solid var(--cp-cyan);
-  outline-offset: 1px;
-}
-
-.bioRowContent {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  padding-top: 1px;
-}
-
-.bioSubStack {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.bioGroupWrap {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-
-.bioGroupTag {
-  flex: none;
-  min-width: 2.3rem;
-  padding: 5px 0 0;
-  color: var(--cp-cyan);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  opacity: 0.84;
-}
-
-.bioOptions {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.bioOption {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
-  border: 1px solid rgb(255 97 88 / 24%);
-  background: rgb(11 9 17 / 88%);
-  color: rgb(212 208 205);
-  font: inherit;
-  font-size: 0.82rem;
-  line-height: 1.35;
-  cursor: var(--cp-cursor-hand);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
-  transition:
-    border-color var(--dur-flash) var(--ease-cyber),
-    color var(--dur-flash) var(--ease-cyber),
-    background-color var(--dur-flash) var(--ease-cyber),
-    transform 130ms var(--ease-snap);
-}
-
-.bioOption:hover:not(:disabled) {
-  border-color: var(--cp-red);
-  color: var(--cp-text);
-  background: rgb(255 97 88 / 16%);
-  transform: translateY(-1px);
-}
-
-.bioOption:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.bioOption[aria-pressed="true"] {
-  border-color: var(--cp-cyan);
-  background: rgb(10 42 52 / 94%);
-  color: var(--cp-cyan);
-  font-weight: 600;
-  box-shadow: inset 2px 0 0 var(--cp-cyan);
-}
-
-.bioOption:disabled {
-  opacity: 0.34;
-  cursor: var(--cp-cursor);
-}
-
-.bioSwatch {
-  flex: none;
-  width: 11px;
-  height: 11px;
-  border: 1px solid rgb(255 255 255 / 55%);
-}
-
-.bioOutput {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px 14px;
-  border: 1px solid rgb(94 246 255 / 32%);
-  border-left: 3px solid var(--cp-cyan);
-  background: rgb(8 21 28 / 88%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
-}
-
-.bioOutput > :not(.hudGridBg) {
-  position: relative;
-  z-index: 1;
-}
-
-.bioOutputHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.bioOutputMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 12px;
-}
-
-.bioOutputCode {
-  color: var(--cp-cyan);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-.bioOutputText {
-  margin: 0;
-  color: var(--cp-text);
-  font-family: var(--font-body);
-  font-size: 0.9rem;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-
-.bioTextareaBox textarea {
-  min-height: 4.5rem;
-  padding: 8px 12px;
-  font-size: var(--fs-ui);
-  line-height: 1.6;
-}
-
-/* ———— 子标签栏（Step 03 / 04 / 05） ———— */
+/* ———— 子标签栏（Step 02 / 03 / 04） ———— */
 
 .subTabs {
   display: flex;
@@ -2231,6 +1907,131 @@
   gap: 6px;
 }
 
+.hiddenFileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 右侧档案栏内置外貌反推区（上传图片即设为立绘并反推物理外貌描写） */
+.asideLookBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgb(94 246 255 / 26%);
+  border-left: 3px solid var(--cp-cyan);
+  background: rgb(8 19 27 / 84%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  transition:
+    border-color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.asideLookBox[data-drag] {
+  border-color: var(--cp-yellow);
+  border-left-color: var(--cp-yellow);
+  background: rgb(28 24 10 / 88%);
+}
+
+.asideLookHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.asideLookCode {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.asideLookCount {
+  color: var(--cp-text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.asideLookActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.asideLookMeta {
+  margin: 0;
+  color: var(--cp-cyan);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.asideLookError {
+  margin: 0;
+  padding: 5px 8px;
+  border-left: 2px solid var(--cp-danger);
+  background: rgb(255 60 60 / 12%);
+  color: var(--cp-danger);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.asideLookFull {
+  margin: 0;
+  color: var(--cp-text);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  line-height: 1.62;
+  overflow-wrap: anywhere;
+}
+
+.asideLookDropHint {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px dashed rgb(94 246 255 / 34%);
+  background: rgb(6 14 21 / 72%);
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    border-color var(--dur-flash),
+    color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.asideLookDropHint:hover:not(:disabled),
+.asideLookDropHint:focus-visible {
+  border-color: var(--cp-cyan);
+  background: rgb(10 26 36 / 86%);
+  color: var(--cp-text);
+}
+
+.asideLookDropHint:disabled {
+  opacity: 0.55;
+  cursor: var(--cp-cursor);
+}
+
+.asideLookTextareaBox textarea {
+  min-height: 4.8rem;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
 /* 2x2 紧凑遥测矩阵（替换原先干瘪的长列表） */
 .dossierTelemetry {
   display: grid;
@@ -2311,13 +2112,6 @@
   margin: 0;
   color: var(--cp-text);
   overflow-wrap: anywhere;
-}
-
-.asideLookText {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .asideChecks {
@@ -2485,7 +2279,7 @@
   .stepRail {
     flex: 0 0 auto;
     width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .mobileSummaryToggle {
@@ -2518,26 +2312,6 @@
   .nameGrid {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .bioRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .bioRowRail {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    padding-right: 0;
-    padding-bottom: 6px;
-    border-right: 0;
-    border-bottom: 1px solid rgb(255 255 255 / 8%);
-  }
-
-  .bioLockBtn {
-    margin-top: 0;
-    margin-left: auto;
-  }
 }
 
 @media (max-width: 820px) {
@@ -2560,15 +2334,6 @@
 
   .tarotGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bioGroupWrap {
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .bioGroupTag {
-    padding-top: 0;
   }
 
   .footerBar {
@@ -2672,8 +2437,8 @@
   .stepUnderline,
   .tarotCard,
   .tarotArt,
-  .bioRow,
-  .bioOption,
+  .asideLookBox,
+  .asideLookDropHint,
   .dossierPortraitEmpty,
   .portraitImg,
   .portraitCornerTL,
@@ -2711,8 +2476,6 @@
   .tarotCard[data-tilting][data-pressed],
   .tarotCard:hover .tarotArt,
   .tarotCard[aria-pressed="true"] .tarotArt,
-  .bioOption:hover:not(:disabled),
-  .bioOption:active:not(:disabled),
   .portraitBtn:hover .portraitImg,
   .portraitBtn:focus-visible .portraitImg,
   .dossierPortraitEmpty:hover .portraitCornerTL,

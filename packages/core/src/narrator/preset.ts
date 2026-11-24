@@ -226,34 +226,60 @@ export interface MacroContext {
 const TRIM_MARK = "";
 const TRIM_EAT = new RegExp(`\\s*${TRIM_MARK}\\s*`, "gu");
 
-/**
- * 展开酒馆常用的宏：{{user}} {{char}} {{lastUserMessage}} {{random::a::b}} {{random:a,b}}
- * {{roll:XdY}} {{setvar::名::值}} {{getvar::名}} {{trim}} {{// 注释}}。变量只在这一轮的这几条条目里有效；
- * 不认识的宏原样留着
- */
-export function expandMacros(input: string, ctx: MacroContext, vars: Map<string, string>): string {
+function expandMacrosDetailed(
+  input: string,
+  ctx: MacroContext,
+  vars: Map<string, string>,
+  dynamicVars: Set<string>,
+): { readonly text: string; readonly dynamic: boolean } {
   const pick = (list: readonly string[]) => list[ctx.roll(list.length) - 1] ?? "";
   let out = input.replace(/\{\{\/\/[\s\S]*?\}\}/g, "");
+  let dynamic = false;
   // 内层先展开，最多套 5 层
   for (let pass = 0; pass < 5; pass++) {
+    let passHadDynamic = false;
     const next = out.replace(/\{\{([^{}]*)\}\}/g, (whole, body: string) => {
       const [head = "", ...rest] = body.split("::");
       const key = head.trim();
       const lower = key.toLowerCase();
       if (lower === "user") return ctx.user;
       if (lower === "char") return ctx.char;
-      if (lower === "lastusermessage") return ctx.lastUserMessage;
+      if (lower === "lastusermessage") {
+        dynamic = true;
+        passHadDynamic = true;
+        return ctx.lastUserMessage;
+      }
       if (lower === "trim") return TRIM_MARK;
       if (lower === "setvar") {
-        vars.set((rest[0] ?? "").trim(), rest.slice(1).join("::"));
+        const varName = (rest[0] ?? "").trim();
+        vars.set(varName, rest.slice(1).join("::"));
+        if (dynamic || passHadDynamic) dynamicVars.add(varName);
+        else dynamicVars.delete(varName);
         return "";
       }
-      if (lower === "getvar") return vars.get((rest[0] ?? "").trim()) ?? "";
-      if (lower === "random") return pick(rest);
-      if (lower.startsWith("random:")) return pick(key.slice(7).split(","));
+      if (lower === "getvar") {
+        const varName = (rest[0] ?? "").trim();
+        if (dynamicVars.has(varName)) {
+          dynamic = true;
+          passHadDynamic = true;
+        }
+        return vars.get(varName) ?? "";
+      }
+      if (lower === "random") {
+        dynamic = true;
+        passHadDynamic = true;
+        return pick(rest);
+      }
+      if (lower.startsWith("random:")) {
+        dynamic = true;
+        passHadDynamic = true;
+        return pick(key.slice(7).split(","));
+      }
       // {{roll:2d6+1}}、{{roll:d20}}，也认酒馆的 {{roll 20}} / {{roll:20}}（一颗 20 面）
       const dice = /^roll[: ]\s*(?:(\d*)d)?(\d+)\s*([+-]\s*\d+)?$/i.exec(key);
       if (dice) {
+        dynamic = true;
+        passHadDynamic = true;
         const count = Math.min(100, Number(dice[1] || 1));
         const sides = Math.max(1, Number(dice[2]));
         let sum = Number((dice[3] ?? "0").replace(/\s/g, ""));
@@ -266,7 +292,16 @@ export function expandMacros(input: string, ctx: MacroContext, vars: Map<string,
     out = next;
   }
   // {{trim}} 吃掉自己前后的空白
-  return out.replace(TRIM_EAT, "");
+  return { text: out.replace(TRIM_EAT, ""), dynamic };
+}
+
+/**
+ * 展开酒馆常用的宏：{{user}} {{char}} {{lastUserMessage}} {{random::a::b}} {{random:a,b}}
+ * {{roll:XdY}} {{setvar::名::值}} {{getvar::名}} {{trim}} {{// 注释}}。变量只在这一轮的这几条条目里有效；
+ * 不认识的宏原样留着
+ */
+export function expandMacros(input: string, ctx: MacroContext, vars: Map<string, string>): string {
+  return expandMacrosDetailed(input, ctx, vars, new Set()).text;
 }
 
 export interface ExpandedPreset {
@@ -274,25 +309,37 @@ export interface ExpandedPreset {
   readonly inChat: readonly { readonly depth: number; readonly message: LlmMessage }[];
 }
 
-/** 一轮里展开好的条目：前置段的放在本作提示词前面，带深度的插进聊天记录 */
+/**
+ * 一轮里展开好的条目：
+ * - 静态前置段（无每轮动态宏）放在本作静态规则之前，跨回合 100% 稳定命中提示缓存；
+ * - 含 {{lastUserMessage}}/{{random}}/{{roll}} 等每轮变动宏的条目，自动下沉至尾部动态区且不以 system 角色上浮，
+ *   防止单个随机宏击穿整段系统提示与对话历史前缀缓存。
+ */
 export function presetMessages(preset: TavernPreset, ctx: MacroContext): ExpandedPreset {
   const vars = new Map<string, string>();
+  const dynamicVars = new Set<string>();
   const head: LlmMessage[] = [];
   const inChat: { depth: number; message: LlmMessage }[] = [];
   for (const e of preset.entries) {
     if (!e.enabled) continue;
-    const content = expandMacros(e.content, ctx, vars).trim();
+    const expanded = expandMacrosDetailed(e.content, ctx, vars, dynamicVars);
+    const content = expanded.text.trim();
     if (content === "") continue;
-    const message = { role: e.role, content };
-    if (e.depth === null) head.push(message);
-    else inChat.push({ depth: e.depth, message });
+    if (e.depth === null && !expanded.dynamic) {
+      head.push({ role: e.role, content });
+    } else {
+      // 动态宏条目不能保留 system 角色（否则 Anthropic / Gemini 适配层会将其上浮进顶层 system 破坏缓存）
+      const role: LlmMessage["role"] = expanded.dynamic && e.role === "system" ? "user" : e.role;
+      inChat.push({ depth: e.depth ?? 0, message: { role, content } });
+    }
   }
   return { head, inChat };
 }
 
 /**
- * 叠加（用户定的）：预设条目在最前面当写作风格，后面接一句交代，再接本作原有的整份消息，本作规则说了算；
- * 带深度的条目从后往前数插进聊天记录（0 插在最后一条之前，不压过本作最后一条指令）
+ * 叠加（用户定的）：静态预设条目在最前面当写作风格，后面接一句交代，再接本作原有的整份消息，本作规则说了算；
+ * 带深度的条目按原深度从大到小排好，统一锚定在历史对话之后、最后一条动态用户消息之前，
+ * 既保持近端高注意力权重，又不因每轮历史增长而向后位移击穿多轮对话前缀缓存。
  */
 export function applyPreset(
   messages: readonly LlmMessage[],
@@ -314,9 +361,10 @@ export function applyExpandedPreset(
       "以上是玩家导入的写作预设，负责文风、修辞、节奏与篇幅。下面是本游戏的世界事实、人物知情边界、本轮已定裁决与纯文本输出协议；文风归预设，世界事实、玩家边界、已定结果与纯文本输出以下面为准。",
   };
   const out: LlmMessage[] = [...head, ...(head.length > 0 ? [bridge] : []), ...messages];
-  for (const { depth, message } of [...inChat].sort((a, b) => b.depth - a.depth)) {
-    const at = Math.max(head.length > 0 ? head.length + 1 : 0, out.length - 1 - depth);
-    out.splice(at, 0, message);
+  if (inChat.length > 0) {
+    const ordered = [...inChat].sort((a, b) => b.depth - a.depth).map((entry) => entry.message);
+    const insertAt = messages.length > 0 ? out.length - 1 : out.length;
+    out.splice(insertAt, 0, ...ordered);
   }
   return out;
 }

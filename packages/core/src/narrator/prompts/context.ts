@@ -6,7 +6,7 @@ import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { evaluatePhysicsBoundaries, type NarrativeIntensity } from "../../physics";
 import type { TurnInput } from "../../schemas/turn";
-import { CyberwareStateSchema, cyberwareSection } from "../../systems/cyberware";
+import { CyberwareStateSchema, cyberwareCatalog, cyberwareSection } from "../../systems/cyberware";
 import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
 import {
@@ -136,14 +136,34 @@ export interface PromptExtras {
   readonly includeNpcEquipment?: boolean | undefined;
 }
 
+/** 把【当前状态】拆成「同场基本不变的稳定行」与「每轮跳变的【时间：】行」，便于按消息边界切片缓存。 */
+export function splitStateSummary(
+  world: WorldState,
+  records: readonly LogRecord[],
+  data: Readonly<Record<string, unknown>> = {},
+): { readonly stable: string; readonly ticking: string | undefined } {
+  const views = registry.project({ world, records, data });
+  const lines = registry.status({ views });
+  const stable: string[] = [];
+  const ticking: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("时间：")) ticking.push(line);
+    else stable.push(line);
+  }
+  return {
+    stable: stable.join("\n"),
+    ticking: ticking.length > 0 ? ticking.join("\n") : undefined,
+  };
+}
+
 export function stateSummary(
   world: WorldState,
   records: readonly LogRecord[],
   data: Readonly<Record<string, unknown>> = {},
 ): string {
-  // 各系统交自己的几行，按 order 穿插排好；这里只负责投影和拼接
-  const views = registry.project({ world, records, data });
-  return registry.status({ views }).join("\n");
+  // 把每轮必变的「时间：」行移到【当前状态】末尾，避免单行分钟变化截断后面 2K+ 字稳定角色状态的 KV 前缀缓存。
+  const { stable, ticking } = splitStateSummary(world, records, data);
+  return ticking ? `${stable}\n${ticking}` : stable;
 }
 
 export function formatInput(input: TurnInput): string {
@@ -194,6 +214,31 @@ const MECHANICAL_WEAPON_HINT =
 const WEAPON_GLITCH_HINT = /(?:武器故障|卡壳|卡死.{0,4}枪|黑.{0,6}(?:枪|武器))/;
 const HARDENED_ICE_HINT =
   /(?:公司数据堡垒|军用黑冰|硬化黑冰|自卫黑冰|个人黑冰|高阶黑冰|自我\s*ICE|网络黑客|网监|军用防火墙|公司特工)/i;
+const HARDENED_FACTIONS: Readonly<Record<string, string>> = {
+  "voodoo-boys": "巫毒帮",
+  "tyger-claws": "虎爪帮",
+  maelstrom: "漩涡帮",
+  arasaka: "荒坂",
+  militech: "军用科技",
+  "kang-tao": "康陶",
+  barghest: "幽冥犬",
+  maxtac: "暴恐机动队",
+  netwatch: "网络监察",
+};
+const HARDENED_FACTION_MENTION: readonly (readonly [RegExp, string])[] = [
+  [/巫毒帮/, "巫毒帮"],
+  [/虎爪帮|云顶/, "虎爪帮"],
+  [/漩涡帮|食品厂|死神舞厅/, "漩涡帮"],
+  [/荒坂/, "荒坂"],
+  [/军用科技/, "军用科技"],
+  [/康陶/, "康陶"],
+  [/幽冥犬/, "幽冥犬"],
+  [/暴恐机动队/, "暴恐机动队"],
+  [/网络监察|网监/, "网络监察"],
+];
+const SURGE_SHIELD_IDS = new Set(["grounding-plating"]);
+const THERMAL_SHIELD_IDS = new Set(["fireproof-coating"]);
+const ICE_DEFENSE_IDS = new Set(["self-ice", "cogito-lattice", "black-ice-sniffer"]);
 const SUBNET_MENTION = /([\u4e00-\u9fa5A-Za-z0-9·-]{2,14}(?:内网|子网))/;
 const SUBNET_GATE = /(?:隔离|封闭|必须先渗入|局域网|本地子网)/;
 const HIGH_END_VENUE =
@@ -408,15 +453,16 @@ export function physicsSection(
 
     const npcs = NpcStateSchema.safeParse(world.slices.npc ?? {});
     const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
-    const targetedNpcs = npcs.success
-      ? Object.values(npcs.data.npcs).filter(
-          (n) =>
-            onStage(n, stage) &&
-            (inputText.includes(n.name) ||
-              (n.alias !== undefined && n.alias !== "" && inputText.includes(n.alias)) ||
-              inputText.includes(n.id)),
-        )
+    const onStageNpcs = npcs.success
+      ? Object.values(npcs.data.npcs).filter((n) => onStage(n, stage))
       : [];
+    const targetedNpcs = onStageNpcs.filter(
+      (n) =>
+        inputText.includes(n.name) ||
+        (n.alias !== undefined && n.alias !== "" && inputText.includes(n.alias)) ||
+        inputText.includes(n.id),
+    );
+    const chromeCatalog = cyberwareCatalog(safeData);
 
     const targetAirGapped = AIR_GAP_HINT.test(sceneContext);
     const mechanicalWeaponOnly =
@@ -441,12 +487,59 @@ export function physicsSection(
         : undefined;
     const requiredSubnet = vector === "localSubnet" ? breachedHere[0] : subnetCandidate;
 
+    const targetSelfIce = targetedNpcs.some((n) =>
+      (n.body?.cyberware ?? []).some((id) => ICE_DEFENSE_IDS.has(id)),
+    );
+    const targetSurgeShielded = targetedNpcs.some((n) =>
+      (n.body?.cyberware ?? []).some((id) => SURGE_SHIELD_IDS.has(id)),
+    );
+    const targetThermalShielded = targetedNpcs.some((n) =>
+      (n.body?.cyberware ?? []).some((id) => THERMAL_SHIELD_IDS.has(id)),
+    );
+    const targetHighTierChrome = targetedNpcs.some((n) =>
+      (n.body?.cyberware ?? []).some((id) => {
+        const def = chromeCatalog.get(id);
+        return (
+          def !== undefined &&
+          (def.rarity === "epic" || def.rarity === "legendary") &&
+          (def.slot === "os" ||
+            def.slot === "integumentary" ||
+            def.slot === "skeleton" ||
+            def.slot === "arms" ||
+            def.slot === "nervous")
+        );
+      }),
+    );
+    const enemyNetrunnerPresent = onStageNpcs.some((n) => {
+      if (!n.body || n.following) return false;
+      const info = npcDeckOf(n.body.cyberware, safeData);
+      return info.deck !== null;
+    });
+    const hardenedFaction =
+      targetedNpcs.map((n) => HARDENED_FACTIONS[n.faction]).find(Boolean) ??
+      onStageNpcs
+        .filter((n) => !n.following)
+        .map((n) => HARDENED_FACTIONS[n.faction])
+        .find(Boolean) ??
+      HARDENED_FACTION_MENTION.find(([re]) => re.test(sceneContext))?.[1];
     const npcHasHardenedChrome = targetedNpcs.some((n) => {
       if (!n.body) return false;
       const info = npcDeckOf(n.body.cyberware, safeData);
       return info.deck !== null || info.selfIce;
     });
-    const hardenedIce = npcHasHardenedChrome || HARDENED_ICE_HINT.test(sceneContext);
+    const hardenedIce =
+      npcHasHardenedChrome ||
+      targetSelfIce ||
+      enemyNetrunnerPresent ||
+      HARDENED_ICE_HINT.test(sceneContext);
+    const playerDeckDef = deckInfo?.deck ? chromeCatalog.get(deckInfo.deck) : undefined;
+    const playerDeckTier: "basic" | "pro" | "elite" | undefined = playerDeckDef
+      ? playerDeckDef.rarity === "legendary"
+        ? "elite"
+        : playerDeckDef.rarity === "rare" || playerDeckDef.rarity === "epic"
+          ? "pro"
+          : "basic"
+      : undefined;
 
     // 核对玩家是否点名施放某个目录程序，且槽位未装或终极程序缺破冰立足点
     const qCatalog = quickhackCatalog(safeData);
@@ -503,6 +596,13 @@ export function physicsSection(
       ...(targetUnchromed ? { targetUnchromed: true } : {}),
       ...(mechanicalWeaponOnly ? { mechanicalWeaponOnly: true } : {}),
       ...(hardenedIce ? { hardenedIce: true } : {}),
+      ...(targetSelfIce ? { targetSelfIce: true } : {}),
+      ...(targetSurgeShielded ? { targetSurgeShielded: true } : {}),
+      ...(targetThermalShielded ? { targetThermalShielded: true } : {}),
+      ...(targetHighTierChrome ? { targetHighTierChrome: true } : {}),
+      ...(enemyNetrunnerPresent ? { enemyNetrunnerPresent: true } : {}),
+      ...(hardenedFaction ? { hardenedFaction } : {}),
+      ...(playerDeckTier ? { playerDeckTier } : {}),
       ...(missingProgramName ? { missingProgramName } : {}),
       ...(missingFootholdFor ? { missingFootholdFor } : {}),
       ...(hasCyberdeck ? { thermalLevel } : {}),
@@ -547,7 +647,49 @@ export function uiActionsSection(
   return `【上一轮之后玩家刚刚在界面完成的操作（必须写进本轮正文）】\n在发本轮行动前，玩家刚在界面上完成了以下操作（钱、货、装备、义体与状态已由代码实际结算完毕）。请在写本轮正文时把这些刚发生的举动顺理成章、具体自然地写进开头或行文里（例如刚在柜台买下某物收进包里、刚装好义体、刚换上衣服等，不要跳过去不提，也不要用“界面/系统”等出戏词）：\n${lines}`;
 }
 
-/** 按阶段拼局面：状态、阶段可见的情境节、商品报价、场景记忆、物理约束、原剧时间线与开场 */
+/**
+ * 将局面拆成「同场稳定的半静态世界上下文」与「每轮跳变的动态尾部」：
+ * - `judge` / `extract` 借此按完整消息边界拆成 `[system, user(半静态世界), assistant(确认), user(本轮动态)]`，
+ *   无论上游是按完整消息分块缓存（Claude / 部分中转站）还是隐式前缀缓存（Gemini / OpenAI），都能整块命中。
+ * - `narrate` 维持 `situation()` 单列表形式。
+ */
+export function splitSituation(
+  world: WorldState,
+  records: readonly LogRecord[],
+  view: PlayerView,
+  plan: NarratorPlan,
+  extras: PromptExtras,
+  stage: SectionStage = "narrate",
+): { readonly stable: string[]; readonly volatile: string[] } {
+  const input = plan.kind === "action" ? { text: plan.input.text } : { text: "" };
+  const stable = [...registry.sections({ world, data: extras.data, input, stage })];
+  const market = merchantContext(view, input.text);
+  if (market) stable.push(market);
+  const state = splitStateSummary(world, records, extras.data);
+  if (state.stable !== "") stable.push(`【当前状态】\n${state.stable}`);
+
+  const volatile: string[] = [];
+  if (state.ticking) volatile.push(`【当前时间】\n${state.ticking}`);
+  const uiActions = plan.input.mode === "ooc" ? undefined : uiActionsSection(records, stage);
+  if (uiActions) volatile.push(uiActions);
+  const sceneMemory = sceneMemorySection(world, input.text);
+  if (sceneMemory) volatile.push(sceneMemory);
+  // 物理与安防约束给判断和正文落地；抽取以【本轮已定的事】与定稿正文为准，不重复带长段武器战术建议
+  if (stage !== "extract") {
+    const physics = physicsSection(world, extras.data, input.text);
+    if (physics) volatile.push(`【物理与安防现状】\n${physics}`);
+  }
+  // 2077 世界时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的背景节点误记为本轮事实
+  if (stage !== "extract") {
+    const canon = canonSection(extras.data, extras.startTime, world.time);
+    if (canon) volatile.push(`【2077 世界时间线】\n${canon}`);
+  }
+  if (stage !== "extract" && extras.opening && view.totalTurns === 0)
+    volatile.push(`【开场】\n${extras.opening}`);
+  return { stable, volatile };
+}
+
+/** 按阶段拼局面（稳定在前、变动在后） */
 export function situation(
   world: WorldState,
   records: readonly LogRecord[],
@@ -556,30 +698,8 @@ export function situation(
   extras: PromptExtras,
   stage: SectionStage = "narrate",
 ): string[] {
-  const input = plan.kind === "action" ? { text: plan.input.text } : { text: "" };
-  const parts = [
-    `【当前状态】\n${stateSummary(world, records, extras.data)}`,
-    ...registry.sections({ world, data: extras.data, input, stage }),
-  ];
-  const uiActions = plan.input.mode === "ooc" ? undefined : uiActionsSection(records, stage);
-  if (uiActions) parts.push(uiActions);
-  const sceneMemory = sceneMemorySection(world, input.text);
-  const market = merchantContext(view, input.text);
-  if (market) parts.push(market);
-  if (sceneMemory) parts.push(sceneMemory);
-  // 物理与安防约束给判断和正文落地；抽取以【本轮已定的事】与定稿正文为准，不重复带长段武器战术建议
-  if (stage !== "extract") {
-    const physics = physicsSection(world, extras.data, input.text);
-    if (physics) parts.push(`【物理与安防现状】\n${physics}`);
-  }
-  // 2077 世界时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的背景节点误记为本轮事实
-  if (stage !== "extract") {
-    const canon = canonSection(extras.data, extras.startTime, world.time);
-    if (canon) parts.push(`【2077 世界时间线】\n${canon}`);
-  }
-  if (stage !== "extract" && extras.opening && view.totalTurns === 0)
-    parts.push(`【开场】\n${extras.opening}`);
-  return parts;
+  const { stable, volatile } = splitSituation(world, records, view, plan, extras, stage);
+  return [...stable, ...volatile];
 }
 
 /** 开了斯安威斯坦时的说明；没开或开不了时为 undefined */

@@ -24,9 +24,17 @@ export interface AbortSignalLike {
   addEventListener(type: "abort", listener: () => void): void;
 }
 
+export interface LlmMessageImage {
+  readonly mimeType: "image/png" | "image/jpeg" | "image/webp";
+  /** 纯 base64 字符串（不含 data:... 前缀） */
+  readonly data: string;
+}
+
 export interface LlmMessage {
   readonly role: "system" | "user" | "assistant";
   readonly content: string;
+  /** 可选多模态图片附件（仅用于支持视觉输入的 user 消息） */
+  readonly images?: readonly LlmMessageImage[];
 }
 
 export interface LlmResponseFormat {
@@ -69,10 +77,37 @@ export interface LlmClient {
   stream(request: LlmRequest, signal?: AbortSignalLike): AsyncIterable<LlmEvent>;
 }
 
+export type EmbedTask = "query" | "document";
+
+export interface EmbedOptions {
+  readonly signal?: AbortSignalLike | undefined;
+  /** 区分查询与文档，供支持 taskType 的向量接口优化语义检索，并让缓存层只持久化文档向量 */
+  readonly task?: EmbedTask | undefined;
+}
+
 /** 可选向量嵌入客户端：用于旧记忆语义检索，未配置或失败时自动退化为规则检索 */
 export interface Embedder {
   embed(
     texts: readonly string[],
-    signal?: AbortSignalLike,
+    signalOrOptions?: AbortSignalLike | EmbedOptions,
   ): Promise<readonly (readonly number[])[]>;
+}
+
+export interface RerankOptions {
+  readonly topN?: number | undefined;
+  readonly signal?: AbortSignalLike | undefined;
+}
+
+export interface RerankResult {
+  readonly index: number;
+  readonly score: number;
+}
+
+/** 可选语义重排客户端（如 Qwen3-Reranker / BGE-Reranker）：对粗排候选做深度相关性精排 */
+export interface Reranker {
+  rerank(
+    query: string,
+    documents: readonly string[],
+    options?: RerankOptions,
+  ): Promise<readonly RerankResult[]>;
 }

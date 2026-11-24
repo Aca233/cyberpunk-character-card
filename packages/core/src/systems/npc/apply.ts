@@ -275,6 +275,7 @@ export function applyNpc(
   now: number,
   facts: Readonly<Record<string, unknown>> = {},
   data: Readonly<Record<string, unknown>> = {},
+  currentLocation: string | null = null,
 ): ApplyOutcome {
   if (command.type === "npc") {
     const { type: _type, location, home, body, faction, ...card } = command;
@@ -291,7 +292,8 @@ export function applyNpc(
     const notes = [`新人物：${card.name}`];
     const resolvedFaction = resolveFaction(faction, data, notes);
     const resolvedHome = home === undefined ? undefined : resolvePlace(home, data);
-    const resolvedLocation = location === undefined ? null : resolvePlace(location, data);
+    const resolvedLocation =
+      location === undefined ? currentLocation : resolvePlace(location, data);
     const resolvedBody = body ? sanitizeNpcBody(body, data, notes, card.id) : EMPTY_NPC_BODY;
     draft.npcs[card.id] = {
       ...card,
@@ -472,7 +474,11 @@ export function applyNpc(
       const notes = npc.met ? [] : [`认识了 ${npc.name}`];
       npc.met = true;
       npc.lastSeenAt = now;
-      if (command.location !== undefined) npc.location = command.location;
+      if (command.location !== undefined) {
+        npc.location = resolvePlace(command.location, data);
+      } else if (currentLocation !== null) {
+        npc.location = currentLocation;
+      }
       npc.lastKnownLocation = npc.location;
       return { ok: true, notes };
     }
@@ -531,9 +537,18 @@ export function applyNpc(
     }
     case "doing": {
       // 公开近况与实际行动分开记录；只听说做什么，不代表知道其当前真实地点。
+      const resolvedLocation =
+        command.location === undefined ? undefined : resolvePlace(command.location, data);
       npc.knownDoing = { text: command.text, at: now };
-      if (command.location !== undefined) npc.lastKnownLocation = command.location;
-      return updateDoing(npc, command, now);
+      if (resolvedLocation !== undefined) npc.lastKnownLocation = resolvedLocation;
+      return updateDoing(
+        npc,
+        {
+          text: command.text,
+          ...(resolvedLocation === undefined ? {} : { location: resolvedLocation }),
+        },
+        now,
+      );
     }
     case "relation": {
       if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
@@ -583,6 +598,10 @@ export function applyNpc(
       if (!npc.met) return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
       if (npc.following === command.following) return { ok: true };
       npc.following = command.following;
+      if (currentLocation !== null) {
+        npc.location = currentLocation;
+        npc.lastKnownLocation = currentLocation;
+      }
       if (command.following) npc.lastSeenAt = now;
       const tail = command.reason ? `（${command.reason}）` : "";
       return {
@@ -608,17 +627,29 @@ export function applyNpc(
   }
 }
 
-/** 玩家移动到达新地点时，把正随行且活着的同行者同步带到该地点 */
+/** 玩家移动到达新地点时：
+ * 1) 把正随行且活着的同行者同步带到该地点；
+ * 2) 若有非同行人物在旧地点建卡/出场时漏记位置（location/lastKnownLocation 为空），
+ *    顺手固定到玩家刚离开的地点，避免切地后仍因为位置为空而被永久判成在场。 */
 export function moveFollowingNpcs(
   draft: Draft<NpcState>,
   location: string | null,
   now: number,
+  departedFrom: string | null = null,
 ): void {
   if (location === null) return;
   for (const person of Object.values(draft.npcs)) {
-    if (!person.alive || !person.following) continue;
-    person.location = location;
-    person.lastKnownLocation = location;
-    person.lastSeenAt = now;
+    if (!person.alive) continue;
+    if (person.following) {
+      person.location = location;
+      person.lastKnownLocation = location;
+      person.lastSeenAt = now;
+      continue;
+    }
+    if (departedFrom !== null && departedFrom !== location && person.met) {
+      if (person.location === null) person.location = departedFrom;
+      if (person.lastKnownLocation === null)
+        person.lastKnownLocation = person.location ?? departedFrom;
+    }
   }
 }

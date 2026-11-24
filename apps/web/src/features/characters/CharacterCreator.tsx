@@ -1,6 +1,5 @@
 import { RADAR_ANCHORS } from "@cp/content";
 import {
-  type AppearanceSelection,
   type Board,
   CASH_TIER_INFO,
   type CharacterCard,
@@ -27,8 +26,6 @@ import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage, ImageLightbox } from "../images/GeneratedImage";
 import { ImageGenModal } from "../images/ImageGenModal";
 import { CYBER_LABELS, CyberDoll, type CyberSlot, type DollPart } from "../story/CyberDoll";
-import { AppearanceCustomizer } from "./AppearanceCustomizer";
-import { appearanceFilledCount } from "./appearance";
 import { PeoplePicker } from "./CreatorLife";
 import {
   CyberwareShelf,
@@ -58,6 +55,7 @@ import {
   stepProgress,
   toleranceSummary,
 } from "./creator";
+import { DossierAppearancePanel } from "./DossierAppearancePanel";
 import { anchorLabel, StartMapPicker, startAnchor } from "./StartMapPicker";
 import wb from "./workbench.module.css";
 
@@ -112,10 +110,10 @@ function TarotCardButton({
 }
 
 /**
- * 2077 开放式五步角色创建工作台：
- * - 顶部五步进度轨（01 身份与出身 / 02 体貌定制 / 03 履历与特质 / 04 义体与行装 / 05 旧识与落脚点）
+ * 2077 开放式四步角色创建工作台：
+ * - 顶部四步进度轨（01 身份与出身 / 02 履历与特质 / 03 义体与行装 / 04 旧识与落脚点）
  * - 左侧开放主编辑舞台（所有定制器直出内嵌，子标签避免拥挤）
- * - 右侧常驻 NC LIVE DOSSIER 档案栏（顶部 3:4 立绘、命牌、人性仪表、摘要、核验清单与唯一保存/入城发射台）
+ * - 右侧常驻 NC LIVE DOSSIER 档案栏（3:4 立绘、上传图片反推外貌描述、命牌、人性仪表、摘要、核验清单与唯一保存/入城发射台）
  * - 底部纯净步骤导航条（上一步 / 下一步 + 草稿保存状态）
  */
 export function CharacterCreator({
@@ -239,18 +237,6 @@ export function CharacterCreator({
     });
   };
 
-  const updateAppearance = (nextSelection: AppearanceSelection, nextLook: string) => {
-    setLocalSaveError(null);
-    onChange((current) => {
-      const currentBoard = current.board ?? emptyBoard();
-      return {
-        ...current,
-        look: nextLook,
-        board: { ...currentBoard, appearance: nextSelection },
-      };
-    });
-  };
-
   const launchMutation = useMutation({
     mutationFn: async () => {
       const targetCard: CharacterCard = {
@@ -345,7 +331,6 @@ export function CharacterCreator({
     ...board.skills.map((m) => m.label),
   ];
   const activeTarot = board.tarot ? TAROT_INFO[board.tarot] : null;
-  const bioFilledCount = appearanceFilledCount(board.appearance);
 
   // 立绘提示词仅传入随身武器与义体，不将载具塞进随身装备
   const characterPromptRequest: ImagePromptRequest = {
@@ -390,7 +375,7 @@ export function CharacterCreator({
 
   return (
     <div className={wb.bench}>
-      {/* —————— 顶部五步进度轨 —————— */}
+      {/* —————— 顶部四步进度轨 —————— */}
       <div className={wb.railBar} inert={busy}>
         <nav className={wb.stepRail} aria-label="创角流程步骤">
           {CREATOR_STEPS.map((step) => {
@@ -438,7 +423,7 @@ export function CharacterCreator({
             {checks.length === 0 ? "✓ 已就绪" : `待完善 ${checks.length} 项`}
           </span>
           <Button small pressed={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
-            {sidebarOpen ? "收起档案" : "实时档案与开局"}
+            {sidebarOpen ? "收起档案" : "档案 / 外貌与开局"}
           </Button>
         </div>
       </div>
@@ -602,8 +587,8 @@ export function CharacterCreator({
                         <strong>{board.origin.label}</strong>
                       </div>
                       <span className={wb.originMetrics}>
-                        启动资金 <b>{loadoutSummary.finalEddies} €</b> · 标配义体{" "}
-                        <b>{activeInherentCount}</b> 件 · 默认起点{" "}
+                        启动资金 <b>{loadoutSummary.finalEddies.toLocaleString("en-US")} €</b> ·
+                        标配义体 <b>{activeInherentCount}</b> 件 · 默认起点{" "}
                         <b>{fallbackAnchor?.name ?? "沃森 H10"}</b>
                       </span>
                     </div>
@@ -631,20 +616,7 @@ export function CharacterCreator({
               </div>
             )}
 
-            {/* ———— Step 02：体貌定制（7 部位纯物理 BIOMETRIC SCAN） ———— */}
-            {activeStep === "appearance" && (
-              <div key="step-appearance" className={wb.stepBody}>
-                <AppearanceCustomizer
-                  selection={board.appearance ?? { marks: [] }}
-                  look={card.look}
-                  pronoun={card.pronoun}
-                  onUpdate={updateAppearance}
-                  onManualLook={(look) => change({ look })}
-                />
-              </div>
-            )}
-
-            {/* ———— Step 03：履历与特质（三层分栏：过往履历 / 核心特质 / 负面缺陷） ———— */}
+            {/* ———— Step 02：履历与特质（三层分栏：过往履历 / 核心特质 / 负面缺陷） ———— */}
             {activeStep === "traits" && (
               <div key="step-traits" className={wb.stepBody}>
                 <div className={wb.subTabs} role="tablist" aria-label="履历与特质分区">
@@ -816,7 +788,7 @@ export function CharacterCreator({
               </div>
             )}
 
-            {/* ———— Step 04：义体与行装（子标签隔离：义体拓扑 / 行装与座驾） ———— */}
+            {/* ———— Step 03：义体与行装（子标签隔离：义体拓扑 / 行装与座驾） ———— */}
             {activeStep === "cyberware" && (
               <div key="step-cyberware" className={wb.stepBody}>
                 <div className={wb.subTabs} role="tablist" aria-label="义体与行装分区">
@@ -951,7 +923,7 @@ export function CharacterCreator({
               </div>
             )}
 
-            {/* ———— Step 05：旧识与落脚点（子标签隔离：夜之城旧识 / 开局落脚点） ———— */}
+            {/* ———— Step 04：旧识与落脚点（子标签隔离：夜之城旧识 / 开局落脚点） ———— */}
             {activeStep === "connections" && (
               <div className={wb.stepBody}>
                 <div className={wb.subTabs} role="tablist" aria-label="旧识与落脚点分区">
@@ -1036,7 +1008,7 @@ export function CharacterCreator({
           </section>
         </div>
 
-        {/* —————— 右侧常驻实时档案栏（NC LIVE DOSSIER，跨全部 5 步常驻） —————— */}
+        {/* —————— 右侧常驻实时档案栏（NC LIVE DOSSIER，跨全部 4 步常驻） —————— */}
         <aside
           className={wb.dossierAside}
           data-open={sidebarOpen || undefined}
@@ -1075,7 +1047,7 @@ export function CharacterCreator({
                     <span className={wb.portraitCornerTL} aria-hidden />
                     <span className={wb.portraitCornerBR} aria-hidden />
                     <span className={wb.portraitEmptyCode}>3:4</span>
-                    <span className={wb.portraitEmptyHint}>生成或上传立绘</span>
+                    <span className={wb.portraitEmptyHint}>AI 生成立绘</span>
                   </button>
                 )}
                 {activeTarot && (
@@ -1112,7 +1084,7 @@ export function CharacterCreator({
 
                 <div className={wb.portraitActions}>
                   <Button small primary onClick={() => setPortraitModalOpen(true)}>
-                    {card.portrait ? "重绘 / 换图" : "✦ 生成 / 上传立绘"}
+                    {card.portrait ? "✦ AI 重绘" : "✦ AI 生成立绘"}
                   </Button>
                   {card.portrait && (
                     <ActionButton onClick={() => setLightboxOpen(true)}>大图</ActionButton>
@@ -1122,12 +1094,28 @@ export function CharacterCreator({
               </div>
             </div>
 
+            {/* 外貌反推（上传参考图自动设为立绘并反推物理外貌描述） */}
+            <DossierAppearancePanel
+              portrait={card.portrait}
+              look={card.look}
+              pronoun={card.pronoun}
+              busy={busy}
+              onPortraitChange={(imageId) => change({ portrait: imageId })}
+              onLookChange={(look) => change({ look })}
+            />
+
             {/* 核心遥测快览（2x2 紧凑数字/地标矩阵） */}
             <div className={wb.dossierTelemetry}>
               <div className={wb.teleCell}>
                 <span className={wb.teleKey}>启动资金</span>
-                <strong className={wb.teleValAccent}>{loadoutSummary.finalEddies} €</strong>
-                <span className={wb.teleSub}>{CASH_TIER_INFO[board.kit.cashTier].label}</span>
+                <strong className={wb.teleValAccent}>
+                  {loadoutSummary.finalEddies.toLocaleString("en-US")} €
+                </strong>
+                <span className={wb.teleSub}>
+                  {board.kit.customEddies !== null
+                    ? "自定义金额"
+                    : CASH_TIER_INFO[board.kit.cashTier].label}
+                </span>
               </div>
               <div className={wb.teleCell}>
                 <span className={wb.teleKey}>装配义体</span>
@@ -1135,9 +1123,13 @@ export function CharacterCreator({
                 <span className={wb.teleSub}>耐受 {TOLERANCE_LEVELS[board.tolerance].label}</span>
               </div>
               <div className={wb.teleCell}>
-                <span className={wb.teleKey}>体貌定制</span>
-                <strong className={wb.teleVal}>{bioFilledCount} / 7</strong>
-                <span className={wb.teleSub}>{card.look.trim() ? "已合成" : "未设定"}</span>
+                <span className={wb.teleKey}>履历特质</span>
+                <strong className={wb.teleVal}>
+                  {board.pasts.length + board.skills.length + board.flaws.length} 项
+                </strong>
+                <span className={wb.teleSub}>
+                  {board.flaws.length > 0 ? `含缺陷 ${board.flaws.length} 项` : "无负面缺陷"}
+                </span>
               </div>
               <div className={wb.teleCell}>
                 <span className={wb.teleKey}>入城起点</span>
@@ -1154,10 +1146,6 @@ export function CharacterCreator({
 
             {/* 精简构筑总览 */}
             <dl className={wb.asideList}>
-              <div>
-                <dt>体貌</dt>
-                <dd className={wb.asideLookText}>{card.look.trim() || "尚未设定体貌"}</dd>
-              </div>
               <div>
                 <dt>履历</dt>
                 <dd>

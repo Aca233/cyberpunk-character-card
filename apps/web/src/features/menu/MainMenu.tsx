@@ -1,8 +1,10 @@
+import { TAROT_INFO } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry, type SaveSummary } from "../../api/client";
+import type { AssetId } from "../../assets";
 import { playSfx, toggleMute, useAudioPrefs, useAudioState } from "../../audio";
 import { formatDate } from "../../labels";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
@@ -21,6 +23,7 @@ import {
   StartMapPicker,
   startAnchor,
 } from "../characters/StartMapPicker";
+import { GeneratedImage } from "../images/GeneratedImage";
 import { EmptyState } from "../status/StatusParts";
 import {
   SHELL_THEMES,
@@ -745,16 +748,47 @@ function CharPreviewCard({
     maxRotate: 5.5,
     shadowShift: 4.5,
   });
+  const tarot = entry.card.board?.tarot;
+  const monogram = (entry.card.name.trim()[0] ?? "V").toUpperCase();
+  const fallbackArt = tarot ? (
+    <Asset
+      id={`tarot.${tarot}` as AssetId}
+      alt={TAROT_INFO[tarot].label}
+      className={styles.charPreviewImg}
+    />
+  ) : (
+    <span className={styles.charPreviewMonogram} aria-hidden>
+      {monogram}
+    </span>
+  );
+
   return (
     <button type="button" className={styles.charPreviewCard} onClick={onOpen} {...tilt}>
       <CellFrame />
-      <span className={styles.charPreviewBadge}>{entry.sample ? "官方预设" : "自建角色"}</span>
-      <strong className={styles.charPreviewName}>
-        {entry.card.name}
-        {entry.card.alias ? `「${entry.card.alias}」` : ""}
-      </strong>
-      <span className={styles.charPreviewMeta}>
-        {entry.card.origin || entry.card.board?.origin?.label || "未知出身"}
+      <div className={styles.charPreviewBody}>
+        <span className={styles.charPreviewBadge}>{entry.sample ? "官方预设" : "自建角色"}</span>
+        <strong className={styles.charPreviewName}>
+          {entry.card.name}
+          {entry.card.alias ? `「${entry.card.alias}」` : ""}
+        </strong>
+        <span className={styles.charPreviewMeta}>
+          {entry.card.origin || entry.card.board?.origin?.label || "未知出身"}
+        </span>
+      </div>
+      <span
+        className={styles.charPreviewMedia}
+        data-kind={entry.card.portrait ? "portrait" : tarot ? "tarot" : "monogram"}
+      >
+        {entry.card.portrait ? (
+          <GeneratedImage
+            imageId={entry.card.portrait}
+            alt={entry.card.name}
+            className={styles.charPreviewImg}
+            fallback={fallbackArt}
+          />
+        ) : (
+          fallbackArt
+        )}
       </span>
     </button>
   );
@@ -1127,29 +1161,17 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
           <div className={styles.field}>
             <label htmlFor="new-save-character">扮演的角色</label>
             <div className={styles.fieldRow}>
-              <FrameBox className={styles.grow}>
-                <select
-                  id="new-save-character"
-                  value={characterId}
-                  disabled={create.isPending || !characters.isSuccess || entries.length === 0}
-                  onChange={(e) => {
-                    setSelectedId(e.target.value);
-                    setCustomStartLocation("");
-                  }}
-                >
-                  {entries.length === 0 && (
-                    <option value="">
-                      {characters.isPending ? "正在读取角色…" : "暂无可选角色"}
-                    </option>
-                  )}
-                  {entries.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.card.name} · {entry.card.origin}
-                      {entry.sample ? "（示例）" : ""}
-                    </option>
-                  ))}
-                </select>
-              </FrameBox>
+              <CharacterSelect
+                id="new-save-character"
+                entries={entries}
+                value={characterId}
+                loading={characters.isPending}
+                disabled={create.isPending || !characters.isSuccess || entries.length === 0}
+                onChange={(id) => {
+                  setSelectedId(id);
+                  setCustomStartLocation("");
+                }}
+              />
               <Button disabled={create.isPending} onClick={() => navigate("/characters")}>
                 管理角色
               </Button>
@@ -1252,6 +1274,295 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
 
 /** 切法照地图浮层 map.panel* */
 const MAP_PANEL_SLICE = [20, 20, 30, 30] as const;
+
+/** 迷你角色头像：优先立绘 → 命牌塔罗 → 首字徽记 */
+function CharacterMiniAvatar({
+  entry,
+  className,
+}: {
+  readonly entry: CharacterEntry;
+  readonly className?: string | undefined;
+}) {
+  const tarot = entry.card.board?.tarot;
+  const monogram = (entry.card.name.trim()[0] ?? "V").toUpperCase();
+  const fallback = tarot ? (
+    <Asset
+      id={`tarot.${tarot}` as AssetId}
+      alt={TAROT_INFO[tarot].label}
+      className={styles.charSelectAvatarImg}
+    />
+  ) : (
+    <span className={styles.charSelectAvatarMono} aria-hidden>
+      {monogram}
+    </span>
+  );
+  return (
+    <span className={className} aria-hidden>
+      {entry.card.portrait ? (
+        <GeneratedImage
+          imageId={entry.card.portrait}
+          alt={entry.card.name}
+          className={styles.charSelectAvatarImg}
+          fallback={fallback}
+        />
+      ) : (
+        fallback
+      )}
+    </span>
+  );
+}
+
+/** 2077 赛博风格角色下拉选择器：替代原生 OS 黑底 select 展开，自带立绘/塔罗缩略图、分组与快速筛选 */
+function CharacterSelect({
+  id,
+  entries,
+  value,
+  loading,
+  disabled,
+  onChange,
+}: {
+  readonly id: string;
+  readonly entries: readonly CharacterEntry[];
+  readonly value: string;
+  readonly loading: boolean;
+  readonly disabled: boolean;
+  readonly onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const selected = entries.find((entry) => entry.id === value) ?? entries[0];
+
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  return (
+    <>
+      <FrameBox className={styles.charSelectBox}>
+        <button
+          ref={triggerRef}
+          id={id}
+          type="button"
+          className={styles.charSelectTrigger}
+          data-open={open || undefined}
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => {
+            if (disabled) return;
+            setOpen((prev) => !prev);
+          }}
+        >
+          {selected ? (
+            <>
+              <CharacterMiniAvatar entry={selected} className={styles.charSelectAvatar} />
+              <span className={styles.charSelectValue}>
+                <span className={styles.charSelectValueName}>{selected.card.name}</span>
+                <span className={styles.charSelectValueOrigin}>
+                  · {selected.card.origin || selected.card.board?.origin?.label || "未知出身"}
+                </span>
+              </span>
+            </>
+          ) : (
+            <span className={styles.charSelectPlaceholder}>
+              {loading ? "正在读取角色…" : "暂无可选角色"}
+            </span>
+          )}
+          <span className={styles.charSelectChevron} aria-hidden>
+            <Asset id="menu.arrowFill" width={11} tint="currentColor" />
+          </span>
+        </button>
+      </FrameBox>
+      {open && (
+        <CharacterSelectPopover
+          anchorRef={triggerRef}
+          entries={entries}
+          value={value}
+          onSelect={(nextId) => {
+            onChange(nextId);
+            setOpen(false);
+            triggerRef.current?.focus();
+          }}
+          onClose={close}
+        />
+      )}
+    </>
+  );
+}
+
+function CharacterSelectPopover({
+  anchorRef,
+  entries,
+  value,
+  onSelect,
+  onClose,
+}: {
+  readonly anchorRef: React.RefObject<HTMLButtonElement | null>;
+  readonly entries: readonly CharacterEntry[];
+  readonly value: string;
+  readonly onSelect: (id: string) => void;
+  readonly onClose: () => void;
+}) {
+  useLayer(onClose);
+  const [query, setQuery] = useState("");
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const updatePos = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const width = Math.min(440, Math.max(rect.width, 320), vw - 32);
+      const estHeight = Math.min(420, entries.length * 56 + 96);
+      const spaceBelow = vh - rect.bottom - 14;
+      const placeAbove = spaceBelow < Math.min(estHeight, 260) && rect.top > spaceBelow;
+      const top = placeAbove
+        ? Math.max(14, rect.top - Math.min(estHeight, rect.top - 18) - 6)
+        : Math.min(rect.bottom + 6, vh - 160);
+      const left = Math.min(Math.max(16, rect.left), vw - width - 16);
+      setPos({ top, left, width });
+    };
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
+  }, [anchorRef, entries.length]);
+
+  useEffect(() => {
+    if (entries.length > 5) searchRef.current?.focus();
+  }, [entries.length]);
+
+  const normalized = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!normalized) return entries;
+    return entries.filter((entry) => {
+      const hay = [
+        entry.card.name,
+        entry.card.alias,
+        entry.card.origin,
+        entry.card.board?.origin?.label,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(normalized);
+    });
+  }, [entries, normalized]);
+
+  const customList = filtered.filter((e) => !e.sample);
+  const sampleList = filtered.filter((e) => e.sample);
+
+  const renderOption = (entry: CharacterEntry) => {
+    const active = entry.id === value;
+    const originText = entry.card.origin || entry.card.board?.origin?.label || "未知出身";
+    return (
+      <button
+        key={entry.id}
+        type="button"
+        role="option"
+        aria-selected={active}
+        className={styles.charSelectOption}
+        data-selected={active || undefined}
+        onClick={() => {
+          onSelect(entry.id);
+        }}
+      >
+        <CharacterMiniAvatar entry={entry} className={styles.charSelectOptAvatar} />
+        <span className={styles.charSelectOptBody}>
+          <span className={styles.charSelectOptTitle}>
+            <span className={styles.charSelectOptName}>{entry.card.name}</span>
+            {entry.card.alias && (
+              <span className={styles.charSelectOptAlias}>「{entry.card.alias}」</span>
+            )}
+          </span>
+          <span className={styles.charSelectOptOrigin}>{originText}</span>
+        </span>
+        {active && <span className={styles.charSelectOptTag}>当前</span>}
+      </button>
+    );
+  };
+
+  if (!pos) return null;
+
+  return createPortal(
+    <div className={styles.charSelectPortal}>
+      <button
+        type="button"
+        className={styles.charSelectBackdrop}
+        aria-label="关闭角色选择列表"
+        onClick={onClose}
+      />
+      <div
+        className={styles.charSelectMenu}
+        role="listbox"
+        aria-label="扮演的角色"
+        style={{ top: pos.top, left: pos.left, width: pos.width }}
+      >
+        <NineSlice
+          id="map.panelBg"
+          tint="var(--cp-surface)"
+          slice={MAP_PANEL_SLICE}
+          className={styles.charSelectMenuBg}
+        />
+        <NineSlice
+          id="map.panelFg"
+          tint="var(--cp-cyan)"
+          slice={MAP_PANEL_SLICE}
+          className={styles.charSelectMenuFg}
+        />
+        <div className={styles.charSelectMenuInner}>
+          {entries.length > 5 && (
+            <div className={styles.charSelectSearchRow}>
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="筛选角色名、外号或出身…"
+                className={styles.charSelectSearch}
+              />
+              <span className={styles.charSelectSearchCount}>
+                {filtered.length}/{entries.length}
+              </span>
+            </div>
+          )}
+          <div className={styles.charSelectList}>
+            {filtered.length === 0 ? (
+              <p className={styles.charSelectEmpty}>没有匹配的角色</p>
+            ) : (
+              <>
+                {customList.length > 0 && (
+                  <div className={styles.charSelectGroup}>
+                    <div className={styles.charSelectGroupHead}>
+                      我的角色（{customList.length}）
+                    </div>
+                    {customList.map(renderOption)}
+                  </div>
+                )}
+                {sampleList.length > 0 && (
+                  <div className={styles.charSelectGroup}>
+                    <div className={styles.charSelectGroupHead}>
+                      官方预设模板（{sampleList.length}）
+                    </div>
+                    {sampleList.map(renderOption)}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 /** 主菜单新建存档的全屏大地图开局选点浮层 */
 function StartLocationMapModal({

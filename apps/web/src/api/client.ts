@@ -16,6 +16,7 @@ import type {
   ProseMode,
   TurnCheckpointSummary,
   TurnInput,
+  TurnStageUsage,
   TurnUsage,
   WorkshopPack,
 } from "@cp/core";
@@ -202,6 +203,18 @@ export interface Health {
       readonly error: string | null;
       readonly capabilities: ImageCapabilities | null;
     };
+    readonly embedding?: {
+      readonly ready: boolean;
+      readonly configured: boolean;
+      readonly model: string | null;
+      readonly error: string | null;
+    };
+    readonly reranker?: {
+      readonly ready: boolean;
+      readonly configured: boolean;
+      readonly model: string | null;
+      readonly error: string | null;
+    };
   };
 }
 
@@ -284,6 +297,7 @@ export interface CanonNpcBrief {
   readonly role: string;
   readonly look: string;
   readonly faction?: string;
+  readonly circle?: string;
   readonly packId?: string;
 }
 
@@ -439,6 +453,8 @@ export interface ProfilesOverview {
   readonly narrator?: string;
   readonly aux?: string;
   readonly image?: string;
+  readonly embedding?: string;
+  readonly reranker?: string;
   readonly profiles: readonly PublicProfile[];
 }
 
@@ -448,7 +464,7 @@ export interface ProfilePatch {
   temperature?: number;
   maxOutputTokens?: number;
   contextWindow?: number;
-  embeddingModel?: string;
+  embeddingModel?: string | null;
   imageProtocol?: ImageProtocol;
   comfyWorkflow?: string;
 }
@@ -467,6 +483,8 @@ export interface NewProfile {
   embeddingModel?: string;
   imageProtocol?: ImageProtocol;
   comfyWorkflow?: string;
+  /** 复制连接时在本地直接沿用原连接的密钥（密钥不经前端回传） */
+  copyKeyFrom?: string;
 }
 
 export type ConnectionTest =
@@ -568,6 +586,7 @@ export interface TurnContext {
   readonly dice: readonly unknown[];
   readonly resolves: string | null;
   readonly usage: TurnUsage | null;
+  readonly stageUsage?: TurnStageUsage | null;
   readonly totalUsage: TurnUsage & { readonly turns: number };
   readonly prompt: {
     readonly messages: readonly { readonly role: string; readonly content: string }[];
@@ -642,8 +661,20 @@ export const api = {
     request<ModelsResult>("POST", "/profiles/-/models", input),
   /** 照 config.example.json 建一份 config.json（已有就不动） */
   initConfig: () => request<{ ok: true }>("POST", "/profiles/-/init"),
-  setRoles: (roles: { narrator?: string; aux?: string; image?: string | null }) =>
-    request<{ narrator?: string; aux?: string; image?: string }>("PUT", "/profiles/-/roles", roles),
+  setRoles: (roles: {
+    narrator?: string;
+    aux?: string;
+    image?: string | null;
+    embedding?: string | null;
+    reranker?: string | null;
+  }) =>
+    request<{
+      narrator?: string;
+      aux?: string;
+      image?: string;
+      embedding?: string;
+      reranker?: string;
+    }>("PUT", "/profiles/-/roles", roles),
   createProfile: (profile: NewProfile) =>
     request<{ profile: PublicProfile }>("POST", "/profiles", profile),
   deleteProfile: (name: string) =>
@@ -852,6 +883,38 @@ export const api = {
         );
       }
       return data as { readonly image: StoredImage };
+    }),
+  /** 上传/读取立绘图片并调用视觉模型反推出中文物理外貌描述 */
+  describeAppearance: (
+    input: {
+      readonly dataUrl?: string;
+      readonly imageId?: string;
+      readonly pronoun?: string;
+      readonly hint?: string;
+      readonly purpose?: "aux" | "narrator";
+    },
+    signal?: AbortSignal,
+  ) =>
+    apiFetch("/images/describe-appearance", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+      ...(signal ? { signal } : {}),
+    }).then(async (res) => {
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new ApiError(
+          typeof data.error === "string" ? data.error : `反推外貌失败（${res.status}）`,
+          res.status,
+          data,
+        );
+      }
+      return data as {
+        readonly look: string;
+        readonly profileName: string;
+        readonly model: string;
+        readonly usedPurpose: "aux" | "narrator";
+      };
     }),
   getImage: (id: string) =>
     request<{ readonly image: StoredImage }>("GET", `/images/${encodeURIComponent(id)}`).then(

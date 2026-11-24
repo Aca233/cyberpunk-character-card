@@ -1,3 +1,4 @@
+import { npcRules } from "@cp/core";
 import { useMemo, useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset } from "../../ui/Asset";
@@ -6,6 +7,8 @@ import { Avatar } from "./Phone";
 import { Profile } from "./Profile";
 import styles from "./phone.module.css";
 import { type PeopleFilter, type PersonDirectoryItem, peopleDirectory, type View } from "./view";
+
+const { NPC_CIRCLES, NPC_CIRCLE_LABELS } = npcRules;
 
 const SEARCH_THRESHOLD = 4;
 
@@ -55,6 +58,7 @@ function matchesPeopleSearch(p: PersonDirectoryItem, q: string): boolean {
     p.npc.alias ?? "",
     p.npc.role ?? "",
     p.npc.faction ?? "",
+    p.npc.circleLabel ?? "",
     p.npc.lastPlace ?? "",
     p.npc.homePlace ?? "",
     p.utilityLine,
@@ -65,6 +69,41 @@ function matchesPeopleSearch(p: PersonDirectoryItem, q: string): boolean {
     .join("\n")
     .toLocaleLowerCase();
   return hay.includes(q);
+}
+
+interface PeopleRosterGroup {
+  readonly id: string;
+  readonly label: string;
+  readonly tone?: "present";
+  readonly items: readonly PersonDirectoryItem[];
+}
+
+function groupPeopleRoster(list: readonly PersonDirectoryItem[]): PeopleRosterGroup[] {
+  const present = list.filter((p) => p.isPresent);
+  const rest = list.filter((p) => !p.isPresent);
+  const groups: PeopleRosterGroup[] = [];
+  if (present.length > 0) {
+    groups.push({ id: "present", label: "当前在场", tone: "present", items: present });
+  }
+  const byCircle = new Map<string, PersonDirectoryItem[]>();
+  const heardOnly: PersonDirectoryItem[] = [];
+  for (const p of rest) {
+    if (!p.met || !p.npc.circle) {
+      heardOnly.push(p);
+    } else {
+      byCircle.set(p.npc.circle, [...(byCircle.get(p.npc.circle) ?? []), p]);
+    }
+  }
+  for (const circle of NPC_CIRCLES) {
+    const items = byCircle.get(circle);
+    if (items && items.length > 0) {
+      groups.push({ id: circle, label: NPC_CIRCLE_LABELS[circle], items });
+    }
+  }
+  if (heardOnly.length > 0) {
+    groups.push({ id: "heard", label: "仅听说 · 未照面", items: heardOnly });
+  }
+  return groups;
 }
 
 /** 独立「人物」页：集中展示所有已知人物（见过 / 仅听说 / 在场 / 同行），并与手机通讯录状态清晰分离 */
@@ -225,44 +264,61 @@ export function PeopleBody({
 
         {filtered.length > 0 ? (
           <ul className={styles.contactList} aria-label="已知人物">
-            {filtered.map((p) => {
-              const active = p.key === current.key;
-              const dead = !p.alive;
-              const statusBadge = p.hasContact
-                ? { label: "已连线", tone: "cyan" as const }
-                : { label: "未留频道", tone: "dim" as const };
-              const subLine = p.highlight || p.utilityLine;
-              return (
-                <li key={p.key}>
-                  <button
-                    type="button"
-                    className={styles.contactBtn}
-                    aria-pressed={active}
-                    data-dead={dead || undefined}
-                    onClick={() => setPicked(p.key)}
-                  >
-                    <Avatar
-                      npc={p.npc.id}
-                      name={p.name}
-                      dead={dead}
-                      present={p.isPresent}
-                      scan={active}
-                    />
-                    <span className={styles.contactInfo}>
-                      <span className={styles.contactTop}>
-                        <b className={styles.contactName}>{p.name}</b>
-                        <span className={styles.badge} data-tone={statusBadge.tone}>
-                          {statusBadge.label}
+            {(() => {
+              const groups = groupPeopleRoster(filtered);
+              const showHeaders = groups.length > 1;
+              const renderItem = (p: PersonDirectoryItem) => {
+                const active = p.key === current.key;
+                const dead = !p.alive;
+                const statusBadge = p.hasContact
+                  ? { label: "已连线", tone: "cyan" as const }
+                  : { label: "未留频道", tone: "dim" as const };
+                const subLine = p.highlight || p.utilityLine;
+                return (
+                  <li key={p.key}>
+                    <button
+                      type="button"
+                      className={styles.contactBtn}
+                      aria-pressed={active}
+                      data-dead={dead || undefined}
+                      onClick={() => setPicked(p.key)}
+                    >
+                      <Avatar
+                        npc={p.npc.id}
+                        name={p.name}
+                        dead={dead}
+                        present={p.isPresent}
+                        scan={active}
+                      />
+                      <span className={styles.contactInfo}>
+                        <span className={styles.contactTop}>
+                          <b className={styles.contactName}>{p.name}</b>
+                          <span className={styles.badge} data-tone={statusBadge.tone}>
+                            {statusBadge.label}
+                          </span>
+                        </span>
+                        <span className={styles.contactBottom}>
+                          <small className={styles.contactSub}>{subLine}</small>
                         </span>
                       </span>
-                      <span className={styles.contactBottom}>
-                        <small className={styles.contactSub}>{subLine}</small>
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
+                    </button>
+                  </li>
+                );
+              };
+              if (!showHeaders) return filtered.map(renderItem);
+              return groups.flatMap((group) => [
+                <li
+                  key={`head:${group.id}`}
+                  className={styles.rosterGroupHead}
+                  data-tone={group.tone}
+                  aria-hidden="true"
+                >
+                  <span>{group.label}</span>
+                  <span className={styles.rosterGroupCount}>{group.items.length}</span>
+                </li>,
+                ...group.items.map(renderItem),
+              ]);
+            })()}
           </ul>
         ) : (
           <div className={styles.rosterEmpty}>

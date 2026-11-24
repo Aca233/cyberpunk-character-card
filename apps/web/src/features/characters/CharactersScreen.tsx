@@ -1,8 +1,14 @@
-import { type CharacterCard, CharacterCardSchema, WorkshopCharacterExportSchema } from "@cp/core";
+import {
+  type CharacterCard,
+  CharacterCardSchema,
+  TAROT_INFO,
+  WorkshopCharacterExportSchema,
+} from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { api, type CharacterEntry } from "../../api/client";
+import type { AssetId } from "../../assets";
 import { useCharactersPreload } from "../../assets/usePreload";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
@@ -381,13 +387,30 @@ export function CharactersScreen() {
         >
           <CellFrame />
           <div className={wb.cardRow}>
-            {entry.card.portrait && (
+            {(entry.card.portrait || b?.tarot) && (
               <span className={wb.cardThumb}>
-                <GeneratedImage
-                  imageId={entry.card.portrait}
-                  alt={entry.card.name}
-                  className={wb.portraitImg}
-                />
+                {entry.card.portrait ? (
+                  <GeneratedImage
+                    imageId={entry.card.portrait}
+                    alt={entry.card.name}
+                    className={wb.portraitImg}
+                    fallback={
+                      b?.tarot ? (
+                        <Asset
+                          id={`tarot.${b.tarot}` as AssetId}
+                          alt={TAROT_INFO[b.tarot].label}
+                          className={wb.portraitImg}
+                        />
+                      ) : null
+                    }
+                  />
+                ) : b?.tarot ? (
+                  <Asset
+                    id={`tarot.${b.tarot}` as AssetId}
+                    alt={TAROT_INFO[b.tarot].label}
+                    className={wb.portraitImg}
+                  />
+                ) : null}
               </span>
             )}
             <div className={wb.cardMetaCol}>
@@ -869,7 +892,19 @@ function RosterCard({
   const cyberCount = b?.cyberware.length ?? 0;
   const originText = entry.card.origin || b?.origin?.label || "未知出身";
   const summaryText = entry.card.personality || entry.card.past || entry.card.look || "";
+  const tarot = b?.tarot;
   const monogram = (entry.card.name.trim()[0] ?? "V").toUpperCase();
+  const fallbackVisual = tarot ? (
+    <Asset
+      id={`tarot.${tarot}` as AssetId}
+      alt={TAROT_INFO[tarot].label}
+      className={wb.portraitImg}
+    />
+  ) : (
+    <span className={wb.rosterMonogram} aria-hidden>
+      {monogram}
+    </span>
+  );
   const tilt = useCardTilt<HTMLLIElement>({
     maxRotate: 4.8,
     shadowShift: 4,
@@ -886,11 +921,10 @@ function RosterCard({
               imageId={entry.card.portrait}
               alt={entry.card.name}
               className={wb.portraitImg}
+              fallback={fallbackVisual}
             />
           ) : (
-            <span className={wb.rosterMonogram} aria-hidden>
-              {monogram}
-            </span>
+            fallbackVisual
           )}
         </span>
         <div className={wb.rosterMeta}>

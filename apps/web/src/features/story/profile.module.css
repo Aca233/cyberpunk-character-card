@@ -296,17 +296,21 @@
   gap: 5px;
   flex: none;
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .bannerAffinityLabel {
+  flex: none;
+  white-space: nowrap;
   font-size: 10px;
   letter-spacing: 0.06em;
   color: var(--cp-text-dim);
 }
 
-.bannerMeter {
+.bannerAffinity > .bannerMeter {
   position: relative;
   display: block;
+  flex: none;
   width: 52px;
   height: 4px;
 }
@@ -751,6 +755,8 @@
 }
 
 .affinityVal {
+  flex: none;
+  white-space: nowrap;
   font-size: 12.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;

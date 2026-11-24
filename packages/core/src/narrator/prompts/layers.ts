@@ -93,6 +93,50 @@ export function modulesBlock(
   return [...note, ...rendered].join("\n\n");
 }
 
+/**
+ * 所有常规（非 OOC）回合恒定激活的常驻规则模块：
+ * 归入 system 静态前缀，跨回合 100% 字节一致，大幅提升 judge / narrate / extract 三阶段提示词缓存命中率。
+ */
+export const ALWAYS_ON_MODULE_IDS: ReadonlySet<string> = new Set([
+  "economy",
+  "places",
+  "npcs",
+  "factions",
+  "reputation",
+  "habits",
+  "jobs",
+  "cyberware",
+  "events",
+  "phone",
+  "notes",
+  "chronicle",
+  "arcs",
+  "shards",
+]);
+
+const staticModulesCache = new Map<PromptStage, string>();
+
+/** 各阶段常驻规则模块的静态缓存块（放进 system 层，避免每轮在 user 侧重复消耗未缓存 token）。 */
+export function staticAlwaysOnModules(stage: PromptStage): string | undefined {
+  let cached = staticModulesCache.get(stage);
+  if (cached === undefined) {
+    const fixed = registry.rules.filter((m) => ALWAYS_ON_MODULE_IDS.has(m.id));
+    cached = modulesBlock(stage, fixed) ?? "";
+    staticModulesCache.set(stage, cached);
+  }
+  return cached === "" ? undefined : cached;
+}
+
+/** 剥离 withWorldObjects 附带的动态独立物件，返回纯静态基础数据表，避免污染 system 层缓存。 */
+export function staticBaseData(
+  data: Readonly<Record<string, unknown>> | undefined,
+): Readonly<Record<string, unknown>> | undefined {
+  if (data && "baseData" in data && data.baseData && typeof data.baseData === "object") {
+    return data.baseData as Readonly<Record<string, unknown>>;
+  }
+  return data;
+}
+
 /** 规则层预算：32K 上下文的模型约 4K token（规格“上下文预算”） */
 export const RULE_BUDGET_TOKENS = 4000;
 
@@ -134,11 +178,14 @@ export interface PromptSlots {
 
 export function userMessage(slots: PromptSlots): string {
   const decided = slots.decided ?? [];
+  // 严格按「最稳定在前、每轮变动在后」排序：
+  // 【前情】与同场动态模块、半静态局面（【人物】【委托】【地点】等）置顶，
+  // 每轮滚动的【最近几轮】与【本轮已定的事】【玩家输入】置底，最大化跨回合 KV 前缀缓存命中率。
   return [
     slots.recap,
-    slots.recent,
     slots.modules,
     ...slots.scene,
+    slots.recent,
     decided.length > 0 ? `【本轮已定的事】\n${decided.join("\n")}` : undefined,
     slots.recall,
     slots.lore,

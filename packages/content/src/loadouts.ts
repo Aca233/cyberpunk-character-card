@@ -24,7 +24,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "lexington", equip: true, slot: 1 },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 800,
+    eddies: 2800,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -40,7 +40,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "pulsar", equip: true, slot: 1 },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 700,
+    eddies: 2400,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -57,7 +57,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "maxdoc", equip: true },
       { id: "med-kit" },
     ],
-    eddies: 750,
+    eddies: 2600,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -74,7 +74,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "bd-editor-wreath" },
       { id: "chip-reader-writer" },
     ],
-    eddies: 950,
+    eddies: 3500,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -90,7 +90,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "nue", equip: true, slot: 1 },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 1050,
+    eddies: 4000,
     cyberware: ["kiroshi-mk1"],
   },
 
@@ -108,7 +108,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "maxdoc", equip: true },
       { id: "corpo-badge" },
     ],
-    eddies: 3000,
+    eddies: 12000,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -125,7 +125,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "bounce-back", equip: true },
       { id: "corpo-badge" },
     ],
-    eddies: 2400,
+    eddies: 9500,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -143,7 +143,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "maxdoc", equip: true },
       { id: "corpo-badge" },
     ],
-    eddies: 2200,
+    eddies: 8500,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -160,7 +160,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "bounce-back", equip: true },
       { id: "ncpd-badge" },
     ],
-    eddies: 950,
+    eddies: 3800,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -176,7 +176,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "maxdoc", equip: true },
       { id: "med-kit" },
     ],
-    eddies: 1450,
+    eddies: 5500,
     cyberware: ["kiroshi-mk1"],
   },
 
@@ -194,7 +194,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "satara", equip: true, slot: 1 },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 550,
+    eddies: 2000,
     cyberware: ["kiroshi-mk1"],
     vehicles: ["thorton-colby-pickup"],
   },
@@ -211,7 +211,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "lockpick-set" },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 950,
+    eddies: 3600,
     cyberware: ["kiroshi-mk1"],
     vehicles: ["thorton-galena"],
   },
@@ -229,7 +229,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "frag-grenade" },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 1000,
+    eddies: 3800,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -247,7 +247,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "tool-kit" },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 700,
+    eddies: 2500,
     cyberware: ["kiroshi-mk1"],
     vehicles: ["thorton-colby-pickup"],
   },
@@ -265,7 +265,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "achilles", equip: true, slot: 1 },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 650,
+    eddies: 2200,
     cyberware: ["kiroshi-mk1"],
     vehicles: ["thorton-colby-pickup"],
   },
@@ -284,7 +284,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "ajax", equip: true, slot: 1 },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 1150,
+    eddies: 4500,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -299,7 +299,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "liberty", equip: true, slot: 1 },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 1400,
+    eddies: 5800,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -315,7 +315,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "chip-reader-writer" },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 900,
+    eddies: 3600,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -331,7 +331,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "tamayura", equip: true, slot: 1 },
       { id: "maxdoc", equip: true },
     ],
-    eddies: 1650,
+    eddies: 6500,
     cyberware: ["kiroshi-mk1"],
   },
   {
@@ -348,7 +348,7 @@ export const loadouts: readonly Loadout[] = [
       { id: "holo-phone" },
       { id: "bounce-back", equip: true },
     ],
-    eddies: 1100,
+    eddies: 4200,
     cyberware: ["kiroshi-mk1"],
   },
 

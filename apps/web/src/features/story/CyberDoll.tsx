@@ -2,7 +2,7 @@ import { type CSSProperties, type ReactNode, useState } from "react";
 import type { AssetId } from "../../assets";
 import { Asset, NineSlice } from "../../ui/Asset";
 import { Panel } from "../../ui/Panel";
-import { itemArtOf } from "./art";
+import { ITEM_ELEMENT_META, itemArtOf, itemElementOf } from "./art";
 import { CYBER_BODY_ART, CYBER_BODY_FRAME, CYBER_SLOT_ICON, humanityToneOf } from "./cyberwareMeta";
 import neural from "./neural.module.css";
 import type { View } from "./view";
@@ -116,6 +116,7 @@ export function CyberItemCell({
   readonly size?: number | undefined;
 }) {
   const art = itemArtOf(id);
+  const element = itemElementOf(id);
   const style = size !== undefined ? ({ "--cell": `${size}px` } as CSSProperties) : undefined;
   return (
     <span
@@ -125,6 +126,7 @@ export function CyberItemCell({
       data-broken={broken || undefined}
       data-rarity={rarity}
       data-iconic={iconic || undefined}
+      data-element={element}
       style={style}
       aria-hidden
     >
@@ -139,6 +141,9 @@ export function CyberItemCell({
         />
       ) : (
         <span className={neural.cyberCellName}>{name}</span>
+      )}
+      {element && (
+        <span className={neural.cyberElementBadge}>{ITEM_ELEMENT_META[element].badge}</span>
       )}
       {broken && (
         <Asset
@@ -289,6 +294,7 @@ export function CyberDoll({
           {Array.from({ length: count }, (_, i) => {
             const part = list[i];
             const art = part ? itemArtOf(part.id) : null;
+            const element = part ? itemElementOf(part.id) : undefined;
             return (
               <button
                 // biome-ignore lint/suspicious/noArrayIndexKey: 格子照原作格数排，空格子没有别的身份
@@ -303,6 +309,7 @@ export function CyberDoll({
                 data-broken={part?.broken || undefined}
                 data-rarity={part?.rarity}
                 data-iconic={part?.iconic || undefined}
+                data-element={element}
                 onMouseEnter={() => previewCell(slot, i)}
                 onMouseLeave={() => setHovered(null)}
                 onFocus={(event) => {
@@ -326,6 +333,11 @@ export function CyberDoll({
                   ) : (
                     <span className={neural.cyberCellName}>{part.name}</span>
                   ))}
+                {element && (
+                  <span className={neural.cyberElementBadge}>
+                    {ITEM_ELEMENT_META[element].badge}
+                  </span>
+                )}
                 {part?.broken && (
                   <Asset
                     id="cyber.disabled"

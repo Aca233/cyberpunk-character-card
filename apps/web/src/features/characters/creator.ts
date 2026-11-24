@@ -14,12 +14,12 @@ import {
   ProseBlockSchema,
   pickLoadouts,
   pickStartLocation,
+  resolveStartEddies,
   SKILL_MAX,
   type WorkshopPack,
   WorkshopPackSchema,
 } from "@cp/core";
 import type { BoardData } from "../../api/client";
-import { appearanceFilledCount } from "./appearance";
 
 const { TOLERANCE_EFFECTS, TOLERANCE_LABELS } = humanityRules;
 
@@ -248,11 +248,7 @@ export function originDefaultLoadout(
   const picked = pickedLoadouts(card, data);
   const name = (id: string) => data?.names?.[id] ?? id;
   const baseEddies = picked.reduce((sum, l) => sum + (l.eddies ?? 0), 0);
-  const cashTier = card.board?.kit?.cashTier ?? "standard";
-  const finalEddies =
-    cashTier === "broke"
-      ? 0
-      : baseEddies + (cashTier === "stash" ? 2500 : cashTier === "windfall" ? 6000 : 0);
+  const finalEddies = resolveStartEddies(baseEddies, card.board?.kit);
   const vehicles = [...new Set(picked.flatMap((l) => l.vehicles ?? []))];
   const seenGear = new Set<string>();
   const gearNames = picked.flatMap((l) =>
@@ -511,7 +507,7 @@ export function loadDraft(blank: CharacterCard): CreatorDraft | null {
   }
 }
 
-// ———— 档案就绪检查与五步引导工作台状态 ————
+// ———— 档案就绪检查与四步引导工作台状态 ————
 
 export type CheckTarget = "identity" | "origin" | "build" | "cyber" | "people" | "kit" | "person";
 
@@ -583,7 +579,7 @@ export function creatorChecks(card: CharacterCard): Check[] {
   return checks;
 }
 
-export type CreatorStepId = "identity" | "appearance" | "traits" | "cyberware" | "connections";
+export type CreatorStepId = "identity" | "traits" | "cyberware" | "connections";
 
 export interface CreatorStepMeta {
   readonly id: CreatorStepId;
@@ -604,33 +600,25 @@ export const CREATOR_STEPS: readonly CreatorStepMeta[] = [
     lead: "确立夜之城档案称谓、挑选 2077 命牌气质，并决定出身背景与初始家底、自带义体及默认落脚点。",
   },
   {
-    id: "appearance",
+    id: "traits",
     index: 2,
     code: "02",
-    label: "体貌定制",
-    title: "BIOMETRIC SCAN · 七部位物理体貌定制",
-    lead: "零输入点选体型、发型发色、面容年龄、眼眸义眼、面部义体线、伤疤纹身与妆容毛发，实时合成外貌档案与立绘依据。",
-  },
-  {
-    id: "traits",
-    index: 3,
-    code: "03",
     label: "履历与特质",
     title: "过往履历、核心特质与负面缺陷",
     lead: "分栏勾选过往履历、性格禀赋与实战专长，或挂载处境短板；三层互不冲突，自由组合。",
   },
   {
     id: "cyberware",
-    index: 4,
-    code: "04",
+    index: 3,
+    code: "03",
     label: "义体与行装",
     title: "义体拓扑装配、神经耐受与开局行装",
     lead: "在十个身体部位装配义体并调控生理耐受，同时敲定启动资金、随身武器与专属座驾。",
   },
   {
     id: "connections",
-    index: 5,
-    code: "05",
+    index: 4,
+    code: "04",
     label: "旧识与落脚点",
     title: "夜之城旧识网络与开局落脚点",
     lead: "建立与夜之城核心人物或自建旧识的交集，并在全城地图上选定开局切入点。",
@@ -644,10 +632,10 @@ const TARGET_STEP_MAP: Readonly<Record<CheckTarget, CreatorStepId>> = {
   cyber: "cyberware",
   kit: "cyberware",
   people: "connections",
-  person: "appearance",
+  person: "identity",
 };
 
-/** 将核验问题目标映射到五步引导工作台对应步骤 */
+/** 将核验问题目标映射到四步引导工作台对应步骤 */
 export function stepForCheckTarget(target: CheckTarget): CreatorStepId {
   return TARGET_STEP_MAP[target];
 }
@@ -662,7 +650,7 @@ export interface StepProgressItem {
 
 export type StepProgressMap = Readonly<Record<CreatorStepId, StepProgressItem>>;
 
-/** 计算五步引导工作台每一步的完成态、阻塞项与摘要计数 */
+/** 计算四步引导工作台每一步的完成态、阻塞项与摘要计数 */
 export function stepProgress(
   card: CharacterCard,
   data?: Pick<BoardData, "cyberware" | "loadouts" | "names">,
@@ -670,7 +658,6 @@ export function stepProgress(
   const checks = creatorChecks(card);
   const issueCounts: Record<CreatorStepId, number> = {
     identity: 0,
-    appearance: 0,
     traits: 0,
     cyberware: 0,
     connections: 0,
@@ -681,15 +668,16 @@ export function stepProgress(
 
   const board = card.board ?? emptyBoard();
   const identityReady = issueCounts.identity === 0;
-  const bioCount = appearanceFilledCount(board.appearance);
-  const appearanceFilled = bioCount > 0 || card.look.trim() !== "";
   const traitsCount = board.pasts.length + board.skills.length + board.flaws.length;
 
   const inherentCount = inherentCyberware(card, data).filter((c) => !c.replaced).length;
   const chromeCount = board.cyberware.length + inherentCount;
   const tol = toleranceSummary(board.tolerance);
   const kitTouched =
-    board.kit.cashTier !== "standard" || board.kit.weapons.length > 0 || board.kit.vehicle !== null;
+    board.kit.cashTier !== "standard" ||
+    board.kit.customEddies !== null ||
+    board.kit.weapons.length > 0 ||
+    board.kit.vehicle !== null;
 
   const peopleCount = board.acquaintances.length;
   const hasStartLoc = Boolean(board.startLocation);
@@ -702,13 +690,6 @@ export function stepProgress(
       filled: identityReady,
       badge: identityReady ? (board.origin?.label ?? "已填") : `待填 ${issueCounts.identity} 项`,
       issueCount: issueCounts.identity,
-    },
-    appearance: {
-      id: "appearance",
-      ready: issueCounts.appearance === 0,
-      filled: appearanceFilled,
-      badge: bioCount > 0 ? `${bioCount}/7 项` : card.look.trim() ? "已写外貌" : "可选",
-      issueCount: issueCounts.appearance,
     },
     traits: {
       id: "traits",

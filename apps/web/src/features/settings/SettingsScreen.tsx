@@ -962,6 +962,27 @@ function ContextDetail({
             {ctx.totalUsage.turns} 轮 · {formatUsageSummary(ctx.totalUsage)}
           </dd>
         </div>
+        {ctx.stageUsage && (
+          <div className={`${styles.factCard} ${styles.factCardWide}`}>
+            <dt>分阶段缓存明细</dt>
+            <dd className="num">
+              {(
+                [
+                  ["judge", "① 判断"],
+                  ["narrate", "③ 写正文"],
+                  ["extract", "④ 抽取"],
+                  ["other", "其他（修复/场外/摘要）"],
+                ] as const
+              )
+                .map(([key, label]) => {
+                  const u = ctx.stageUsage?.[key];
+                  return u ? `${label}：${formatUsageSummary(u)}` : null;
+                })
+                .filter(Boolean)
+                .join(" ｜ ")}
+            </dd>
+          </div>
+        )}
         <div className={`${styles.factCard} ${styles.factCardWide}`}>
           <dt>载入模块（{ctx.modules.length}）</dt>
           <dd>

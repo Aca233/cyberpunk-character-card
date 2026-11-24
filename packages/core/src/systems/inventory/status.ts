@@ -24,7 +24,7 @@ export const inventoryStatus: readonly SystemStatus[] = [
     lines(ctx: StatusContext) {
       return (ctx.views.shops as ShopsView).map(
         (shop) =>
-          `商店 ${shop.id}：${shop.name}在这里（店主${shop.keeper}，${shop.note}）。按钮与自由输入共用实际报价；询价不交付，已成交写 trade with:${shop.id}，店内私人交易写实际人物 id，不占本店货源。`,
+          `商店 ${shop.id}：${shop.name}在这里（店主${shop.keeper}，${shop.note}）。按钮与自由输入共用实际报价；询价不交付，已成交写 trade with:${shop.id}（买卖入本店库存，不占店主随身装备栏），非店主之间的店内私人交易写实际人物 id。`,
       );
     },
   },
@@ -34,9 +34,10 @@ export const inventoryStatus: readonly SystemStatus[] = [
       const inv = ctx.views.inventory as InventoryView;
       const names = (ctx.views.names as NamesView | undefined)?.items ?? {};
       const cyber = (ctx.views.cyberware as CyberwareView | undefined) ?? [];
-      const hasHandSmartLink = cyber.some((c) => c.id === "smart-link" && !c.broken);
+      const isSmartLinkChrome = (id: string) => id === "smart-link" || id === "tyger-claws-tattoo";
+      const hasHandSmartLink = cyber.some((c) => isSmartLinkChrome(c.id) && !c.broken);
       const brokenHandSmartLink =
-        !hasHandSmartLink && cyber.some((c) => c.id === "smart-link" && c.broken);
+        !hasHandSmartLink && cyber.some((c) => isSmartLinkChrome(c.id) && c.broken);
 
       const lines: string[] = [];
       const formatWeapon = (w: InventoryView["carriedWeapons"][number]) => {
@@ -59,6 +60,7 @@ export const inventoryStatus: readonly SystemStatus[] = [
           const tagParts = [summary, ...(m.locked ? ["固锁"] : [])].filter(Boolean);
           return `[${m.label}] ${m.name}${tagParts.length > 0 ? `（${tagParts.join("；")}）` : ""}`;
         });
+        const weaponTrait = summarizeAbility(detail?.ability, 72);
         const extra = [
           ...(displayName !== w.id ? [w.id] : []),
           ...(detail?.subLabel ? [detail.subLabel] : []),
@@ -66,6 +68,7 @@ export const inventoryStatus: readonly SystemStatus[] = [
           ...(w.isRanged && w.noise === "silent" ? ["已消音"] : []),
           ...(smartLinkNote ? [smartLinkNote] : []),
           ...modSummaries,
+          ...(weaponTrait ? [weaponTrait] : []),
         ];
         const qty = w.count > 1 ? `×${w.count}` : "";
         return `${displayName}${qty}${extra.length > 0 ? `（${extra.join("；")}）` : ""}`;

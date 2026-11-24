@@ -15,9 +15,16 @@ import {
   type NarratorPrompt,
   type PromptExtras,
   recapFor,
-  situation,
+  splitSituation,
 } from "./context";
-import { BASE_RULES, modulesBlock, systemMessage, userMessage } from "./layers";
+import {
+  ALWAYS_ON_MODULE_IDS,
+  BASE_RULES,
+  modulesBlock,
+  staticAlwaysOnModules,
+  systemMessage,
+  userMessage,
+} from "./layers";
 
 /** ① 判断：辅助模型，低温，只输出 JSON（记忆调度 + 定性物理与社会因果裁决） */
 export const JUDGE_TEMPERATURE = 0.3;
@@ -90,30 +97,54 @@ export function buildJudgePrompt(
     .slice(-JUDGE_TURNS)
     .map((t) => `${formatInput(t.input)}\n${t.text}`)
     .join("\n\n");
-  const activeModulesText = modulesBlock("judge", modules);
-  const content = userMessage({
-    recap: recapFor(world, records, JUDGE_TURNS),
+  const dynamicModules = modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
+  const staticModulesText = staticAlwaysOnModules("judge");
+  const dynamicModulesText = modulesBlock("judge", dynamicModules);
+  const { stable, volatile } = splitSituation(
+    world,
+    records,
+    view,
+    plan,
+    { ...extras, opening },
+    "judge",
+  );
+  const recap = recapFor(world, records, JUDGE_TURNS);
+  const stableContext = [recap, dynamicModulesText, ...stable]
+    .filter((s): s is string => s !== undefined && s !== "")
+    .join("\n\n");
+  const volatileTurn = userMessage({
+    scene: volatile,
     recent: recent === "" ? undefined : `【最近几轮】\n${recent}`,
-    modules: activeModulesText,
-    scene: situation(world, records, view, plan, { ...extras, opening }, "judge"),
     recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,
     input: formatInput(plan.input),
     after: [boostNote(view, plan, "judge")],
     reminder: "（只输出判断的 JSON 对象。）",
   });
-  // 系统层保持 100% 静态可缓存前缀；随状态变化的场景规则模块放进用户消息
+  // 系统层放纯静态核心守则 + 常驻判断规则模块；
+  // 半静态世界/人物背景独立为前导 user+assistant 消息，与末尾本轮动态输入物理隔离，
+  // 确保按完整消息分块缓存的网关/模型也能整块命中 20K+ 半静态上下文。
   const system = systemMessage("judge", [
     BASE_RULES,
     JUDGE_STAGE,
     CARRY_AND_WEAPON_RULES,
     judgeOutput(),
+    ...(staticModulesText ? [staticModulesText] : []),
   ]);
+  const messages =
+    stableContext !== ""
+      ? [
+          { role: "system" as const, content: system },
+          { role: "user" as const, content: stableContext },
+          { role: "assistant" as const, content: "已核对当前世界状态与在场人物资料。" },
+          { role: "user" as const, content: volatileTurn },
+        ]
+      : [
+          { role: "system" as const, content: system },
+          { role: "user" as const, content: volatileTurn },
+        ];
   return {
-    rules: system.length + (activeModulesText?.length ?? 0),
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content },
-    ],
+    rules: system.length + (dynamicModulesText?.length ?? 0),
+    messages,
     modules: modules.map((m) => m.id),
   };
 }

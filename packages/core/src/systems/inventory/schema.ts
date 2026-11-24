@@ -629,7 +629,7 @@ export type PartsCommand = z.infer<typeof PartsCommandSchema>;
 export const BASE_BULKY_LIMIT = 2;
 
 /** 未损坏时可额外多带 1 件大件的承重骨骼义体 */
-const LOAD_BEARING_CYBERWARE = new Set(["titanium-bones"]);
+const LOAD_BEARING_CYBERWARE = new Set(["titanium-bones", "cargo-spine-frame"]);
 
 /**
  * 武器隐蔽度（Concealment）：

@@ -27,6 +27,7 @@ import {
   npcs,
   openings,
   quickhacks,
+  RADAR_ANCHORS,
   ripperdocs,
   SERVICE_POINTS,
   sampleCharacters,
@@ -39,6 +40,8 @@ import {
   arcRules,
   BASE_RULES,
   BoardModuleSchema,
+  boardPeople,
+  boardStart,
   braindanceRules,
   CanonTimelineSchema,
   CharacterCardSchema,
@@ -52,13 +55,19 @@ import {
   inventoryRules,
   JUDGE_STAGE,
   jobsRules,
+  loadoutText,
   NARRATE_STAGE,
   ncpdRules,
   newGameWorld,
+  normalizeBoard,
   npcRules,
+  pickLoadouts,
+  pickStartLocation,
   projectState,
   registry,
+  START_CYBERWARE_RARITIES,
   safehouseRules,
+  saveCharacter,
   schemaDoc,
   sidegigRules,
   TwistCatalogSchema,
@@ -521,7 +530,71 @@ for (const o of openings) {
 }
 if (planted === 0) errors.push("玩家投影：没有一个开场带委托，隐藏转折的检查没覆盖到");
 
-const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、心事 ${arcs.length}、超梦录像 ${braindances.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
+// 示例角色（官方预设模板）：校验主板义体、开局武器/载具、落脚点、旧识引用以及真实建档初始化
+const radarAnchorIds = new Set(RADAR_ANCHORS.map((a) => a.id));
+const startWeaponIds = new Set(
+  items.filter((i) => i.kind === "weapon" && !i.iconic && i.rarity !== undefined).map((i) => i.id),
+);
+const npcNameById = new Map(npcs.map((n) => [n.id, n.name] as const));
+for (const card of sampleCharacters) {
+  const label = `示例角色「${card.name}」`;
+  if (!card.board) {
+    errors.push(`${label}：缺少主板配置 board`);
+    continue;
+  }
+  const normalized = normalizeBoard(card.board, { cyberware });
+  if (!normalized.ok) {
+    errors.push(`${label}：主板义体校验失败（${normalized.error}）`);
+  }
+  for (const c of card.board.cyberware) {
+    const def = cyberware.find((item) => item.id === c.id);
+    if (def && (def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity))) {
+      errors.push(`${label}：开局义体「${c.id}」不在创建可用稀有度范围内`);
+    }
+  }
+  refs(`${label}的开局武器`, card.board.kit.weapons, startWeaponIds, "可用开局武器");
+  if (card.board.kit.vehicle) {
+    refs(`${label}的开局载具`, [card.board.kit.vehicle], vehicleIds, "车型");
+  }
+  if (card.board.startLocation) {
+    refs(`${label}的开局地点`, [card.board.startLocation], radarAnchorIds, "开局地图锚点");
+  }
+  const modulePeopleIds = new Set(boardPeople(card.board).map((p) => p.id));
+  for (const a of card.board.acquaintances) {
+    if (a.custom || modulePeopleIds.has(a.id)) continue;
+    const canonName = npcNameById.get(a.id);
+    if (!canonName) {
+      errors.push(`${label}：旧识引用了不存在的人物「${a.id}」`);
+    } else if (canonName !== a.name) {
+      errors.push(`${label}：旧识「${a.id}」的名字是「${a.name}」，人物表里是「${canonName}」`);
+    }
+  }
+  try {
+    const matchInput = loadoutText(card);
+    const start = boardStart(card);
+    const startLocation =
+      card.board.startLocation ?? pickStartLocation(matchInput, loadouts, "megabuilding-h10");
+    withAllSlices(
+      newGameWorld(
+        {
+          startTime: Date.UTC(2077, 9, 1, 22) / 60000,
+          opening: DEFAULT_OPENING,
+          character: saveCharacter(card),
+          loadouts: pickLoadouts(matchInput, loadouts, DEFAULT_LOADOUT),
+          startLocation,
+          ...(start ? { board: start } : {}),
+        },
+        gameContent,
+      ),
+    );
+  } catch (error) {
+    errors.push(
+      `${label}：模拟建档初始化失败（${error instanceof Error ? error.message : String(error)}）`,
+    );
+  }
+}
+
+const counts = `物品 ${items.length}、义体 ${cyberware.length}、快速破解 ${quickhacks.length}、地点 ${locations.length}、人物 ${npcs.length}、主板模块 ${boardModules.length}、预设角色 ${sampleCharacters.length}、商店 ${shops.length}、义体医生 ${ripperdocs.length}、委托模板 ${jobTemplates.length}、偶遇 ${encounters.length}、车型 ${vehicles.length}、势力 ${factions.length}、势力动向 ${agendas.length}、心事 ${arcs.length}、超梦录像 ${braindances.length}、NCPD 警情 ${ncpdAlerts.length}、开局住所 ${homes.length}、公寓 ${apartments.length}、拳赛和赛车 ${sidegigs.length}`;
 for (const n of notes) console.log(n);
 if (errors.length > 0) {
   console.log(`数据检查没通过，${errors.length} 处问题（${counts}）：`);

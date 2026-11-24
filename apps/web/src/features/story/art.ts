@@ -20,6 +20,50 @@ const PORTRAITS: Readonly<Record<string, AssetId>> = {
   panam: "portrait.panam",
   river: "portrait.river",
   kerry: "portrait.kerry",
+  takemura: "portrait.takemura",
+  hanako: "portrait.hanako",
+  yorinobu: "portrait.yorinobu",
+  smasher: "portrait.smasher",
+  myers: "portrait.myers",
+  hansen: "portrait.hansen",
+  meredith: "portrait.meredith",
+  "bryce-mosley": "portrait.bryceMosley",
+  songbird: "portrait.songbird",
+  reed: "portrait.reed",
+  alex: "portrait.alex",
+  dino: "portrait.dino",
+  "el-capitan": "portrait.elCapitan",
+  "mr-hands": "portrait.mrHands",
+  dakota: "portrait.dakota",
+  evelyn: "portrait.evelyn",
+  "t-bug": "portrait.tBug",
+  "mama-welles": "portrait.mamaWelles",
+  claire: "portrait.claire",
+  nix: "portrait.nix",
+  saul: "portrait.saul",
+  mitch: "portrait.mitch",
+  carol: "portrait.carol",
+  placide: "portrait.placide",
+  brigitte: "portrait.brigitte",
+  wilson: "portrait.wilson",
+  fingers: "portrait.fingers",
+  "cassius-ryder": "portrait.cassiusRyder",
+  "jefferson-peralez": "portrait.jeffersonPeralez",
+  "elizabeth-peralez": "portrait.elizabethPeralez",
+  delamain: "portrait.delamain",
+  "blue-moon": "portrait.blueMoon",
+  "lizzy-wizzy": "portrait.lizzyWizzy",
+  "mr-blue-eyes": "portrait.mrBlueEyes",
+  ozob: "portrait.ozob",
+  "coach-fred": "portrait.coachFred",
+  scorpion: "portrait.scorpion",
+  cassidy: "portrait.cassidy",
+  nancy: "portrait.nancy",
+  emmerick: "portrait.emmerick",
+  weyland: "portrait.weyland",
+  pepe: "portrait.pepe",
+  kirk: "portrait.kirk",
+  "red-menace": "portrait.redMenace",
 };
 
 /** 物品 id（武器、义体）→ 原作物品图 */
@@ -329,7 +373,98 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   chitin: "cyberArt.chitin",
   "leeroy-ligament-system": "cyberArt.leeroyLigament",
   "rara-avis": "cyberArt.paraBellum",
+  // 补齐既有漏配义体与本次扩充的 50 件新义体（全部映射到原作解包 cyberArt.*）
+  "maneuvering-system": "cyberArt.nanorelays",
+  "metabolic-editor": "cyberArt.reverseMetabolic",
+  "prosthetic-arms": "cyberArt.powerGrip",
+  "prosthetic-legs": "cyberArt.skeletonShock",
+  "songbird-military-netrunning": "cyberArt.militechCanto",
+  "chrome-compressor": "cyberArt.osCapacityBooster",
+  axolotl: "cyberArt.holographicCamo",
+  "ram-reallocator": "cyberArt.fastAccessMemory",
+  "cox2-optimizer": "cyberArt.bioconductor",
+  "peripheral-inverse": "cyberArt.proxiShield",
+  revulsor: "cyberArt.nervousDischarge",
+  "deep-field-visual": "cyberArt.visualCortexSupport",
+  "isometric-stabilizer": "cyberArt.powerGrip",
+  "kiroshi-cockatrice": "cyberArt.eyesCriticalIconic",
+  "adreno-trigger": "cyberArt.adrenalineConverter",
+  "cellular-adapter": "cyberArt.resistancesBooster",
+  // 新增额叶 / 面部 / 神经
+  "neural-translator": "cyberArt.fastAccessMemory",
+  "mood-stabilizer": "cyberArt.painReductor",
+  "black-ice-sniffer": "cyberArt.reversePowerInductor",
+  "behavioral-faceplate": "cyberArt.faceplate",
+  "arasaka-optics": "cyberArt.kiroshiAlt1",
+  "militech-thermal-optics": "cyberArt.kiroshiAlt2",
+  "zetatech-net-optics": "cyberArt.kiroshiAlt3",
+  "street-mod-optics": "cyberArt.kiroshiMk1",
+  "biometric-polygraph-optics": "cyberArt.kiroshiClairvoyant",
+  "voice-modulator": "cyberArt.tyrosineV2",
+  "sleep-skip-regulator": "cyberArt.skeletonEsns",
+  // 新增操作系统
+  "fuyutsuki-deck": "cyberArt.fuyutsukiDeck",
+  "seocho-deck": "cyberArt.seochoDeck",
+  "biodyne-deck": "cyberArt.biodyneDeck",
+  "stephenson-deck": "cyberArt.stephensonDeck",
+  "arasaka-sandevistan": "cyberArt.arasakaSandevistan",
+  "animals-berserk": "cyberArt.animalsBerserk",
+  // 新增循环 / 表皮 / 骨骼
+  "toxin-cleanser": "cyberArt.toxinCleanser",
+  "auto-suppressant-injector": "cyberArt.resistancesBooster",
+  "personal-sound-silencer": "cyberArt.soundSilencer",
+  "smuggler-cavity": "cyberArt.heatBooster",
+  "chrome-plating-skin": "cyberArt.metalSkin",
+  "holo-disguise-weave": "cyberArt.holographicCamo",
+  "cargo-spine-frame": "cyberArt.skeletonBoneMarrow",
+  "shock-disperser-ribs": "cyberArt.skeletonCharge",
+  // 新增手部 / 手臂 / 腿部
+  "tyger-claws-tattoo": "cyberArt.tygerTattoo",
+  "power-grip": "cyberArt.powerGrip",
+  "tech-diagnostic-palm": "cyberArt.circulatoryMicrogen",
+  "palm-jammer": "cyberArt.nervousDischarge",
+  "precision-manipulators": "cyberArt.skeletonEnhancedTissue",
+  "concealed-razor-knuckles": "cyberArt.handleWrap",
+  "thermal-gorilla-arms": "cyberArt.gorillaArms",
+  "electric-gorilla-arms": "cyberArt.gorillaArms",
+  "toxic-gorilla-arms": "cyberArt.gorillaArms",
+  "thermal-mantis-blades": "cyberArt.mantisBlades",
+  "electric-mantis-blades": "cyberArt.mantisBlades",
+  "toxic-mantis-blades": "cyberArt.mantisBlades",
+  "thermal-monowire": "cyberArt.monowire",
+  "electric-monowire": "cyberArt.monowire",
+  "toxic-monowire": "cyberArt.monowire",
+  "thermal-projectile-launch": "cyberArt.projectileLaunchSystem",
+  "electric-projectile-launch": "cyberArt.projectileLaunchSystem",
+  "toxic-projectile-launch": "cyberArt.projectileLaunchSystem",
+  "tech-utility-arm": "cyberArt.armRotor",
+  "surgical-prosthetic-arm": "cyberArt.bloodDepleter",
+  "mag-grip-legs": "cyberArt.skeletonShock",
+  "anchor-hydraulic-legs": "cyberArt.fortifiedAnkles",
+  "drop-damper-legs": "cyberArt.reinforcedTendons",
+  "badlands-runner-legs": "cyberArt.jenkinsTendons",
+  "holster-calf-legs": "cyberArt.lynxPaws",
 };
+
+/** 义体元素变体色标（热能 / 电磁 / 化学），用于在复用原作手臂图标时一眼区分属性版本 */
+export type ItemElement = "thermal" | "electrical" | "chemical";
+
+export const ITEM_ELEMENT_META: Readonly<
+  Record<ItemElement, { readonly badge: string; readonly label: string }>
+> = {
+  thermal: { badge: "热", label: "热能" },
+  electrical: { badge: "电", label: "电磁" },
+  chemical: { badge: "毒", label: "化学" },
+};
+
+export function itemElementOf(item: string | null | undefined): ItemElement | undefined {
+  if (!item) return undefined;
+  const base = baseWeaponIdOf(item);
+  if (base.startsWith("thermal-")) return "thermal";
+  if (base.startsWith("electric-")) return "electrical";
+  if (base.startsWith("toxic-")) return "chemical";
+  return undefined;
+}
 
 const SHOP_POI_ICONS: Readonly<Record<string, AssetId>> = {
   gun: "map.poi.gun",

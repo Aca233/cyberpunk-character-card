@@ -255,20 +255,6 @@ export const TAROT_INFO: Readonly<Record<TarotCard, TarotMeta>> = {
 
 const line = (max: number) => z.string().trim().max(max);
 
-/** 零输入 7 部位纯物理体貌选择（不含衣着/风格轮廓，避免与实时穿戴服装冲突） */
-export const AppearanceSelectionSchema = z.object({
-  build: line(32).optional(),
-  hairStyle: line(32).optional(),
-  hairColor: line(24).optional(),
-  age: line(20).optional(),
-  face: line(32).optional(),
-  eyes: line(32).optional(),
-  cyberwareFace: line(36).optional(),
-  marks: z.array(line(32)).max(2).default([]),
-  grooming: line(32).optional(),
-});
-export type AppearanceSelection = z.infer<typeof AppearanceSelectionSchema>;
-
 /** 模块带出的人物：开档后自动生成人物卡 */
 export const ModulePersonSchema = z.object({
   name: z.string().trim().min(1).max(20),
@@ -314,9 +300,12 @@ export const StartCyberwareSchema = z.object({
 export type StartCyberware = z.infer<typeof StartCyberwareSchema>;
 
 /** 开局启动资金档位 */
-export const CASH_TIERS = ["broke", "standard", "stash", "windfall"] as const;
+export const CASH_TIERS = ["broke", "standard", "stash", "windfall", "mogul"] as const;
 export const CashTierSchema = z.enum(CASH_TIERS);
 export type CashTier = z.infer<typeof CashTierSchema>;
+
+/** 创角自定义启动资金上限（欧元） */
+export const CUSTOM_EDDIES_MAX = 9_999_999;
 
 export const CASH_TIER_INFO: Readonly<
   Record<
@@ -340,23 +329,41 @@ export const CASH_TIER_INFO: Readonly<
   },
   stash: {
     label: "私房金库",
-    eddiesDelta: 2500,
-    desc: "额外携带 2,500 欧元私房钱",
+    eddiesDelta: 10_000,
+    desc: "额外携带 10,000 欧元私房钱，足够置办罕见义体或趁手装备",
   },
   windfall: {
     label: "巨额黑金",
-    eddiesDelta: 6000,
-    desc: "额外携带 6,000 欧元黑金",
+    eddiesDelta: 35_000,
+    desc: "额外携带 35,000 欧元黑金，足以开局购车、置业或装稀有义体",
+  },
+  mogul: {
+    label: "财阀黑卡",
+    eddiesDelta: 100_000,
+    desc: "额外携带 100,000 欧元离岸黑金，直抵夜之城顶级消费门槛",
   },
 };
 
-/** 开局行装定制：资金档位、额外选购的随身武器（最多 2 把）与专属载具 */
+/** 开局行装定制：资金档位、自定义启动资金、额外选购的随身武器（最多 2 把）与专属载具 */
 export const StartKitSchema = z.object({
   cashTier: CashTierSchema.default("standard"),
+  /** 自定义启动资金（非空时直接覆盖档位与出身基准） */
+  customEddies: z.number().int().min(0).max(CUSTOM_EDDIES_MAX).nullable().default(null),
   weapons: z.array(z.string().trim().min(1).max(60)).max(2).default([]),
   vehicle: z.string().trim().min(1).max(60).nullable().default(null),
 });
 export type StartKit = z.infer<typeof StartKitSchema>;
+
+/** 统一计算角色开局实际启动资金（建卡预览与建档结算共用） */
+export function resolveStartEddies(
+  baseEddies: number,
+  kit?: Pick<StartKit, "cashTier" | "customEddies">,
+): number {
+  if (!kit) return baseEddies;
+  if (typeof kit.customEddies === "number") return kit.customEddies;
+  if (kit.cashTier === "broke") return 0;
+  return baseEddies + CASH_TIER_INFO[kit.cashTier].eddiesDelta;
+}
 
 export const RELATIONS = ["nod", "friend", "owesYou", "youOwe", "ex", "grudge"] as const;
 export const RelationKindSchema = z.enum(RELATIONS);
@@ -405,16 +412,19 @@ export const BoardSchema = z.object({
   origin: BoardModuleSchema.nullable().default(null),
   /** 赛博朋克 2077 命牌（角色气质锚点） */
   tarot: TarotCardSchema.optional(),
-  /** 7 部位物理体貌结构化选项，用于生成外貌摘要与立绘提示词 */
-  appearance: AppearanceSelectionSchema.optional(),
   pasts: z.array(BoardModuleSchema).max(PAST_MAX).default([]),
   skills: z.array(BoardModuleSchema).max(SKILL_MAX).default([]),
   flaws: z.array(BoardModuleSchema).max(FLAW_MAX).default([]),
   cyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
   tolerance: ToleranceSchema.default("normal"),
   acquaintances: z.array(AcquaintanceSchema).max(ACQUAINTANCE_MAX).default([]),
-  /** 开局行装定制：资金档位、额外随身武器与专属载具 */
-  kit: StartKitSchema.default({ cashTier: "standard", weapons: [], vehicle: null }),
+  /** 开局行装定制：资金档位、自定义启动资金、额外随身武器与专属载具 */
+  kit: StartKitSchema.default({
+    cashTier: "standard",
+    customEddies: null,
+    weapons: [],
+    vehicle: null,
+  }),
   /** 开局地图锚点 */
   startLocation: z.string().trim().min(1).max(80).optional(),
 });
@@ -597,8 +607,14 @@ export function boardBrief(board: Board): string {
   if (board.cyberware.length > 0) {
     lines.push(`- 开局义体：${board.cyberware.map((c) => c.name).join("、")}`);
   }
-  if (board.kit && board.kit.cashTier !== "standard") {
-    lines.push(`- 开局财务状况：${CASH_TIER_INFO[board.kit.cashTier].label}`);
+  if (board.kit) {
+    if (typeof board.kit.customEddies === "number") {
+      lines.push(
+        `- 开局财务状况：自定义启动资金 ${board.kit.customEddies.toLocaleString("en-US")} 欧元`,
+      );
+    } else if (board.kit.cashTier !== "standard") {
+      lines.push(`- 开局财务状况：${CASH_TIER_INFO[board.kit.cashTier].label}`);
+    }
   }
   for (const a of board.acquaintances) {
     lines.push(

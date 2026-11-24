@@ -3,10 +3,10 @@ import { everydayPeople } from "./everydayLife";
 import { extraNpcs } from "./npcsExtra";
 
 /**
- * 2077 夜之城预制人物总表（共 66 人，基准时间 2077-04-12 21:00）：
+ * 2077 夜之城预制人物总表（共 77 人，按 7 大圈层归类，基准时间 2077-04-12 21:00）：
  * - everydayPeople（7 人）：歌舞伎/丽姿/云顶/扭扭街日常与红灯区人物
  * - 本文件核心原作人物（41 人）：全部补齐年龄、生平底色（bio）、幕后秘密（secret）、常出没地点（hangouts）、3 句差异化口吻样本与开局近况（initialDoing）
- * - extraNpcs（18 人）：常驻店主（威尔逊/阿涛/针眼）及城内关键帮派、云顶、荒坂、市政、执法与城市标志人物
+ * - extraNpcs（29 人）：常驻店主（威尔逊/阿涛/针眼）、帮派/云顶/荒坂/市政/执法/城市标志人物，以及 11 位 2077 经典世界角色（蓝眼先生、恶兆、弗雷德教练、蝎子、卡西迪、南希、埃默里克、韦兰、佩佩、柯克、红色威胁）
  *
  * 约定：
  * - 人物卡中的 bio、want、limit、secret、initialDoing 均为幕后设定，不自动等同于玩家角色已获知；
@@ -102,7 +102,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "synth-cigs",
           "blank-shard",
         ],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "self-ice"],
       },
     },
     {
@@ -157,6 +157,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       pronoun: "他",
       role: "海伍德出身的独狼佣兵，前瓦伦蒂诺帮成员，渴望闯进来生大联盟",
       faction: "none",
+      circle: "merc",
       look: "体格极为魁梧的拉丁裔大汉，梳着利落发髻、下巴留着短胡须，双臂满是海伍德圣母与瓦伦蒂诺风格的旧纹身；一提起爱车“阿奇”摩托眼睛就发亮。",
       outfit: "高领耐磨红黑街头夹克，颈间挂着沉甸甸的粗金链，腰间左右各别着一把镀金定制手枪。",
       voice:
@@ -231,7 +232,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "holo-phone",
           "synth-cigs",
         ],
-        cyberware: ["kiroshi-mk2", "subdermal-armor"],
+        cyberware: ["kiroshi-mk2", "subdermal-armor", "self-ice"],
       },
     },
     {
@@ -265,7 +266,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: ["byakko", "kimono-haori", "silk-shirt", "dress-shoes", "holo-phone", "blank-shard"],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "self-ice"],
       },
     },
     {
@@ -376,7 +377,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: ["silk-shirt", "tailored-slacks", "dress-shoes", "rosary-beads", "holo-phone"],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "self-ice"],
       },
     },
     {
@@ -549,7 +550,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "holo-phone",
           "real-liquor",
         ],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "self-ice"],
       },
     },
     {
@@ -589,7 +590,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "dress-shoes",
           "holo-phone",
         ],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "self-ice"],
       },
     },
     {
@@ -631,7 +632,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "tool-kit",
           "med-kit",
         ],
-        cyberware: ["kiroshi-mk1"],
+        cyberware: ["kiroshi-mk1", "self-ice"],
       },
     },
     {
@@ -717,7 +718,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "dress-shoes",
           "corpo-badge",
         ],
-        cyberware: ["kiroshi-mk2", "subdermal-armor", "kerenzikov"],
+        cyberware: ["kiroshi-mk2", "subdermal-armor", "kerenzikov", "self-ice"],
       },
     },
     {
@@ -730,6 +731,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       pronoun: "她",
       role: "云顶高级玩偶，前莫克斯成员，近期与下榻绀碧大厦的荒坂赖宣走得极近",
       faction: "none",
+      circle: "gang",
       look: "一头利落耀眼的浅金波波头短发，五官精致得如同精修过的商业超梦封面，举止优雅迷人，但眼底总藏着飞快权衡筹码的冷静光彩。",
       outfit: "剪裁极显身段的黑色丝绒连衣裙配精致细跟鞋，随身手包里藏着加密芯片与香烟。",
       voice:
@@ -784,7 +786,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: ["kimono-haori", "silk-shirt", "dress-shoes", "corpo-badge", "holo-phone"],
-        cyberware: ["arasaka-deck", "kiroshi-mk2"],
+        cyberware: ["arasaka-deck", "kiroshi-mk2", "self-ice"],
       },
     },
     {
@@ -826,7 +828,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "corpo-badge",
           "real-liquor",
         ],
-        cyberware: ["kiroshi-mk2"],
+        cyberware: ["kiroshi-mk2", "self-ice"],
       },
     },
     {
@@ -857,7 +859,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: ["satori", "kimono-haori", "silk-shirt", "dress-shoes", "blank-shard"],
-        cyberware: ["kiroshi-mk2", "prosthetic-arms"],
+        cyberware: ["kiroshi-mk2", "prosthetic-arms", "self-ice"],
       },
     },
     {
@@ -981,7 +983,13 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "combat-boots",
           "maxdoc",
         ],
-        cyberware: ["kiroshi-mk2", "militech-paraline", "subdermal-armor"],
+        cyberware: [
+          "kiroshi-mk2",
+          "militech-paraline",
+          "subdermal-armor",
+          "self-ice",
+          "fireproof-coating",
+        ],
       },
     },
     {
@@ -1015,7 +1023,13 @@ export const npcs = npcRules.NpcCardSchema.extend({
       canon: true,
       body: {
         gear: ["chaos", "street-jacket", "leather-pants", "combat-boots", "black-lace"],
-        cyberware: ["kiroshi-mk2", "subdermal-armor", "pain-editor"],
+        cyberware: [
+          "kiroshi-mk2",
+          "subdermal-armor",
+          "pain-editor",
+          "self-ice",
+          "grounding-plating",
+        ],
       },
     },
     {
@@ -1056,7 +1070,13 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "combat-boots",
           "rosary-beads",
         ],
-        cyberware: ["zetatech-sandevistan", "kerenzikov", "subdermal-armor"],
+        cyberware: [
+          "zetatech-sandevistan",
+          "kerenzikov",
+          "subdermal-armor",
+          "self-ice",
+          "grounding-plating",
+        ],
       },
     },
     {
@@ -1168,7 +1188,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "corpo-badge",
           "holo-phone",
         ],
-        cyberware: ["kiroshi-mk1", "subdermal-armor"],
+        cyberware: ["kiroshi-mk1", "subdermal-armor", "self-ice"],
       },
     },
     {
@@ -1181,6 +1201,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
       pronoun: "她",
       role: "来生酒吧首席调酒师，白天在阿罗约经营改装修车厂",
       faction: "none",
+      circle: "merc",
       look: "黑发挑染着一缕炽烈酒红，棕眼睛爽朗通透，手臂线条结实；浑身上下一件义体都没装，在来生这群铁疙瘩中间极其罕见。",
       outfit: "来生黑色吧台围裙底下套着沾满淡淡机油味的修车工装衫、牛仔裤与重靴。",
       voice:
@@ -1251,7 +1272,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "synth-cigs",
           "blank-shard",
         ],
-        cyberware: ["biotech-sigma", "kiroshi-mk1", "self-ice"],
+        cyberware: ["stephenson-deck", "kiroshi-mk1", "black-ice-sniffer", "self-ice"],
       },
     },
     {
@@ -1289,7 +1310,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "kiroshi-mk2",
           "prosthetic-arms",
           "prosthetic-legs",
-          "subdermal-armor",
+          "chrome-plating-skin",
+          "voice-modulator",
           "pain-editor",
         ],
       },
@@ -1334,6 +1356,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "prosthetic-legs",
           "kiroshi-mk2",
           "pain-editor",
+          "self-ice",
         ],
       },
     },
@@ -1548,7 +1571,15 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "holo-phone",
           "lockpick-set",
         ],
-        cyberware: ["subdermal-armor", "gorilla-arms", "fortified-ankles", "kiroshi-mk2"],
+        cyberware: [
+          "subdermal-armor",
+          "gorilla-arms",
+          "fortified-ankles",
+          "kiroshi-mk2",
+          "behavioral-faceplate",
+          "personal-sound-silencer",
+          "self-ice",
+        ],
       },
     },
     {
@@ -1588,7 +1619,7 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "dress-shoes",
           "holo-phone",
         ],
-        cyberware: ["kiroshi-mk1", "subdermal-armor"],
+        cyberware: ["kiroshi-mk1", "subdermal-armor", "self-ice"],
       },
     },
     {
@@ -1638,6 +1669,8 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "fortified-ankles",
           "prosthetic-arms",
           "kiroshi-mk2",
+          "self-ice",
+          "grounding-plating",
         ],
       },
     },
@@ -1680,7 +1713,15 @@ export const npcs = npcRules.NpcCardSchema.extend({
           "holo-phone",
           "real-liquor",
         ],
-        cyberware: ["zetatech-sandevistan", "kiroshi-mk1", "optical-camo"],
+        cyberware: [
+          "zetatech-sandevistan",
+          "kiroshi-mk1",
+          "optical-camo",
+          "behavioral-faceplate",
+          "voice-modulator",
+          "personal-sound-silencer",
+          "self-ice",
+        ],
       },
     },
   ]);

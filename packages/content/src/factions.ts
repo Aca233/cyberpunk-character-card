@@ -13,7 +13,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     kind: "gang",
     turf: ["沃森"],
     turfNote: "北区",
-    style: "重度义体改造、对铬上瘾，离赛博精神病只差一步；做军火和义体的黑买卖",
+    style:
+      "重度义体改造、对铬上瘾，离赛博精神病只差一步；做军火和义体的黑买卖，据点与武装小队常配有改装脏黑客、带反烧陷阱的本地防火墙，重装骨干普遍加装自我 ICE 与防电涌/防过热镀层",
     color: "#d7263d",
     allies: [],
     enemies: ["tyger-claws"],
@@ -27,7 +28,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     kind: "gang",
     turf: ["沃森", "威斯特布鲁克"],
     turfNote: "歌舞伎区、日本街",
-    style: "开摩托、用刀，做超梦、赌场和夜店的生意，收保护费",
+    style:
+      "开摩托、用刀，做超梦、赌场和夜店的生意，收保护费；背靠荒坂暗线技术与地下子网，核心场子、仓库与精锐队普遍配有驻场/连线网络黑客、智能靶向反制与个人自我 ICE",
     color: "#2ec4b6",
     allies: [],
     enemies: ["maelstrom", "mox"],
@@ -79,7 +81,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     en: "Voodoo Boys",
     kind: "gang",
     turf: ["太平洲"],
-    style: "网络黑客帮派，海地移民起家，盯着黑墙后面的东西；对外人多疑",
+    style:
+      "网络黑客帮派，海地移民起家，盯着黑墙后面的东西；对外人多疑，几乎全员高阶网络黑客，标配强力自我 ICE、隔离本地子网与致命反烧黑冰",
     color: "#8e44ad",
     allies: [],
     enemies: ["animals", "netwatch"],
@@ -145,7 +148,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     en: "Barghest",
     kind: "gang",
     turf: ["狗镇"],
-    style: "老兵组成的武装，把狗镇围起来自己管，靠走私和黑市过日子",
+    style:
+      "老兵组成的武装，把狗镇围起来自己管，靠走私和黑市过日子；军用级电子战编组，精锐小队标配自我 ICE、防电涌重甲与连线战术黑客",
     color: "#6b8e23",
     allies: [],
     enemies: [],
@@ -159,7 +163,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     kind: "corp",
     turf: ["市政中心"],
     turfNote: "荒坂塔",
-    style: "日本的安保和军火巨头，夜之城最大的公司；耳目遍布，下手干净",
+    style:
+      "日本的安保和军火巨头，夜之城最大的公司；耳目遍布，下手干净；安保与特勤标配公司级自我 ICE、稳压隔热冗余与全天候反黑客联防子网",
     color: "#e03131",
     allies: [],
     enemies: ["militech"],
@@ -172,7 +177,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     en: "Militech",
     kind: "corp",
     turf: [],
-    style: "美国的军火巨头，和新美国政府绑在一起；荒坂的死对头",
+    style:
+      "美国的军火巨头，和新美国政府绑在一起；荒坂的死对头；作战分队标配军用级自我 ICE、重装抗电涌硬件与随队电子战黑客",
     color: "#9aa5b1",
     allies: [],
     enemies: ["arasaka"],
@@ -185,7 +191,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     en: "Kang Tao",
     kind: "corp",
     turf: [],
-    style: "做智能武器的公司，正在扩张，想从荒坂和军用科技手里抢市场",
+    style:
+      "做智能武器的公司，正在扩张，想从荒坂和军用科技手里抢市场；护卫队标配加密战术链路、自我 ICE 与随队电子战反制专员",
     color: "#f59f00",
     allies: [],
     enemies: [],
@@ -237,7 +244,8 @@ export const factions: readonly factionsRules.FactionDef[] = [
     en: "MaxTac",
     kind: "law",
     turf: [],
-    style: "应对赛博精神病等极高危威胁的精锐特警，常以压倒性武力迅速制止威胁；不代表必然处决已被制伏的人",
+    style:
+      "应对赛博精神病等极高危威胁的精锐特警，常以压倒性武力迅速制止威胁；不代表必然处决已被制伏的人",
     color: "#1c3d6e",
     allies: ["ncpd"],
     enemies: [],

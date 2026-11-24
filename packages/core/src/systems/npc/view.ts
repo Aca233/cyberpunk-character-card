@@ -5,10 +5,12 @@ import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world
 import { currentOutfit, deathKnown } from "./apply";
 import { bodyView } from "./body";
 import {
+  inferNpcCircle,
   KNOWN_SOURCE_LABELS,
   LEDGER_KIND_LABELS,
   NO_FACTION,
   NO_FACTION_LABEL,
+  NPC_CIRCLE_LABELS,
   NPC_UNDECIDED_PREFIX,
   NpcStateSchema,
 } from "./schema";
@@ -72,6 +74,9 @@ export function npcsView({ world, data }: ViewContext) {
       role: n.met ? n.role : "只听说过",
       /** 所属势力的中文名，不属于任何势力是「无」；没见过的人和身份一样不给 */
       faction: n.met ? factionName(n.faction, data) : null,
+      /** 夜之城圈层分类（仅见过面时展示明确圈层；未见过仅听说的人物不泄底） */
+      circle: n.met ? inferNpcCircle(n) : null,
+      circleLabel: n.met ? NPC_CIRCLE_LABELS[inferNpcCircle(n)] : null,
       look: n.met
         ? n.look.startsWith(NPC_UNDECIDED_PREFIX)
           ? "初见时未细看长相，待正式照面后写入档案"
@@ -96,7 +101,9 @@ export function npcsView({ world, data }: ViewContext) {
         (Boolean(n.following) ||
           (n.lastSeenAt !== null &&
             n.lastSeenAt >= clock.sceneStartedAt &&
-            (n.lastKnownLocation === null || n.lastKnownLocation === clock.location))),
+            (clock.location === null
+              ? n.lastKnownLocation === null
+              : n.lastKnownLocation === clock.location))),
       /** 最后一次见面的游戏时间；没见过面（只有消息往来）是 null */
       lastSeen: n.lastSeenAt === null ? null : formatGameTime(n.lastSeenAt),
       /** 最后出现的地点和常在的地点（中文名），人物档案信息栏用；没见过面的人不给 */

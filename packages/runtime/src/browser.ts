@@ -3,6 +3,7 @@ import { createApp } from "./app";
 import { CharacterStore } from "./characters";
 import { TurnCheckpointStore } from "./checkpoints";
 import { ConfigService } from "./config";
+import { EmbeddingCacheStore } from "./embedding-cache";
 import { IdbDocStore, IdbSaveStore, openGameDb } from "./idb-store";
 import { ImageStore } from "./images";
 import { PresetStore } from "./presets";
@@ -44,6 +45,7 @@ export async function createLocalBackend(
     presets: new PresetStore(docs),
     images: new ImageStore(docs),
     checkpoints: new TurnCheckpointStore(docs),
+    embeddingCache: new EmbeddingCacheStore(docs),
     // 创意工坊尚未完成，暂不启用
     hub,
     log: (message) => console.warn(message),

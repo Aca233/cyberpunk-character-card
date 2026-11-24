@@ -52,6 +52,7 @@ export interface PreparedCheckpointData {
   };
   readonly presetName: string | undefined;
   readonly auxUsage: LlmUsage;
+  readonly judgeUsage?: LlmUsage | undefined;
   readonly repairs: number;
   readonly repairUsage: LlmUsage;
   readonly notes: readonly string[];
@@ -78,6 +79,7 @@ export interface ExtractedCheckpointData {
   readonly title: string | undefined;
   readonly unsettled: string | undefined;
   readonly auxUsage: LlmUsage;
+  readonly extractUsage?: LlmUsage | undefined;
   readonly repairs: number;
   readonly repairUsage: LlmUsage;
   readonly notes: readonly string[];

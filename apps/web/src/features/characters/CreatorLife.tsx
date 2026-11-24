@@ -2,6 +2,7 @@ import {
   type Acquaintance,
   type Board,
   boardPeople,
+  npcRules,
   RELATION_INFO,
   RELATIONS,
   type RelationKind,
@@ -15,10 +16,13 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { portraitOf } from "../story/art";
 import styles from "./characters.module.css";
 
+const { NPC_CIRCLES, NPC_CIRCLE_LABELS, inferNpcCircle } = npcRules;
+type NpcCircle = npcRules.NpcCircle;
+
 /**
  * 工作台的人脉选择器（NC CONTACTS）：
- * 优先呈现 12 位带原作立绘的核心人物，清晰展示外貌/势力/6 种关系真实开局效果，
- * 支持已选汇总条、快捷交集模板与自定义旧识原地编辑。
+ * 按夜之城 7 大圈层清晰分类展示世界角色（支持全量 56+ 原作立绘头像），
+ * 清晰展示外貌/圈层/势力/6 种关系真实开局效果，支持已选汇总条、圈层快筛与自定义旧识原地编辑。
  */
 
 const LEDGER_EFFECT_LABELS: Readonly<Record<string, string>> = {
@@ -76,6 +80,7 @@ interface Person {
   readonly role: string;
   readonly look?: string;
   readonly faction?: string;
+  readonly circle?: NpcCircle;
   /** 原作人物的 id，有原作头像就画头像 */
   readonly npc?: string;
   readonly hasPortrait: boolean;
@@ -87,21 +92,37 @@ interface Person {
 
 const customId = () => `custom-${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
 
-type PeopleFilter = "all" | "portrait" | "linked" | "custom" | "workshop";
+type PeopleFilter = "all" | "linked" | "custom" | "workshop" | NpcCircle;
 
 function isWorkshopSource(packId?: string): boolean {
   return Boolean(packId && packId !== "local");
 }
 
+function isCircleFilter(f: PeopleFilter): f is NpcCircle {
+  return (NPC_CIRCLES as readonly string[]).includes(f);
+}
+
+function resolveCircle(raw: {
+  readonly circle?: string | undefined;
+  readonly faction?: string | undefined;
+  readonly role?: string | undefined;
+}): NpcCircle {
+  if (raw.circle && (NPC_CIRCLES as readonly string[]).includes(raw.circle)) {
+    return raw.circle as NpcCircle;
+  }
+  return inferNpcCircle({ faction: raw.faction, role: raw.role });
+}
+
 function matchesPerson(p: Person, query: string): boolean {
   if (!query) return true;
-  return `${p.name} ${p.rawName} ${p.role} ${p.faction ?? ""} ${p.look ?? ""} ${p.preset?.note ?? ""}`
+  const circleLabel = p.circle ? NPC_CIRCLE_LABELS[p.circle] : "";
+  return `${p.name} ${p.rawName} ${p.role} ${p.faction ?? ""} ${circleLabel} ${p.look ?? ""} ${p.preset?.note ?? ""}`
     .toLowerCase()
     .includes(query);
 }
 
 /**
- * 旧识不限人数：原作人物（已过滤 2075 已故角色）优先展示 12 位核心立绘人物，
+ * 旧识不限人数：世界角色按夜之城 7 大圈层清晰分类，圈内优先展示带原作头像的人物，
  * 出身/特质带出故人可覆盖关系，自定义旧识支持原地改名改身份。
  */
 export function PeoplePicker({
@@ -153,6 +174,7 @@ export function PeoplePicker({
     const list = data.npcs.map((n) => {
       const preset = data.acquaintances?.find((entry) => entry.id === n.id);
       const hasPortrait = Boolean(portraitOf(n.id));
+      const circle = resolveCircle(n);
       return {
         id: n.id,
         rawName: n.name,
@@ -160,6 +182,7 @@ export function PeoplePicker({
         role: n.role,
         ...(n.look ? { look: n.look } : {}),
         ...(n.faction ? { faction: n.faction } : {}),
+        circle,
         npc: n.id,
         hasPortrait,
         fromModule: false,
@@ -168,7 +191,7 @@ export function PeoplePicker({
         ...(preset ? { preset } : {}),
       };
     });
-    // 核心立绘人物（12 位原作头像）排在前面
+    // 同圈层内带原作头像的标志人物排在前面
     return [...list].sort((x, y) => Number(y.hasPortrait) - Number(x.hasPortrait));
   }, [data.npcs, data.acquaintances]);
 
@@ -205,15 +228,22 @@ export function PeoplePicker({
     [modulePeople, own, canon, availableWorkshopPresets],
   );
   const hasWorkshop = allPeople.some((p) => isWorkshopSource(p.packId));
-  const portraitCount = canon.filter((p) => p.hasPortrait).length;
+  const circleCounts = useMemo(() => {
+    const map = new Map<NpcCircle, number>();
+    for (const c of NPC_CIRCLES) map.set(c, 0);
+    for (const p of canon) {
+      if (p.circle) map.set(p.circle, (map.get(p.circle) ?? 0) + 1);
+    }
+    return map;
+  }, [canon]);
 
   const filterList = useMemo(
     () => (list: readonly Person[]) =>
       list.filter((p) => {
-        if (filter === "portrait" && !p.hasPortrait) return false;
         if (filter === "linked" && !byId.has(p.id)) return false;
         if (filter === "custom" && !p.fromModule && !own.some((o) => o.id === p.id)) return false;
         if (filter === "workshop" && !isWorkshopSource(p.packId)) return false;
+        if (isCircleFilter(filter) && p.circle !== filter) return false;
         return matchesPerson(p, normalizedQuery);
       }),
     [filter, byId, own, normalizedQuery],
@@ -221,14 +251,20 @@ export function PeoplePicker({
 
   const shownModule = filterList(modulePeople);
   const shownOwn = filterList(own);
-  const shownCanonPortrait = filterList(canon.filter((p) => p.hasPortrait));
-  const shownCanonOther = filterList(canon.filter((p) => !p.hasPortrait));
+  const shownCanonByCircle = useMemo(
+    () =>
+      NPC_CIRCLES.map((circle) => ({
+        circle,
+        label: NPC_CIRCLE_LABELS[circle],
+        list: filterList(canon.filter((p) => p.circle === circle)),
+      })).filter((g) => g.list.length > 0),
+    [canon, filterList],
+  );
   const shownPresets = filterList(availableWorkshopPresets);
   const visiblePeople = [
     ...shownModule,
     ...shownOwn,
-    ...shownCanonPortrait,
-    ...shownCanonOther,
+    ...shownCanonByCircle.flatMap((g) => g.list),
     ...shownPresets,
   ];
 
@@ -343,7 +379,7 @@ export function PeoplePicker({
 
   return (
     <div className={styles.peopleWrap}>
-      {/* 顶部常驻已选旧识汇总条 */}
+      {/* 顶部紧凑已选旧识汇总条 */}
       <section className={styles.peopleSummary} aria-label="已建立联系的旧识">
         <CellFrame />
         <div className={styles.peopleSummaryHead}>
@@ -351,10 +387,12 @@ export function PeoplePicker({
             已建交集 <b>{board.acquaintances.length}</b> 人
           </span>
           <span className={styles.note}>
-            点击下方旧识卡片定位详情；关系将在入城时直接写入通讯录好感与人情债账本。
+            {board.acquaintances.length > 0
+              ? "点击标签快速定位详情；所设关系将在入城时写入通讯录好感与人情债账本。"
+              : "尚未建立额外旧识：从下方名录点选人物设定关系，或保持孤狼状态入城。"}
           </span>
         </div>
-        {board.acquaintances.length > 0 ? (
+        {board.acquaintances.length > 0 && (
           <div className={styles.peopleChips}>
             {board.acquaintances.map((item) => (
               <span
@@ -392,60 +430,43 @@ export function PeoplePicker({
               </span>
             ))}
           </div>
-        ) : (
-          <p className={styles.note}>
-            尚未建立额外旧识：可直接从右侧通讯录勾选，或保持孤狼状态入城。
-          </p>
         )}
       </section>
 
-      <div className={styles.people}>
-        <nav className={styles.peopleList} aria-label="联系人">
-          <div className={styles.peopleTools}>
-            <FrameBox className={styles.searchBox}>
-              <input
-                type="search"
-                value={query}
-                placeholder="搜索姓名、身份、势力或外貌…"
-                aria-label="搜索联系人"
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </FrameBox>
-            <fieldset className={styles.shelfFilter} aria-label="按圈层筛选联系人">
-              <Button small pressed={filter === "all"} onClick={() => setFilter("all")}>
-                全部 ({allPeople.length})
-              </Button>
-              {portraitCount > 0 && (
-                <Button small pressed={filter === "portrait"} onClick={() => setFilter("portrait")}>
-                  核心名录 ({portraitCount})
-                </Button>
-              )}
-              <Button small pressed={filter === "linked"} onClick={() => setFilter("linked")}>
-                已建联系 ({board.acquaintances.length})
-              </Button>
-              <Button small pressed={filter === "custom"} onClick={() => setFilter("custom")}>
-                故人与自建 ({modulePeople.length + own.length})
-              </Button>
-              {hasWorkshop && (
-                <Button small pressed={filter === "workshop"} onClick={() => setFilter("workshop")}>
-                  工坊
-                </Button>
-              )}
-            </fieldset>
-          </div>
-
-          {shownModule.length > 0 && (
-            <>
-              <h3 className={styles.peopleGroup}>出身与特质带出的故人</h3>
-              <ul>{shownModule.map(contact)}</ul>
-            </>
+      {/* 通栏搜索、新建与圈层筛选栏 */}
+      <div className={styles.peopleToolbar}>
+        <div className={styles.peopleSearchRow}>
+          <FrameBox className={styles.searchBox}>
+            <input
+              type="search"
+              value={query}
+              placeholder="搜索姓名、代号、身份、势力或外貌…"
+              aria-label="搜索联系人"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </FrameBox>
+          <span className={styles.peopleMatchStat}>
+            显示 <b>{visiblePeople.length}</b> / {allPeople.length}
+          </span>
+          {(query.trim() !== "" || filter !== "all") && (
+            <ActionButton
+              onClick={() => {
+                setQuery("");
+                setFilter("all");
+              }}
+            >
+              重置筛选
+            </ActionButton>
           )}
+          <Button small primary={adding} onClick={() => setAdding((v) => !v)}>
+            {adding ? "收起新建" : "＋ 新建自定义旧识"}
+          </Button>
+        </div>
 
-          <h3 className={styles.peopleGroup}>自定义旧识</h3>
-          {shownOwn.length > 0 && <ul>{shownOwn.map(contact)}</ul>}
-          {adding ? (
-            <div className={styles.customForm}>
-              <CellFrame />
+        {adding && (
+          <div className={styles.customForm}>
+            <CellFrame />
+            <div className={styles.ownEditGrid}>
               <label className={styles.field}>
                 <span>名字</span>
                 <FrameBox className={styles.compactBox}>
@@ -468,56 +489,134 @@ export function PeoplePicker({
                   />
                 </FrameBox>
               </label>
-              <div className={styles.slotTools}>
-                <Button
-                  small
-                  primary
-                  disabled={draftName.trim() === ""}
-                  reason="请先填写旧识的名字"
-                  onClick={addOwn}
-                >
-                  加入旧识
-                </Button>
-                <ActionButton onClick={() => setAdding(false)}>取消</ActionButton>
-              </div>
             </div>
-          ) : (
-            <div>
-              <Button small onClick={() => setAdding(true)}>
-                ＋ 新建自定义旧识
+            <div className={styles.slotTools}>
+              <Button
+                small
+                primary
+                disabled={draftName.trim() === ""}
+                reason="请先填写旧识的名字"
+                onClick={addOwn}
+              >
+                加入旧识
               </Button>
+              <ActionButton onClick={() => setAdding(false)}>取消</ActionButton>
             </div>
+          </div>
+        )}
+
+        <fieldset className={styles.peopleFilters} aria-label="按圈层筛选联系人">
+          <button
+            type="button"
+            className={styles.peopleFilterTab}
+            aria-pressed={filter === "all"}
+            onClick={() => setFilter("all")}
+          >
+            <span>全部</span>
+            <small className={styles.peopleFilterNum}>{allPeople.length}</small>
+          </button>
+          <button
+            type="button"
+            className={styles.peopleFilterTab}
+            aria-pressed={filter === "linked"}
+            onClick={() => setFilter("linked")}
+          >
+            <span>已建联系</span>
+            <small className={styles.peopleFilterNum}>{board.acquaintances.length}</small>
+          </button>
+          <button
+            type="button"
+            className={styles.peopleFilterTab}
+            aria-pressed={filter === "custom"}
+            onClick={() => setFilter("custom")}
+          >
+            <span>故人与自建</span>
+            <small className={styles.peopleFilterNum}>{modulePeople.length + own.length}</small>
+          </button>
+          {hasWorkshop && (
+            <button
+              type="button"
+              className={styles.peopleFilterTab}
+              aria-pressed={filter === "workshop"}
+              onClick={() => setFilter("workshop")}
+            >
+              <span>工坊</span>
+            </button>
+          )}
+          <span className={styles.peopleFilterSep} aria-hidden="true" />
+          {NPC_CIRCLES.map((circle) => {
+            const count = circleCounts.get(circle) ?? 0;
+            if (count === 0) return null;
+            return (
+              <button
+                key={circle}
+                type="button"
+                className={styles.peopleFilterTab}
+                aria-pressed={filter === circle}
+                onClick={() => setFilter(circle)}
+              >
+                <span>{NPC_CIRCLE_LABELS[circle]}</span>
+                <small className={styles.peopleFilterNum}>{count}</small>
+              </button>
+            );
+          })}
+        </fieldset>
+      </div>
+
+      <div className={styles.people}>
+        <nav className={styles.peopleList} aria-label="联系人">
+          {shownModule.length > 0 && (
+            <section className={styles.peopleSection}>
+              <h3 className={styles.peopleGroup}>
+                <span>出身与特质带出的故人</span>
+                <small className={styles.peopleCount}>{shownModule.length} 人</small>
+              </h3>
+              <ul className={styles.peopleGrid}>{shownModule.map(contact)}</ul>
+            </section>
           )}
 
-          {shownCanonPortrait.length > 0 && (
-            <>
+          {shownOwn.length > 0 && (
+            <section className={styles.peopleSection}>
               <h3 className={styles.peopleGroup}>
-                夜之城核心名录
-                <small className={styles.peopleCount}>{shownCanonPortrait.length} 人</small>
+                <span>自定义旧识</span>
+                <small className={styles.peopleCount}>{shownOwn.length} 人</small>
               </h3>
-              <ul>{shownCanonPortrait.map(contact)}</ul>
-            </>
+              <ul className={styles.peopleGrid}>{shownOwn.map(contact)}</ul>
+            </section>
           )}
 
-          {shownCanonOther.length > 0 && (
-            <>
+          {shownCanonByCircle.map((group) => (
+            <section key={group.circle} className={styles.peopleSection}>
               <h3 className={styles.peopleGroup}>
-                其他原作熟面孔
-                <small className={styles.peopleCount}>{shownCanonOther.length} 人</small>
+                <span>{group.label}</span>
+                <small className={styles.peopleCount}>{group.list.length} 人</small>
               </h3>
-              <ul>{shownCanonOther.map(contact)}</ul>
-            </>
-          )}
+              <ul className={styles.peopleGrid}>{group.list.map(contact)}</ul>
+            </section>
+          ))}
 
           {shownPresets.length > 0 && (
-            <>
-              <h3 className={styles.peopleGroup}>工坊人脉预设</h3>
-              <ul>{shownPresets.map(contact)}</ul>
-            </>
+            <section className={styles.peopleSection}>
+              <h3 className={styles.peopleGroup}>
+                <span>工坊人脉预设</span>
+                <small className={styles.peopleCount}>{shownPresets.length} 人</small>
+              </h3>
+              <ul className={styles.peopleGrid}>{shownPresets.map(contact)}</ul>
+            </section>
           )}
 
           {visiblePeople.length === 0 && (
-            <p className={styles.note}>没有匹配当前筛选条件的联系人。</p>
+            <div className={styles.peopleEmpty}>
+              <p className={styles.note}>没有匹配当前筛选条件的联系人。</p>
+              <ActionButton
+                onClick={() => {
+                  setQuery("");
+                  setFilter("all");
+                }}
+              >
+                查看全部联系人
+              </ActionButton>
+            </div>
           )}
         </nav>
 
@@ -535,6 +634,11 @@ export function PeoplePicker({
               <span className={styles.peopleName}>
                 <span className={styles.peopleTitleRow}>
                   <b className={styles.peopleTitle}>{current.name}</b>
+                  {current.circle && (
+                    <span className={styles.moduleBadge} data-tone="active">
+                      {NPC_CIRCLE_LABELS[current.circle]}
+                    </span>
+                  )}
                   {current.faction && <span className={styles.moduleBadge}>{current.faction}</span>}
                   {isWorkshopSource(current.packId) && (
                     <span className={styles.moduleBadge} data-tone="workshop">

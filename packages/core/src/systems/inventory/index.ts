@@ -220,10 +220,15 @@ export const inventory = defineSystem<
                 input.text.includes(id) ||
                 input.text.includes(o.definition.name)),
           )
-          .map(
-            ([id, o]) =>
-              `${id} ${o.definition.name}：归属 ${o.holder}，位置 ${o.location ?? "随持有人"}；来源 ${o.origin}；最近变化 ${o.lastChange}${o.definition.ability ? `；用途 ${o.definition.ability}` : ""}`,
-          );
+          .map(([id, o]) => {
+            const holderLabel = o.holder.startsWith("shop:")
+              ? `商店 ${o.holder.slice(5)} 在库`
+              : o.holder;
+            const locationLabel = o.holder.startsWith("shop:")
+              ? "店面货架"
+              : (o.location ?? "随持有人");
+            return `${id} ${o.definition.name}：归属 ${holderLabel}，位置 ${locationLabel}；来源 ${o.origin}；最近变化 ${o.lastChange}${o.definition.ability ? `；用途 ${o.definition.ability}` : ""}`;
+          });
         return lines.length ? lines.join("\n") : undefined;
       },
     },

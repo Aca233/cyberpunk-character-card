@@ -77,7 +77,7 @@ export const quickhacks = hackingRules.QuickhackCatalogSchema.parse([
     requiresFoothold: false,
     targetRequirement: "目标体内装有带电源与散热阀的电子义体（纯肉体或物理离线端口无效）",
     effect:
-      "强行关停目标义体散热阀并把供电推至超频上限，金属壳体与皮下接口瞬间滚烫灼伤血肉，逼迫对方痛苦失衡甚至烧毁散热件",
+      "推高目标义体功耗并锁死散热阀：对民用/廉价街头件可迅速灼伤失衡；但对自我 ICE、防火涂层或军用/传说级冗余散热重装件，入门单发多被拦下或仅致高温警报与短暂降频，不会一发烧毁，须先破冰并凭高阶接入仓/持续强攻压垮",
     source: SOURCE,
   },
   {
@@ -88,7 +88,7 @@ export const quickhacks = hackingRules.QuickhackCatalogSchema.parse([
     requiresFoothold: false,
     targetRequirement: "目标装有义肢、斯安威斯坦、外骨骼或重型电子义体",
     effect:
-      "绕过稳压保护向目标核心义体灌入瞬时高压电涌，直接击穿一条义肢、斯安威斯坦或安保机体的电路板，当场冒烟半身瘫痪",
+      "向目标核心义体灌入高压电涌：对民用义肢、未屏蔽接头或普通无人机可瞬时电弧瘫痪；但对自我 ICE、接地镀层或自带稳压熔断保护的高阶战斗义体/斯安威斯坦，入门单发常被分流挡回或仅致短时抽搐卡顿，绝非一发炸缸，须先破冰叠加压制",
     source: SOURCE,
   },
   {

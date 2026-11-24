@@ -199,6 +199,8 @@ export interface MemoryQuery {
   readonly context: string;
   /** 可选向量余弦相似度（按记忆条 id 索引，范围 0–1）；未配 embedding 时为空 */
   readonly vectorScores?: ReadonlyMap<string, number> | undefined;
+  /** 可选语义重排相关度（按记忆条 id 索引，范围 0–1）；未配 reranker 时为空 */
+  readonly rerankScores?: ReadonlyMap<string, number> | undefined;
 }
 
 type Intent = "ask" | "trade" | "fight";
@@ -213,8 +215,9 @@ const DAY_WORDS: readonly (readonly [RegExp, number])[] = [
   [/今天|今晚|刚才/, 0],
 ];
 
-/** 各路的分值；向量相似度仅在配置 embedding 并成功计算时计入 */
+/** 各路的分值；向量相似度与语义重排仅在对应模型配置并成功计算时计入 */
 const WEIGHT = {
+  rerank: 0.6,
   vector: 0.45,
   input: 0.4,
   context: 0.2,
@@ -308,6 +311,8 @@ export function scoreMemories(
     .map((entry) => {
       const sim = query.vectorScores?.get(entry.id) ?? 0;
       const vector = WEIGHT.vector * Math.max(0, Math.min(1, sim));
+      const rel = query.rerankScores?.get(entry.id) ?? 0;
+      const rerank = WEIGHT.rerank * Math.max(0, Math.min(1, rel));
       const person = entry.people.some((p) => named.has(p))
         ? WEIGHT.input
         : entry.people.some((p) => around.has(p))
@@ -325,8 +330,8 @@ export function scoreMemories(
       const bias = intent !== undefined && intentMatches(intent, entry) ? WEIGHT.intent : 0;
       const exact = entry.people.some((p) => named.has(p)) ? EXACT_BONUS : 0;
       const times = IMPORTANCE_WEIGHT[entry.importance];
-      const score = (vector + person + time + keyword + bias) * times + exact;
-      const parts = `${vector > 0 ? `向量 ${r2(vector)}、` : ""}人物 ${r2(person)}、时间 ${r2(time)}、关键词 ${r2(keyword)}、意图 ${r2(bias)}，×${times}${exact > 0 ? `，点名 +${EXACT_BONUS}` : ""}`;
+      const score = (rerank + vector + person + time + keyword + bias) * times + exact;
+      const parts = `${rerank > 0 ? `重排 ${r2(rerank)}、` : ""}${vector > 0 ? `向量 ${r2(vector)}、` : ""}人物 ${r2(person)}、时间 ${r2(time)}、关键词 ${r2(keyword)}、意图 ${r2(bias)}，×${times}${exact > 0 ? `，点名 +${EXACT_BONUS}` : ""}`;
       return { entry, score: r2(score), parts };
     })
     .sort((a, b) => b.score - a.score);

@@ -2,10 +2,12 @@ import type { LlmUsage } from "@cp/core";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { type ConfigService, ProviderTypeSchema, type Result, redact } from "../config";
+import { embeddingModelFor, probeEmbedding } from "../providers/embedding";
 import { AbortedError } from "../providers/http";
 import { ImageRouter } from "../providers/image";
 import { LlmRouter } from "../providers/index";
 import { fetchProviderModels } from "../providers/models";
+import { probeReranker } from "../providers/rerank";
 
 /** 测试连接最多等这么久 */
 const TEST_TIMEOUT_MS = 30_000;
@@ -171,6 +173,76 @@ export function profileRoutes(config: ConfigService): Hono {
           model: profile.model,
           ms: Date.now() - started,
           reply: `生图测试成功（${result.mimeType}）`,
+        });
+      } catch (error) {
+        return c.json({
+          ok: false,
+          error: redact(error instanceof Error ? error.message : String(error)),
+          ms: Date.now() - started,
+        });
+      }
+    }
+    const embeddingOnly =
+      overview.status === "ok" &&
+      profile !== undefined &&
+      overview.config.embedding === name &&
+      overview.config.narrator !== name &&
+      overview.config.aux !== name &&
+      overview.config.image !== name &&
+      overview.config.reranker !== name;
+    if (embeddingOnly) {
+      const started = Date.now();
+      const targetModel = embeddingModelFor(profile, "dedicated");
+      if (!targetModel) {
+        return c.json({ ok: false, error: "向量连接还没有填写模型名" });
+      }
+      try {
+        const probed = await probeEmbedding(
+          profile,
+          config.keyFor(profile),
+          targetModel,
+          AbortSignal.timeout(TEST_TIMEOUT_MS),
+        );
+        return c.json({
+          ok: true,
+          model: probed.model,
+          ms: Date.now() - started,
+          reply: `向量嵌入测试成功（维度 ${probed.dimensions}）`,
+        });
+      } catch (error) {
+        return c.json({
+          ok: false,
+          error: redact(error instanceof Error ? error.message : String(error)),
+          ms: Date.now() - started,
+        });
+      }
+    }
+    const rerankerOnly =
+      overview.status === "ok" &&
+      profile !== undefined &&
+      overview.config.reranker === name &&
+      overview.config.narrator !== name &&
+      overview.config.aux !== name &&
+      overview.config.image !== name &&
+      overview.config.embedding !== name;
+    if (rerankerOnly) {
+      const started = Date.now();
+      const targetModel = profile.model.trim();
+      if (!targetModel) {
+        return c.json({ ok: false, error: "重排连接还没有填写模型名" });
+      }
+      try {
+        const probed = await probeReranker(
+          profile,
+          config.keyFor(profile),
+          targetModel,
+          AbortSignal.timeout(TEST_TIMEOUT_MS),
+        );
+        return c.json({
+          ok: true,
+          model: probed.model,
+          ms: Date.now() - started,
+          reply: `语义重排测试成功（返回 ${probed.count} 条，最高相关度 ${probed.topScore.toFixed(2)}）`,
         });
       } catch (error) {
         return c.json({

@@ -9,6 +9,7 @@ import {
   interpretModule,
   type LlmClient,
   normalizeBoard,
+  npcRules,
   ProseRequestSchema,
   pruneAcquaintances,
   START_CYBERWARE_RARITIES,
@@ -111,6 +112,7 @@ export function characterRoutes(
         role: n.role,
         look: n.look,
         ...(n.faction && n.faction !== "none" ? { faction: n.faction } : {}),
+        circle: npcRules.inferNpcCircle(n),
         ...(customPackId(n.id) ? { packId: customPackId(n.id) } : {}),
       })),
       cyberware: allCyberware.flatMap((def) =>

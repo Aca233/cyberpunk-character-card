@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import type { CharacterStore } from "./characters";
 import { TurnCheckpointStore } from "./checkpoints";
 import type { ConfigService } from "./config";
+import { EmbeddingCacheStore } from "./embedding-cache";
 import { GameService } from "./game";
 import type { ImageStore } from "./images";
 import type { SaveStorage } from "./ports";
@@ -36,6 +37,8 @@ export interface AppDeps {
   readonly images?: ImageStore | undefined;
   /** 回合阶段断点存储；传了可跨刷新保存中间阶段结果 */
   readonly checkpoints?: TurnCheckpointStore | undefined;
+  /** 本地持久化向量缓存；传了按存档复用旧记忆向量，未传则仅用内存缓存 */
+  readonly embeddingCache?: EmbeddingCacheStore | undefined;
   readonly workshop?: WorkshopStore | undefined;
 }
 
@@ -45,6 +48,7 @@ export function createApp(deps: AppDeps): Hono {
   const llm = new LlmRouter(deps.config);
   const imageRouter = new ImageRouter(deps.config);
   const checkpoints = deps.checkpoints ?? new TurnCheckpointStore();
+  const embeddingCache = deps.embeddingCache ?? new EmbeddingCacheStore();
   const game = new GameService({
     saves: deps.saves,
     characters: deps.characters,
@@ -56,6 +60,7 @@ export function createApp(deps: AppDeps): Hono {
     log: deps.log,
     presets: deps.presets,
     checkpoints,
+    embeddingCache,
     workshop: deps.workshop,
   });
   const app = new Hono();
@@ -67,10 +72,12 @@ export function createApp(deps: AppDeps): Hono {
   app.notFound((c) => c.json({ error: `没有这个接口：${c.req.method} ${c.req.path}` }, 404));
   app.get("/api/health", async (c) => {
     const state = await deps.config.load();
-    const [narrator, aux, image] = await Promise.all([
+    const [narrator, aux, image, embedding, reranker] = await Promise.all([
       llm.resolve("narrator"),
       llm.resolve("aux"),
       imageRouter.resolve(),
+      llm.resolveEmbeddingTarget(),
+      llm.resolveRerankerTarget(),
     ]);
     const redact = await deps.config.redactor();
     return c.json({
@@ -84,6 +91,18 @@ export function createApp(deps: AppDeps): Hono {
           ready: image.ok,
           error: image.ok ? null : redact(image.error),
           capabilities: image.ok ? imageProtocolCapabilities(image.protocol) : null,
+        },
+        embedding: {
+          ready: embedding.ok,
+          configured: embedding.configured,
+          model: embedding.ok ? embedding.model : null,
+          error: embedding.configured && !embedding.ok ? redact(embedding.error) : null,
+        },
+        reranker: {
+          ready: reranker.ok,
+          configured: reranker.configured,
+          model: reranker.ok ? reranker.model : null,
+          error: reranker.configured && !reranker.ok ? redact(reranker.error) : null,
         },
       },
     });
