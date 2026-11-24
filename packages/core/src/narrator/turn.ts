@@ -1015,8 +1015,8 @@ export async function runNarratorTurn(
       if (journey) decided.push(`【成交前出行】${journey}`);
       decided.push(
         quote.ok
-          ? `【本次交易报价】${proposal.destination ? `以实际到达 ${proposal.destination} 为前提；` : ""}${quote.detail}。这一条只对应一件或一次服务；只有玩家已接受并确实交付才成交，不得另改交易对象、价钱或旧件处理。`
-          : `【本次交易尚不能成立】${quote.reason}。可以继续询价或商谈，不能先写成已付款、拿货或安装。`,
+          ? `【本次交易报价】${proposal.destination ? `以实际到达 ${proposal.destination} 为前提；` : ""}${quote.detail}。这一条只对应一件或一次服务；玩家本轮已明确付款或同意交付时当轮爽快收款推进，不得另改交易对象、价钱或旧件处理，也不要编造额外转账通道故障拖延成交。`
+          : `【本次交易尚不能成立】${quote.reason}。直接说明这一真实障碍即可，不要编造互相矛盾的付款通道借口；未解决前不能先写成已付款、拿货或安装。`,
       );
     }
     // 对手的打算：只给写正文的一步，正文照它写对手的行动

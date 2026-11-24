@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { WeaponConcealment, WeaponNoise } from "../dice";
-import { RaritySchema, ServiceSchema } from "../economy";
+import { MONEY_CAP, RaritySchema, ServiceSchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
   "weapon",
@@ -503,6 +503,15 @@ export const TradeCommandSchema = z
       .max(80)
       .optional()
       .describe("引用已谈妥报价的 id；省略时使用同条件有效报价或当前店价"),
+    amount: z
+      .number()
+      .int()
+      .min(1)
+      .max(MONEY_CAP)
+      .optional()
+      .describe(
+        "仅限 favor（打点/破译/办事/定金或尾款）与 info（买情报）两类自由剧情服务填写实际约定金额；目录物品与其他固定服务禁填",
+      ),
     with: z
       .string()
       .min(1)
@@ -517,6 +526,14 @@ export const TradeCommandSchema = z
         : t.item !== undefined && t.service === undefined,
     {
       message: "buy 和 sell 只写 item，service 只写 service",
+    },
+  )
+  .refine(
+    (t) =>
+      t.amount === undefined ||
+      (t.action === "service" && (t.service === "favor" || t.service === "info")),
+    {
+      message: "amount 仅允许用于 favor 或 info 自由剧情服务，普通商品与其他服务按目录或报价结算",
     },
   )
   .describe(

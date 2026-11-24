@@ -3,7 +3,12 @@ import type { WorldState } from "../kernel/world";
 import type { NarratedPurchase } from "../systems/commerce/quotes";
 import { quoteCyberware } from "../systems/cyberware/quote";
 import { cyberwareSettlement, quoteCyberwareService } from "../systems/cyberware/service";
-import { EconomyStateSchema, isBigSpend, ServiceSchema } from "../systems/economy/schema";
+import {
+  EconomyStateSchema,
+  isBigSpend,
+  MONEY_CAP,
+  ServiceSchema,
+} from "../systems/economy/schema";
 import { gunsmithSettlement, quoteGunsmith } from "../systems/inventory/gunsmith";
 import { quoteTrade } from "../systems/inventory/trade";
 import { quoteTraumaMembership, TraumaStateSchema } from "../systems/trauma";
@@ -59,8 +64,17 @@ export const BuyProposalSchema = z
     tradeIn: z.boolean().optional().describe("玩家明确同意出售旧件时才为 true"),
     credit: z.boolean().optional().describe("玩家明确申请赊账时才为 true"),
     service: ServiceSchema.optional().describe(
-      "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 看伤，fine 罚款，favor 打点，bd-session 店内超梦，adult-service 成年从业者服务",
+      "买服务写：meal 吃一顿，drink 一杯酒，lodging 住一晚，cab 打车，info 买情报，medical 看伤，fine 罚款，favor 打点/破译/办事/定金或尾款，bd-session 店内超梦，adult-service 成年从业者服务",
     ),
+    amount: z
+      .number()
+      .int()
+      .min(1)
+      .max(MONEY_CAP)
+      .optional()
+      .describe(
+        "仅限 favor / info 自由剧情服务：当玩家明确支付约定金额（如 500 定金或 1000 全款）时填正整数欧元；普通物品/义体/其他服务不填",
+      ),
     gunsmith: z
       .enum(["install", "detach", "convert"])
       .optional()
@@ -113,6 +127,9 @@ export const BuyProposalSchema = z
   })
   .refine((b) => b.tier === undefined || b.trauma !== undefined, {
     message: "tier 仅用于创伤小组会籍",
+  })
+  .refine((b) => b.amount === undefined || b.service === "favor" || b.service === "info", {
+    message: "amount 仅用于 favor 或 info 自由剧情服务",
   });
 export type BuyProposal = z.infer<typeof BuyProposalSchema>;
 
@@ -478,6 +495,7 @@ export function purchaseQuote(
     service: buy.service,
     with: buy.with,
     offer: buy.offer,
+    amount: buy.amount,
   });
   if (!q.ok) return q;
   return {
@@ -493,7 +511,7 @@ export function purchaseQuote(
       q.quote?.id,
       buy.destination,
     ]),
-    detail: `${q.party.name} ${q.label}：${action === "sell" ? "卖出后玩家所得" : "最终对价"} ${q.price} 欧元${q.left !== undefined ? `；现货 ${q.left}` : ""}${q.quote ? `；报价 ${q.quote.id}` : ""}`,
+    detail: `${q.party.name} ${q.label}：${action === "sell" ? "卖出后玩家所得" : "最终对价"} ${q.price} 欧元${q.left !== undefined ? `；现货 ${q.left}` : ""}${q.quote ? `；报价 ${q.quote.id}` : ""}${buy.amount !== undefined ? `（自定义服务金额 amount: ${buy.amount}）` : ""}`,
     settlement: {
       seller: q.counterparty,
       kind: buy.service ? "service" : "item",

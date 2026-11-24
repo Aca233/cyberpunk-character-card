@@ -83,7 +83,7 @@ export const commerce = defineSystem<CommerceState, CommerceCommand, CommerceInt
       when: (state, input) =>
         Object.values(state.quotes).some((q) => q.status === "offered") ||
         Object.values(state.sessions).some((s) => ["active", "paused"].includes(s.status)) ||
-        /买|卖|价格|报价|砍价|讲价|赊|赠|免费|交换|安装|维修|拆卸|吃|喝|住|超梦|性偶|玩偶|云顶|扭扭街|丽姿|服务/.test(
+        /买|卖|价格|报价|砍价|讲价|赊|赠|免费|交换|安装|维修|拆卸|吃|喝|住|超梦|性偶|玩偶|云顶|扭扭街|丽姿|服务|付|转|汇|款|定金|尾款|现钞|扫码|破译|打点|酬金|小费|费用|收费|交钱|给钱/.test(
           input.text,
         ),
       judge:

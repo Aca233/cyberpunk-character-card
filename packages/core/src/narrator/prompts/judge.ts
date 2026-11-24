@@ -53,6 +53,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 【交易确认】
 - buy：只在玩家明确要买入、卖出、支付服务、安装、拆卸、维修或还款时填写；询价、砍价和提出尚未获同意的新条件写 null；【上一轮之后玩家刚刚在界面完成的操作】里已经买完、装完或付完的事不要再次填进 buy。单笔写一个对象；多笔或多件按玩家授权的实际顺序逐件列数组，同款买两件也列两项，不能从一次授权推断重复成交。
 - 普通物品写 item，买入写 action:buy、卖出写 action:sell；服务写 service。with 始终写实际交易对方的稳定商店/人物 id，不能默认同地点第一家；已谈妥报价写 offer。价格由代码与货架共用报价，不能自行猜折扣；车辆按真实目录价。
+- 自由剧情付费服务（找黑客/技师破译芯片、付费办事、打点贿赂、付定金或尾款、向线人买定制情报）：service 写 favor（情报写 info）、with 写实际在场人物或店铺 id；只要玩家本轮明确支付谈妥的具体金额（例如先付 500 定金或 1000 全款），直接把该整数金额写进 amount（覆盖旧报价单的不同方案，避免 500/1000 来回锁死），不因对方店铺未单列该服务而放弃填写。普通商品、武器、义体与其他固定服务绝不填 amount。
 - 店内超梦用 service:bd-session，成年从业者服务用 service:adult-service；谈妥价格后成交即可，询价、挑片或聊天不算接受。不用 favor/info 代付。
 - 枪匠工坊写 gunsmith（install 从货架直装或用自带件改锁定槽、detach 拆锁定件解锁、convert 智能靶向联锁或精工固锁）、商店 with 与随身武器 weapon；install/detach 写 mod（自带件写 source:backpack），精工固锁写 slot 与 conversion:precision-lock，智能改造写 conversion:smart-link。普通未锁定配件的日常战外装卸在界面上免费做，不填 buy。
 - 义体写 cyberware、医生 with 与 operation（buy 只买下、install 安装、remove 拆卸、repair 维修、repay 还款）；还款不写 cyberware。自带实物写 part；替换写 replace；旧件明确去向写 disposition:keep/sell/scrap，出售也可 tradeIn:true。赊账只认 credit:true 的明确授权。

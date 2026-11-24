@@ -84,6 +84,7 @@ function purchaseCommand(p: BuyProposal, q: PurchaseQuote): Command {
     service: p.service,
     with: p.with,
     offer: p.offer,
+    ...(p.amount !== undefined ? { amount: p.amount } : {}),
     reason,
   };
 }
@@ -366,8 +367,16 @@ export function applyMerchantCommands(
       for (const [i, purchaseIndex] of remaining.entries()) {
         const candidate = purchases[purchaseIndex];
         if (!candidate?.quote.ok) continue;
+        const inheritedAmount =
+          proposal.amount === undefined &&
+          candidate.proposal.amount !== undefined &&
+          proposal.service !== undefined &&
+          proposal.service === candidate.proposal.service
+            ? candidate.proposal.amount
+            : undefined;
         const actual = purchaseQuote(current, ctx.data ?? {}, {
           ...proposal,
+          ...(inheritedAmount !== undefined ? { amount: inheritedAmount } : {}),
           destination: candidate.proposal.destination,
           startAt: proposal.startAt ?? candidate.quote.settlement?.startsAt,
         });
@@ -378,6 +387,8 @@ export function applyMerchantCommands(
             command.startAt === undefined
           )
             executable = { ...command, startAt: actual.settlement?.startsAt };
+          else if (command.type === "trade" && inheritedAmount !== undefined)
+            executable = { ...command, amount: inheritedAmount };
           break;
         }
       }

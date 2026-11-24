@@ -62,7 +62,13 @@ export function itemReferencePrice(
   return extra > 0 ? extra : undefined;
 }
 
-export type TradeRequest = Pick<TradeCommand, "action" | "item" | "service" | "with" | "offer">;
+export type TradeRequest = Pick<
+  TradeCommand,
+  "action" | "item" | "service" | "with" | "offer" | "amount"
+>;
+
+/** 自由剧情服务（打点/破译/定金/尾款、买情报）：任何在场存活的 NPC、店铺或诊所都可承接，且支持按本轮约定 amount 结算。 */
+const UNIVERSAL_STORY_SERVICES: ReadonlySet<string> = new Set(["favor", "info"]);
 type SavedQuote = Extract<ReturnType<typeof agreedQuote>, { ok: true }>["quote"];
 type Counterparty = {
   id: string;
@@ -203,10 +209,17 @@ export function quoteTrade(
   if (party.npc?.alive === false) return { ok: false, reason: `${party.name}已经死亡，无法交易` };
   const shop = party.shop;
   const services = merchantServices(data, party.id);
-  if (party.clinic && (request.action !== "service" || request.service !== "medical"))
+  const universalService =
+    request.action === "service" && UNIVERSAL_STORY_SERVICES.has(request.service ?? "");
+  if (
+    party.clinic &&
+    !universalService &&
+    (request.action !== "service" || request.service !== "medical")
+  )
     return { ok: false, reason: "诊所的普通服务只处理看伤；义体购买、安装和维修需走义体交易" };
   if (
     request.action === "service" &&
+    !universalService &&
     services !== undefined &&
     !services.includes(request.service ?? "")
   )
@@ -242,7 +255,10 @@ export function quoteTrade(
       }
     }
   }
-  if (!match.ok) return match;
+  const customAmount =
+    universalService && request.amount !== undefined ? request.amount : undefined;
+  if (!match.ok && customAmount === undefined) return match;
+  const matchedOffer = match.ok ? match.quote : null;
   if (request.action === "service" && request.service === "adult-service" && party.npc) {
     const subject = party.npc;
     if (
@@ -266,17 +282,23 @@ export function quoteTrade(
           : shop
             ? moodPrice(Math.max(10, Math.round((refPrice * shop.priceFactor) / 10) * 10), mood)
             : refPrice;
-  const price = match.quote?.price ?? base;
+  const price = customAmount ?? matchedOffer?.price ?? base;
+  const matchedQuote =
+    customAmount !== undefined
+      ? matchedOffer?.price === customAmount
+        ? matchedOffer
+        : null
+      : matchedOffer;
   if (
     price === undefined ||
     price < 0 ||
-    (price === 0 && !match.quote) ||
+    (price === 0 && !matchedQuote) ||
     !Number.isSafeInteger(price)
   )
     return { ok: false, reason: "这笔交易没有有效现金报价；赠与使用实际物件转交" };
   const fail = (reason: string): TradeQuote => ({ ok: false, reason, price });
   if (price > MONEY_CAP) return fail("这笔报价超过当前单笔现金结算额度，尚不能交付");
-  if (party.clinic) {
+  if (party.clinic && !universalService) {
     const state = CyberwareStateSchema.parse(world.slices.cyberware);
     const clinic = clinicState(state, party.clinic, world.time);
     if (!clinic.open) return fail(`诊所暂停服务：${clinic.reason}`);
@@ -370,7 +392,7 @@ export function quoteTrade(
     ...(shop ? { shop } : {}),
     ...(item ? { item } : {}),
     ...(left === undefined ? {} : { left }),
-    quote: match.quote,
+    quote: matchedQuote,
   };
 }
 
