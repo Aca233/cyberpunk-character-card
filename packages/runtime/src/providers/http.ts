@@ -124,24 +124,51 @@ export async function get(
   );
 }
 
-/** 读出错误响应里的说明文字，兼容 {error: {message, code}} 和 {error: "..."} 两种写法 */
+/** 读出错误响应里的说明文字，兼容 {error: {message, code}}、{error: "..."} 及顶层 {message|detail|msg} */
 export async function errorDetail(res: Response): Promise<{ message: string; code?: string }> {
   const text = await res.text().catch(() => "");
+  const trimmed = text.trim();
+  if (!trimmed) return { message: "" };
   try {
-    const json = JSON.parse(text) as {
+    const json = JSON.parse(trimmed) as {
       error?: { message?: unknown; code?: unknown; status?: unknown } | string;
+      message?: unknown;
+      detail?: unknown;
+      msg?: unknown;
+      statusMessage?: unknown;
+      code?: unknown;
     };
-    if (typeof json.error === "string") return { message: json.error };
-    const message = typeof json.error?.message === "string" ? json.error.message : "";
+    if (typeof json.error === "string" && json.error.trim()) {
+      return { message: json.error.trim() };
+    }
+    const nestedError = typeof json.error === "object" && json.error !== null ? json.error : null;
+    const candidates = [
+      nestedError?.message,
+      json.message,
+      json.detail,
+      json.msg,
+      json.statusMessage,
+    ];
+    let message = "";
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim() !== "") {
+        message = candidate.trim();
+        break;
+      }
+    }
+    if (!message) {
+      message = trimmed.slice(0, 300);
+    }
+    const rawCode = nestedError?.code ?? nestedError?.status ?? json.code;
     const code =
-      typeof json.error?.code === "string" && json.error.code !== ""
-        ? json.error.code
-        : typeof json.error?.status === "string"
-          ? json.error.status
+      typeof rawCode === "string" && rawCode.trim() !== ""
+        ? rawCode.trim()
+        : typeof rawCode === "number"
+          ? String(rawCode)
           : undefined;
     return code ? { message, code } : { message };
   } catch {
-    return { message: text.trim().slice(0, 300) };
+    return { message: trimmed.slice(0, 300) };
   }
 }
 
