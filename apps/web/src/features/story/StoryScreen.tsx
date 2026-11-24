@@ -1912,6 +1912,11 @@ export function StoryScreen() {
                 state: { from: `/play/${encodeURIComponent(saveId)}` },
               })
             }
+            onFeedback={() =>
+              navigate(`/settings?tab=feedback&save=${encodeURIComponent(saveId)}`, {
+                state: { from: `/play/${encodeURIComponent(saveId)}` },
+              })
+            }
             onQuit={busy ? undefined : () => navigate("/menu")}
           />
         )}

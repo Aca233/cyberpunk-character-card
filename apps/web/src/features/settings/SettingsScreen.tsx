@@ -17,6 +17,7 @@ import neural from "../story/neural.module.css";
 import { useStory } from "../story/store";
 import { ShellBackdrop, ThemeModal, themeById, useShellTheme } from "../theme";
 import { AudioSettings } from "./AudioSettings";
+import { FeedbackPanel } from "./FeedbackPanel";
 import { ModelSettings } from "./ModelSettings";
 import { NarrativeSettings } from "./NarrativeSettings";
 import { PresetSettings } from "./PresetSettings";
@@ -24,7 +25,7 @@ import { setNarrativePref } from "./prefs";
 import { useSpoilerView } from "./SpoilerBadge";
 import styles from "./settings.module.css";
 
-type Tab = "profiles" | "presets" | "narrative" | "audio" | "context";
+type Tab = "profiles" | "presets" | "narrative" | "audio" | "context" | "feedback";
 
 const TABS: readonly { readonly id: Tab; readonly code: string; readonly label: string }[] = [
   { id: "profiles", code: "01", label: "模型连接" },
@@ -32,6 +33,7 @@ const TABS: readonly { readonly id: Tab; readonly code: string; readonly label: 
   { id: "narrative", code: "03", label: "叙事偏好" },
   { id: "audio", code: "04", label: "音频" },
   { id: "context", code: "05", label: "上下文（调试）" },
+  { id: "feedback", code: "06", label: "问题反馈" },
 ];
 
 const CITY_WEIGHT = { minor: "街角小事", normal: "几个街区在传", major: "头条" } as const;
@@ -86,7 +88,8 @@ export function SettingsScreen() {
     tabParam === "context" ||
     tabParam === "narrative" ||
     tabParam === "presets" ||
-    tabParam === "audio"
+    tabParam === "audio" ||
+    tabParam === "feedback"
       ? tabParam
       : "profiles";
   const backTarget = activeSaveId
@@ -237,6 +240,8 @@ export function SettingsScreen() {
           <NarrativeSettings onOpenContext={() => requestGo("context")} />
         ) : tab === "audio" ? (
           <AudioSettings />
+        ) : tab === "feedback" ? (
+          <FeedbackPanel initialSaveId={params.get("save") ?? activeSaveId} />
         ) : (
           <ContextViewer />
         )}

@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router";
+import { installClientErrorCapture } from "./api/diagnostics";
 import { warmLocalBackend } from "./api/transport";
 import { router } from "./app";
 import { loadAssetIndex, loadAudioAssetIndex } from "./assets";
@@ -19,6 +20,7 @@ import { installAudioUnlock, installUiAudioDelegation } from "./audio";
 import { installTypographyPrefs } from "./features/settings/prefs";
 import { FatalScreen } from "./features/status/FatalScreen";
 
+installClientErrorCapture();
 installTypographyPrefs();
 
 const queryClient = new QueryClient({

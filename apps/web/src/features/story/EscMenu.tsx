@@ -21,6 +21,7 @@ export function EscMenu({
   canEndStory = false,
   onEndStory,
   onSettings,
+  onFeedback,
   onQuit,
 }: {
   readonly context?: EscContext | undefined;
@@ -29,6 +30,7 @@ export function EscMenu({
   readonly canEndStory?: boolean;
   readonly onEndStory?: (() => void) | undefined;
   readonly onSettings: () => void;
+  readonly onFeedback?: (() => void) | undefined;
   /** 正在生成时不传：这一轮写完才能回主菜单 */
   readonly onQuit?: (() => void) | undefined;
 }) {
@@ -78,6 +80,14 @@ export function EscMenu({
               />
             )}
             <MenuItem label="设置" onSelect={onSettings} />
+            {onFeedback && (
+              <MenuItem
+                label="问题反馈 / 诊断日志"
+                hint="BUG"
+                hintTone="cyan"
+                onSelect={onFeedback}
+              />
+            )}
             <MenuItem
               label="回主菜单"
               disabled={!onQuit}

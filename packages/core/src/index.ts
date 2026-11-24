@@ -58,6 +58,7 @@ export {
 } from "./systems/chronicle";
 export * as cityRules from "./systems/city";
 export * as combatRules from "./systems/combat";
+export * as commerceRules from "./systems/commerce";
 export * as cyberwareRules from "./systems/cyberware";
 export * as diceRules from "./systems/dice";
 export * as economyRules from "./systems/economy";

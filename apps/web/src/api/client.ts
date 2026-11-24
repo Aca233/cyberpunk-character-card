@@ -22,6 +22,7 @@ import type {
 
 import { offscreenPace, spoilersOn } from "../features/settings/prefs";
 import type { Gloss } from "../features/story/view";
+import { recordClientDiagnosticError } from "./diagnostics";
 import { apiFetch } from "./transport";
 
 /**
@@ -83,6 +84,12 @@ async function request<T>(
   if (!response.ok) {
     const details = Array.isArray(data.details) ? `：${data.details.join("；")}` : "";
     const message = typeof data.error === "string" ? data.error : `请求失败（${response.status}）`;
+    if (response.status >= 500 || (response.status >= 400 && response.status !== 404)) {
+      recordClientDiagnosticError(
+        "api",
+        `${method} ${path} -> ${response.status}: ${message}${details}`,
+      );
+    }
     throw new ApiError(`${message}${details}`, response.status, data);
   }
   return data as T;
@@ -629,8 +636,122 @@ export interface CityEventView {
 
 export type TurnBody = { requestId: string; baseVersion: number; input: TurnInput };
 
+export interface RuntimeDiagnosticsReport {
+  readonly schemaVersion: string;
+  readonly generatedAt: string;
+  readonly health: {
+    readonly config: string;
+    readonly ready: boolean;
+    readonly narrator: {
+      readonly ready: boolean;
+      readonly model: string | null;
+      readonly error: string | null;
+    };
+    readonly aux: {
+      readonly ready: boolean;
+      readonly model: string | null;
+      readonly error: string | null;
+    };
+    readonly image: {
+      readonly ready: boolean;
+      readonly model: string | null;
+      readonly error: string | null;
+    };
+    readonly embedding: {
+      readonly ready: boolean;
+      readonly configured: boolean;
+      readonly model: string | null;
+      readonly error: string | null;
+    };
+    readonly reranker: {
+      readonly ready: boolean;
+      readonly configured: boolean;
+      readonly model: string | null;
+      readonly error: string | null;
+    };
+  };
+  readonly profiles: unknown;
+  readonly activePreset: {
+    readonly name: string;
+    readonly entryCount: number;
+    readonly enabledEntries: number;
+    readonly sampling: Record<string, unknown> | null;
+  } | null;
+  readonly runtimeLogs: readonly { readonly at: string; readonly message: string }[];
+  readonly save: {
+    readonly meta: {
+      readonly id: string;
+      readonly title: string;
+      readonly createdAt: string;
+      readonly startLocation: string | null;
+      readonly characterName: string | null;
+    };
+    readonly snapshot: {
+      readonly version: number;
+      readonly totalTurns: number;
+      readonly locationId: string | null;
+      readonly locationName: string | null;
+      readonly gameTime: string;
+      readonly eddies: number;
+      readonly death: boolean;
+      readonly ended: boolean;
+    };
+    readonly checkpoint: TurnCheckpointSummary | null;
+    readonly commerce: {
+      readonly activeQuotes: readonly Record<string, unknown>[];
+      readonly activeSessions: readonly Record<string, unknown>[];
+      readonly registeredParties: readonly Record<string, unknown>[];
+    };
+    readonly recentActions: readonly {
+      readonly seq: number;
+      readonly at: string;
+      readonly action: unknown;
+      readonly notes: readonly string[];
+      readonly commands: readonly unknown[];
+    }[];
+    readonly recentTurns: readonly {
+      readonly seq: number;
+      readonly at: string;
+      readonly ooc: boolean;
+      readonly input: unknown;
+      readonly read: string | null;
+      readonly ruling: string | null;
+      readonly decided: readonly string[];
+      readonly commands: readonly unknown[];
+      readonly dropped: readonly { readonly where: string; readonly reason: string }[];
+      readonly notes: readonly string[];
+      readonly unsettled: string | null;
+      readonly check: unknown;
+      readonly offscreenSkip: string | null;
+      readonly modules: readonly string[];
+      readonly usage: TurnUsage | null;
+      readonly budget: unknown;
+      readonly text: string;
+      readonly thought?: string;
+    }[];
+    readonly lastTurnMessages?: readonly { readonly role: string; readonly content: string }[];
+  } | null;
+  readonly saveError: string | null;
+}
+
 export const api = {
   health: () => request<Health>("GET", "/health"),
+  diagnostics: (
+    options: {
+      readonly saveId?: string | null;
+      readonly turns?: number;
+      readonly includeThought?: boolean;
+      readonly includePrompt?: boolean;
+    } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (options.saveId) params.set("saveId", options.saveId);
+    if (options.turns !== undefined) params.set("turns", String(options.turns));
+    if (options.includeThought === false) params.set("includeThought", "0");
+    if (options.includePrompt === true) params.set("includePrompt", "1");
+    const qs = params.toString();
+    return request<RuntimeDiagnosticsReport>("GET", qs ? `/diagnostics?${qs}` : "/diagnostics");
+  },
   /** 酒馆预设管理：只访问本机后端，不发送模型请求；导入后需单独启用。 */
   tavernPresets: () =>
     request<{ active: string | null; presets: PresetSummary[] }>("GET", "/presets"),
