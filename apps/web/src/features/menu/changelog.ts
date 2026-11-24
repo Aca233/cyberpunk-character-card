@@ -59,6 +59,10 @@ export const CHANGELOG_ENTRIES: readonly ChangelogEntry[] = [
       },
       {
         tag: "修复",
+        text: "修复 NovelAI V4/V4.5/V5 生图请求体字段兼容（补齐 parameters.prompt、修正 v4_negative_prompt 与模型名识别），在文生图弹窗对 NovelAI/SD 纯中文提示词新增一键切纯英文 Tag 重提提醒与实际协议/尺寸标注，并修复出图后弹窗底栏「重新生成 / 采用此图」按钮被挤出屏幕的问题。",
+      },
+      {
+        tag: "修复",
         text: "修复自由剧情付费服务（破译、办事、定金/尾款、买情报）易因旧报价单覆盖或店铺服务列表限制导致多轮拒收鬼打墙的问题：为 favor/info 服务支持显式约定金额 amount，补全付款激活词并禁止在核验通过后编造支付通道借口卡回合。",
       },
       {

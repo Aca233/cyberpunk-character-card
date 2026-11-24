@@ -292,7 +292,7 @@ export function resolveImageProtocol(profile: Profile): ResolvedImageProtocol {
     return /^imagen/i.test(cleanModel) ? "gemini-imagen" : "gemini-native";
   }
   const m = profile.model.toLowerCase();
-  if (m.startsWith("nai-diffusion")) {
+  if (m.includes("nai-diffusion") || m.startsWith("nai-") || m.includes("novelai")) {
     return "novelai";
   }
   if (
@@ -950,8 +950,10 @@ async function generateNovelAi(
     request.seed !== undefined && request.seed >= 0
       ? request.seed
       : (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) % 2_147_483_647;
-  const isV5 = /^nai-diffusion-5/i.test(model);
-  const isV4OrV5 = isV5 || /^nai-diffusion-4/i.test(model);
+  const isLegacyV3 =
+    /(?:nai|novelai)[-_ ]?(?:diffusion[-_ ]?)?(?:furry[-_ ]?)?(?:v)?[123](?:\b|[-_])/i.test(model);
+  const isV5 = /(?:nai|novelai)[-_ ]?(?:diffusion[-_ ]?)?(?:v)?5(?:\b|[-_])/i.test(model);
+  const isV4OrV5 = !isLegacyV3;
 
   const parameters: Record<string, unknown> = {
     params_version: isV5 ? 4 : isV4OrV5 ? 3 : 1,
@@ -972,9 +974,17 @@ async function generateNovelAi(
     noise_schedule: "karras",
     legacy_v3_extend: false,
     seed,
+    prompt,
     negative_prompt: negativePrompt,
     ...(isV4OrV5
       ? {
+          skip_cfg_above_sigma: null,
+          use_coords: false,
+          legacy_uc: false,
+          normalize_reference_strength_multiple: true,
+          characterPrompts: [],
+          deliberate_euler_ancestral_bug: false,
+          prefer_brownian: true,
           v4_prompt: {
             caption: {
               base_caption: prompt,
@@ -988,8 +998,7 @@ async function generateNovelAi(
               base_caption: negativePrompt,
               char_captions: [],
             },
-            use_coords: false,
-            use_order: true,
+            legacy_uc: false,
           },
         }
       : {}),

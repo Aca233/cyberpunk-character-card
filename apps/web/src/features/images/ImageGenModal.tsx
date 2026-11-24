@@ -758,6 +758,31 @@ export function ImageGenModal({
               </div>
             )}
 
+            {imageModelReady &&
+              (model.data?.protocol === "novelai" ||
+                model.data?.protocol === "sdwebui" ||
+                model.data?.protocol === "comfyui") &&
+              (prefs.imagePromptLanguage === "zh" || /[\u4e00-\u9fff]/.test(prompt)) && (
+                <div className={styles.notice} role="status">
+                  <span>
+                    当前使用 {model.data.protocol === "novelai" ? "NovelAI" : model.data.protocol}（
+                    {model.data.model ?? model.data.profileName}
+                    ），纯中文提示词极易被编码器忽略而画出默认二次元少女。推荐切换为「纯英文 Tag
+                    词组」或「纯英文自然语言」后重新提炼。
+                  </span>
+                  <Button
+                    small
+                    disabled={busy}
+                    onClick={() => {
+                      setImagePromptLanguage("en-tags");
+                      void runDraft(isMultiMode ? "all" : "single");
+                    }}
+                  >
+                    切为纯英文 Tag 并重提
+                  </Button>
+                </div>
+              )}
+
             {displayNotice && (
               <div className={styles.notice} role="status">
                 <span>{displayNotice}</span>
@@ -1046,7 +1071,21 @@ export function ImageGenModal({
                     ))}
                   </div>
                 ) : preview ? (
-                  <img src={preview.image.dataUrl} alt={title} className={styles.previewImg} />
+                  <div className={styles.previewSingle}>
+                    <img src={preview.image.dataUrl} alt={title} className={styles.previewImg} />
+                    <small className={styles.previewMeta}>
+                      {[
+                        preview.image.metadata?.model,
+                        preview.image.metadata?.protocol,
+                        `${preview.image.width}×${preview.image.height}`,
+                        preview.image.metadata?.seed !== undefined
+                          ? `seed ${preview.image.metadata.seed}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  </div>
                 ) : null}
               </div>
             )}

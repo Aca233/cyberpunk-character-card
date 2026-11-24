@@ -387,6 +387,8 @@ export function imageRoutes(
         ready: false,
         error: redact(resolved.error),
         profileName: null,
+        protocol: null,
+        model: null,
         capabilities: null,
       });
     }
@@ -394,6 +396,8 @@ export function imageRoutes(
       ready: true,
       error: null,
       profileName: resolved.profile.name,
+      protocol: resolved.protocol,
+      model: resolved.profile.model,
       capabilities: imageProtocolCapabilities(resolved.protocol),
     });
   });

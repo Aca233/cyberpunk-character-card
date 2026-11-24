@@ -193,6 +193,8 @@ export interface ImageModelCapabilities {
   readonly ready: boolean;
   readonly error: string | null;
   readonly profileName: string | null;
+  readonly protocol?: string | null;
+  readonly model?: string | null;
   readonly capabilities: ImageCapabilities | null;
 }
 
