@@ -22,11 +22,13 @@
 ## 2. 核心设计方案
 
 ### 2.1 抽屉壳层与弹性滚动容器（`Corners.tsx` + `corners.module.css`）
+
 - **展开宽度升级**：`.track[data-open]` 加宽至 `min(540px, calc(100vw - var(--corner-edge) - var(--corner-edge) - var(--corner-w) - var(--corner-gap)))`，既让卡片元信息矩阵与按钮从容排布，又保留对正文与左栏的安全边距；折叠态保持原宽与原摘要不变。
 - **弹性吸顶滚动**：`.track[data-open] .growBody` 设为 `display: flex; flex-direction: column; overflow: hidden;`（仍受 `useRoomLeft` 的行内 `maxHeight` 约束），由内部 `.trackerScroll` 独立滚动，确保顶栏筛选条始终固定可见，同时短内容不留大块空黑。
 - **展开顶栏升级**：展开态在 `.trackHead` 左侧呈现原作 `notify.journal` 图标、`追踪` 标题、`OBJECTIVE // LOG` 等宽副标与状态胶囊；右侧增加随身欧元余额胶囊（带 `notify.cash` 图标）与可点击的 `ESC` 赛博切角收起键。
 
 ### 2.2 独立追踪模块（`TrackerPanel.tsx` + `tracker.module.css`）
+
 - **动态分类筛选栏（吸顶）**：
   - 提供 `全部` / `账务` / `在办` / `待决` / `结案` 赛博切角筛选芯片与数量角标；仅展示存在条目的次级维度，避免满屏 `0`；存在超期时显示紧凑的红色超期预警细带。
 - **账务与欠款卡片（`BillCard`）**：
@@ -46,6 +48,7 @@
   - 无任何在办/账务/待决风声时呈现 `TRACKER // STANDBY` 终端待命卡，附简洁引导与「打开夜之城地图」直达入口。
 
 ### 2.3 旧代码清理（不做历史兼容）
+
 - 从 `NeuralPages.tsx` 移除旧 `JournalPage`，在 `StoryScreen.tsx` 直接接入 `TrackerPanel`（并传入 `onOpenMap`）。
 - 清理 `story.module.css` 中不再使用的旧 `.trackPane` / `.trackSection` / `.trackGig*` / `.trackBd*` 等样式。
 

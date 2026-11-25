@@ -13,14 +13,14 @@
 ```json
 {
   "changes": [
-    {"type": "breach", "network": "保险柜内网", "via": "接入点", "gains": ["data"]},
-    {"type": "loot", "amount": "some", "tier": "street", "reason": "保险柜转账"},
-    {"type": "loot", "amount": "some", "tier": "street", "reason": "朋友归还旧债"}
+    { "type": "breach", "network": "保险柜内网", "via": "接入点", "gains": ["data"] },
+    { "type": "loot", "amount": "some", "tier": "street", "reason": "保险柜转账" },
+    { "type": "loot", "amount": "some", "tier": "street", "reason": "朋友归还旧债" }
   ],
   "events": [
-    {"id": "access", "requires": ["$action"], "entries": ["changes[0]"]},
-    {"id": "vault-transfer", "requires": ["access"], "entries": ["changes[1]"]},
-    {"id": "friend-repayment", "requires": [], "entries": ["changes[2]"]}
+    { "id": "access", "requires": ["$action"], "entries": ["changes[0]"] },
+    { "id": "vault-transfer", "requires": ["access"], "entries": ["changes[1]"] },
+    { "id": "friend-repayment", "requires": [], "entries": ["changes[2]"] }
   ]
 }
 ```
@@ -57,7 +57,6 @@
 抽取格式缺失仍复用原有有界格式修复；事件归属或依赖图错误直接保留零结算草稿，不调用模型猜依赖。部分成功使用现有未完整结算与按账目改写入口，保存实际状态；错误正文不进入后续历史、记忆、摘要或幕后推演，也不派生选项与危机标记。首轮部分结算后不会误触发重复开场。
 
 验证结果：
-
 - 全量 **80 个测试文件、700 项测试通过**，比本批基线增加 63 项测试。
 - core、content、server、web、Vite 配置及 tools 类型检查通过。
 - 改动的 26 个 TypeScript 文件 Biome 检查及 Git 差异检查通过。

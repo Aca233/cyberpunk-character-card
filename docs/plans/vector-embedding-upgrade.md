@@ -13,10 +13,12 @@
 ## 2. 实施方案
 
 ### 2.1 Core 接口与检索调用
+
 - [packages/core/src/kernel/ports.ts](../../packages/core/src/kernel/ports.ts)：为 `Embedder.embed` 增加可选 `EmbedOptions`（`task?: "query" | "document"`、`signal?: AbortSignalLike`），兼容旧调用方式。
 - [packages/core/src/narrator/turn.ts](../../packages/core/src/narrator/turn.ts)：`computeVectorScores` 拆分查询向量（`task: "query"`）与记忆文档向量（`task: "document"`）请求，使缓存层可仅对未命中的文档增量请求，且查询不污染文档缓存。
 
 ### 2.2 独立向量角色、多协议客户端与配置清空
+
 - [packages/runtime/src/config.ts](../../packages/runtime/src/config.ts)：
   - `ConfigSchema` / `RolesSchema` 新增可选角色 `embedding`（支持传 `null` 停用）。
   - `ProfilePatchSchema` 允许 `embeddingModel: null` 以支持留空清除。
@@ -28,6 +30,7 @@
   - `resolveEmbedder()` 优先解析独立 `config.embedding` 方案（模型取 `embeddingModel || model`），未配置时回退至 `aux` / `narrator` 的 `embeddingModel`，并返回可识别模型身份的元数据以便缓存按模型隔离。
 
 ### 2.3 本地持久化向量缓存
+
 - [packages/runtime/src/embedding-cache.ts](../../packages/runtime/src/embedding-cache.ts)（新增）：
   - 基于现有 `DocStore` 按存档存放在 `embeddings/<saveId>.json`（无需升级 IndexedDB 版本号，兼容浏览器与本地文件存储）。
   - 以 `modelKey`（`type|baseUrl|model`）校验模型维度一致性，切换向量模型后自动重建。
@@ -35,6 +38,7 @@
   - 删档时同步清理对应存档的向量缓存文件。
 
 ### 2.4 路由、健康检查与设置页 UI
+
 - [packages/runtime/src/routes/profiles.ts](../../packages/runtime/src/routes/profiles.ts)：纯向量方案点击「测试连接」时直接发向量探测并返回维度与耗时。
 - [packages/runtime/src/app.ts](../../packages/runtime/src/app.ts) & [packages/runtime/src/browser.ts](../../packages/runtime/src/browser.ts) & [packages/runtime/src/game.ts](../../packages/runtime/src/game.ts)：接入 `EmbeddingCacheStore`，并在 `/api/health` 汇报 `models.embedding` 状态。
 - [apps/web/src/api/client.ts](../../apps/web/src/api/client.ts)、[apps/web/src/features/settings/ModelSettings.tsx](../../apps/web/src/features/settings/ModelSettings.tsx)、[apps/web/src/features/settings/model-settings.module.css](../../apps/web/src/features/settings/model-settings.module.css)：
@@ -43,6 +47,7 @@
   - 高级选项支持 `openai` / `ollama` / `gemini` 填写或留空清空 `embeddingModel`。
 
 ### 2.5 语义重排（Reranker）与两阶段检索
+
 - [packages/core/src/kernel/ports.ts](../../packages/core/src/kernel/ports.ts)：新增 `Reranker` 接口（`rerank(query, documents, options)`）。
 - [packages/core/src/narrator/retrieve.ts](../../packages/core/src/narrator/retrieve.ts) & [packages/core/src/narrator/turn.ts](../../packages/core/src/narrator/turn.ts)：`MemoryQuery` 新增 `rerankScores`（权重 `0.6`），回合检索升级为两阶段——先用向量（含缓存）+ 规则粗排筛出 Top 20，再送重排模型精排；支持单用向量、单用重排或两者共用。
 - [packages/runtime/src/providers/rerank.ts](../../packages/runtime/src/providers/rerank.ts)（新增）：兼容 SiliconFlow / Jina / Cohere / vLLM `/rerank` 协议（如 `Qwen/Qwen3-Reranker-8B`），提供容错 `createReranker` 与连接测试 `probeReranker`。

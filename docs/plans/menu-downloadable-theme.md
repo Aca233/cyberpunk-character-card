@@ -16,6 +16,7 @@
 ## 架构与模块规划
 
 ### 1. 静态媒体资产（`apps/web/public/media/themes/`）
+
 - `lunar-porthole-2k.mp4`：月球舷窗动态壁纸（由 14.3 MB 4K 原片压制为 2560×1440 30fps H.264 CRF 19，约 3.12 MB，去音轨并启用 `faststart`）。
 - `lunar-porthole-poster.jpg`：从原片提取的 1920×1080 轻量封面预览图（供主题选择卡片预览、视频首帧防黑屏、以及 `prefers-reduced-motion` 静态降级）。
 - `rain-window-2k.mp4`：雨夜窗畔动态壁纸（由 86.9 MB 原片压缩为 2560×1440 60fps H.264，约 3.05 MB，去音轨并启用 `faststart`）。
@@ -25,6 +26,7 @@
 - 所有路径统一通过 `import.meta.env.BASE_URL` 拼接，兼容 `/` 与子路径部署；不触碰 `apps/web/public/assets/local/`，保持 `pnpm check-assets` 通过。
 
 ### 2. 主题注册表与按需缓存层（`apps/web/src/features/theme/`）
+
 - `catalog.ts`：定义 `ShellThemeId`（`"night-city" | "lunar-porthole" | "rain-window" | "moon-helmet"`），默认主题为 `rain-window`（「雨夜窗畔」内置直接播放，无需手动点击下载）；`night-city` 为内置经典静态主题；`lunar-porthole` 与 `moon-helmet` 为按需下载缓存主题。
 - `cache.ts`：封装浏览器端 IndexedDB Blob 缓存（库名 `cp-shell-theme-assets`，store `blobs`），提供 `getCachedThemeBlob`、`putCachedThemeBlob`、`deleteCachedThemeBlob`、`listCachedThemeMeta`。相较 Cache API 直接生成 `URL.createObjectURL(blob)`，在全浏览器下对 `<video loop>` 播放与无缝循环兼容性最佳，且不依赖安全上下文限制。
 - `store.ts`：基于 `useSyncExternalStore` 的响应式主题状态管理：
@@ -36,12 +38,14 @@
   - `clearThemeCache(id)` 删除本地缓存并释放 ObjectURL（若正在使用则自动切回 `night-city`）。
 
 ### 3. 配色令牌与共享背景组件
+
 - `apps/web/src/styles/tokens.css`：新增 `[data-shell-theme="lunar-porthole"]` 变量覆盖块，定义星云紫、月光青、流金黄与深空暗蓝表面色阶，同时补充主菜单卡片/日志底色语义变量，使默认主题像素级不变、新主题视觉浑然一体。
 - `apps/web/src/app.tsx`：在 `Shell()` 中监听路由、当前生效主题与 `useNarrativePrefs().storyTheme`，在 `/menu`、`/settings`、`/characters` 以及开启 `storyTheme` 时的 `/play/*` 同步 `document.documentElement.dataset.shellTheme`。
 - `apps/web/src/features/story/CityBackdrop.tsx` + `story.module.css`：当 `storyTheme` 开启且当前主题带动态壁纸时，在局内背景层无缝续播当前主题视频/封面并减薄全域压暗遮罩；关闭或选用「夜之城 2091」时回退按地点与时段变化的夜之城实景。
 - `apps/web/src/features/theme/ShellBackdrop.tsx` + `shell-backdrop.module.css` + `BackdropFxCanvas.tsx`：统一渲染外壳界面的背景层（静态夜之城或动态视频 + 鼠标阻尼视差景深 + 镜头缓呼吸漂移 + 主题专属轻量 Canvas 粒子层 + 极细全息扫线 + 适配遮罩 + 可选条幅 + 网格肌理 + 扫描线 + `panel.frame`），接入 `MainMenu`、`SettingsScreen`、`CharactersScreen`，且完整尊重 `prefers-reduced-motion` 与后台页签暂停。
 
 ### 5. 主题专属配乐与 Folia 风格主菜单动态歌词舞台
+
 - **压缩音频资产**：`apps/web/public/media/themes/stay-at-your-house.mp3`（由用户上传的 3.95 MB 原音频通过 FFmpeg `libmp3lame 80kbps 44.1kHz stereo` 压缩至约 2.35 MB，体积缩减约 40%，全浏览器原生兼容）。
 - **主题配乐联动（`apps/web/src/audio/engine.ts` + `apps/web/src/app.tsx`）**：
   - 当选用三个新主题（`rain-window` 雨夜窗畔、`lunar-porthole` 月球舷窗、`moon-helmet` 月面余光）时，**仅在主菜单等局外界面**无缝播放《I Really Want to Stay at Your House》，绝不在局内剧情（`/play/:saveId`）播放（局内始终保持原版自适应场景配乐）；

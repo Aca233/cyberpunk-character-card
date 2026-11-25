@@ -7,7 +7,6 @@
 ## 方案设计
 
 在保持 `config.json` 完全向后兼容的前提下，引入角色级模型覆写 `roleModels`，让**同一个连接（中转站/服务商）可以直接同时承担多个角色、且每个角色独立指定不同模型 ID**：
-
 - [x] **阶段一：运行时配置与路由器支持 `roleModels`（`packages/runtime`）**
   - `packages/runtime/src/config.ts`：
     - `ConfigSchema` 新增可选 `roleModels?: { narrator?, aux?, image?, embedding?, reranker? }`；

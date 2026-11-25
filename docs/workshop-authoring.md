@@ -15,7 +15,6 @@
 ## 角色卡单独分享
 
 可玩的玩家角色使用独立文件，不放在内容包的 `npcs` 中：
-
 - 在「角色档案」点击「导出当前角色」，得到 `format: "cp2077-character"`、`version: 1` 的 JSON。
 - 接收者点击「导入角色 JSON」，通过校验后会作为新角色保存到自己的角色库，不覆盖已有角色。切换前仍会保护当前未保存的修改。
 - 角色卡如果选用了内容包的武器、义体、模块或人物，应同时分享并安装相应内容包。角色 JSON 不会自动打包这些依赖。
@@ -57,7 +56,6 @@
 ```
 
 空数组以及有默认值的元数据可以省略。顶层只接受当前定义的字段，不要自行添加 `scripts`、`events` 等未知字段。
-
 - 包 `id` 最多 22 个字符；包内条目 `id` 最多 33 个字符。
 - ID 只用小写英文字母、数字和单个连字符，不能以连字符开头或结尾，不能连续写两个连字符，也不能包含空格。例如 `rooftop-evening` 合法。
 - 同包中的模块、NPC、物品、义体、超梦和芯片资料不能互相重用同一个条目 ID。超梦片段和芯片正文分段分别在所属作品或资料内保持唯一。
@@ -66,18 +64,18 @@
 
 ## 各类条目
 
-| 字段 | 内容与使用方式 |
-| --- | --- |
-| `modules` | 角色主板模块。`slot` 为 `origin`、`past`、`skill` 或 `flaw`；主要填写 `id`、`slot`、`label`、`ability`、`hook`，可带标签、检定属性和模块带出的故人。安装后可在建角时选择。 |
-| `acquaintances` | 人脉关系预设。可引用本包或游戏自带 NPC，也可用 `custom: true` 写简要自创旧识；填写名字、身份、关系和关系备注。关系值为 `nod`、`friend`、`owesYou`、`youOwe`、`ex` 或 `grudge`。 |
-| `npcs` | 完整 NPC 人物卡，包含身份、外观、口吻、动机、边界及身体装备等现有字段。它与可玩的玩家角色卡不是同一种结构。`body.gear` 引用物品，`body.cyberware` 引用义体。 |
-| `seedNpcs` | 要在新局初始化时加入出场人物的包内 NPC ID。只定义在 `npcs` 中，不等于该人物自动在每个场景出现。 |
-| `items` | 完整物品定义。`kind` 支持 `weapon`、`healing`、`grenade`、`consumable`、`clothing`、`mod`、`misc`；芯片、阅读器和超梦设备通常用 `misc`。 |
-| `cyberware` | 完整义体定义，包含部位、稀有度、参考价、人性成本和实际能力等。义体价格必须大于 0；建角仍遵守部位容量及开局可选规则。 |
-| `braindances` | 超梦作品定义：作品信息、分段梗概、每段时长，以及可通过具体方式查证的细节。所有片段时长之和必须等于 `durationMinutes`。 |
-| `chipContents` | 芯片里的固定资料，与实体载体分开保存。可承载邮件、日记、录音、普通资料、功能辅助内容或超梦作品引用。 |
-| `shopListings` | 给已有商店上架物品，填写 `shop`、`item` 和 `stock`。`shop` 是游戏自带商店 ID；`item` 是本包或自带物品 ID。默认库存为 1。 |
-| `ripperdocListings` | 给已有义体诊所上架义体，填写 `ripperdoc`、`cyberware` 和 `stock`。默认库存为 1。 |
+| 字段                | 内容与使用方式                                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modules`           | 角色主板模块。`slot` 为 `origin`、`past`、`skill` 或 `flaw`；主要填写 `id`、`slot`、`label`、`ability`、`hook`，可带标签、检定属性和模块带出的故人。安装后可在建角时选择。      |
+| `acquaintances`     | 人脉关系预设。可引用本包或游戏自带 NPC，也可用 `custom: true` 写简要自创旧识；填写名字、身份、关系和关系备注。关系值为 `nod`、`friend`、`owesYou`、`youOwe`、`ex` 或 `grudge`。 |
+| `npcs`              | 完整 NPC 人物卡，包含身份、外观、口吻、动机、边界及身体装备等现有字段。它与可玩的玩家角色卡不是同一种结构。`body.gear` 引用物品，`body.cyberware` 引用义体。                    |
+| `seedNpcs`          | 要在新局初始化时加入出场人物的包内 NPC ID。只定义在 `npcs` 中，不等于该人物自动在每个场景出现。                                                                                 |
+| `items`             | 完整物品定义。`kind` 支持 `weapon`、`healing`、`grenade`、`consumable`、`clothing`、`mod`、`misc`；芯片、阅读器和超梦设备通常用 `misc`。                                        |
+| `cyberware`         | 完整义体定义，包含部位、稀有度、参考价、人性成本和实际能力等。义体价格必须大于 0；建角仍遵守部位容量及开局可选规则。                                                            |
+| `braindances`       | 超梦作品定义：作品信息、分段梗概、每段时长，以及可通过具体方式查证的细节。所有片段时长之和必须等于 `durationMinutes`。                                                          |
+| `chipContents`      | 芯片里的固定资料，与实体载体分开保存。可承载邮件、日记、录音、普通资料、功能辅助内容或超梦作品引用。                                                                            |
+| `shopListings`      | 给已有商店上架物品，填写 `shop`、`item` 和 `stock`。`shop` 是游戏自带商店 ID；`item` 是本包或自带物品 ID。默认库存为 1。                                                        |
+| `ripperdocListings` | 给已有义体诊所上架义体，填写 `ripperdoc`、`cyberware` 和 `stock`。默认库存为 1。                                                                                                |
 
 详细字段以源码 schema 为准：`packages/core/src/schemas/workshop.ts` 负责包结构与引用；各条目复用现有系统中的物品、义体、NPC、芯片和超梦 schema。包内不支持新增商店或诊所定义，上架只能指向已有目录中的地点经营者。
 
@@ -94,7 +92,6 @@ items 中的实体载体
 ```
 
 `chipContents` 的 `parts` 是可读取的正文分段，每段有 `id`、`label`、`text`，可选 `media` 与 `encrypted`（布尔，默认 `false`）；`kind` 为 `recording`、`email`、`diary` 或 `data`；`category` 必填，为 `intel`（情报资料）、`daemon`（加密魔偶/信用芯片/陷阱）、`skill`（技能协议）、`braindance`（超梦卷轴）或 `behavior`（行为协议）。可选字段：`encryption`（`none` / `standard` / `corp` / `military`）、`hazard`（`none` / `malware` / `black-ice`）、`eddies`（加密信用芯片内含欧元，默认 `0`）、`ability`（技能/行为协议插槽后的定性能力描述）、`protocol`（行为协议名）、`braindance`（关联超梦作品 ID）。
-
 - 未加密、无隐患的芯片可直接通过个人颈后神经槽读取；未知来历或带隐患芯片需隔离芯片读写器（`chipDevice: "reader-writer"`）执行沙盒查毒；离线破译加密芯片需要完好网络接入仓（可配合隔离读写器）；空白存储载体填写 `chipStorage: true`。
 - 播放实体超梦需要可接触的作品载体，以及填写了 `braindanceDevice.playback: true` 的真实设备。`analysis` 只能列出设备确实支持的 `visual`、`audio`、`thermal` 三层轨道（不要给纯超梦头环填写 `chipDevice`）。
 - `skill` / `behavior` 类芯片可插入个人颈后神经槽（上限 2 槽，同款协议不可重复叠加）提供真实定性能力，拔出即失效，不提供属性数值或骰点加值；`behavior` 芯片需已安装完好的行为芯片义体（`doll-behavior-chip`）。
