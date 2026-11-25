@@ -1,10 +1,16 @@
 import type { ViewContext } from "../../kernel/system";
-import { keeperOf, RARITY_LABELS } from "../economy";
+import { RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { formatGameTime, merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, repairCost, ripperdocList, ripperdocShelf, tradeInValue } from "./apply";
 import { clinicProvider, DoctorRosterSchema, quoteCyberware } from "./quote";
-import { CyberwareStateSchema, DECK_TRAIT_LABELS, SLOT_LABELS } from "./schema";
+import {
+  CyberwareStateSchema,
+  cyberwareExclusiveGroup,
+  DECK_TRAIT_LABELS,
+  EXCLUSIVE_GROUP_LABELS,
+  SLOT_LABELS,
+} from "./schema";
 import { clinicState } from "./stock";
 import { bonusText } from "./view";
 
@@ -24,13 +30,10 @@ export function ripperdocView({ world, data }: ViewContext) {
   const parts = cyberwareCatalog(data);
   const owed = debts.filter((d) => d.doc === doc.id);
   const due = owed.flatMap((d) => (d.due === null ? [] : [d.due])).sort((a, b) => a - b)[0];
-  const keeper = keeperOf(doc.keeperNpc, npcs);
   const provider = clinicProvider(doc, npcs, clinic.staff, data);
   return {
     id: doc.id,
     name: doc.name,
-    /** 医生对你的好感；没有人物卡或还没见过是 null */
-    affinity: keeper?.affinity ?? null,
     note: doc.note,
     blackMarket: doc.blackMarket,
     /** 最多肯赊多少；0 是不赊账 */
@@ -99,6 +102,12 @@ export function ripperdocView({ world, data }: ViewContext) {
         rarity: item.def.rarity,
         rarityLabel: RARITY_LABELS[item.def.rarity],
         iconic: item.def.iconic,
+        humanityCost: item.def.humanityCost,
+        exclusiveGroup: cyberwareExclusiveGroup(item.def),
+        exclusiveGroupLabel: (() => {
+          const g = cyberwareExclusiveGroup(item.def);
+          return g ? EXCLUSIVE_GROUP_LABELS[g] : null;
+        })(),
         price: quote?.price ?? item.price,
         tradeIn: quote?.tradeIn ?? item.tradeIn,
         net: quote?.total ?? item.net,

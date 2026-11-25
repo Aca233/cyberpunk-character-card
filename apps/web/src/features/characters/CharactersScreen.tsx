@@ -226,6 +226,7 @@ export function CharactersScreen() {
   const remove = useMutation({
     mutationFn: api.deleteCharacter,
     onSuccess: (_result, id) => {
+      const deletedName = deleting?.card.name;
       if (editor?.id === id) {
         clearDraft();
         setEditor(null);
@@ -236,6 +237,10 @@ export function CharactersScreen() {
         setPendingDraft(null);
       }
       setDeleting(null);
+      setShareNotice({
+        tone: "ok",
+        text: deletedName ? `已删除角色「${deletedName}」` : "已删除角色档案",
+      });
       void client.invalidateQueries({ queryKey: ["characters"] });
     },
   });
@@ -808,11 +813,17 @@ export function CharactersScreen() {
                   }
                   onDelete={() => {
                     if (!editor.id || editor.sample) return;
-                    const entry = characters.data?.find((item) => item.id === editor.id);
-                    if (entry && !entry.sample) {
-                      remove.reset();
-                      setDeleting(entry);
-                    }
+                    const found = characters.data?.find((item) => item.id === editor.id);
+                    if (found?.sample) return;
+                    remove.reset();
+                    setDeleting(
+                      found ?? {
+                        id: editor.id,
+                        card: editor.card,
+                        updatedAt: "",
+                        sample: false,
+                      },
+                    );
                   }}
                   onLaunch={(saveId) => navigate(`/play/${saveId}`)}
                 />

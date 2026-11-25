@@ -271,7 +271,13 @@ if (mate !== undefined) {
     const friendly = set(base, "npc", {
       npcs: {
         ...npcs,
-        [mate]: { ...existing, met: true, alive: true, affinity: 25, location: worldLocation },
+        [mate]: {
+          ...existing,
+          met: true,
+          alive: true,
+          relation: { text: "测试搭档", at: 0 },
+          location: worldLocation,
+        },
       },
     });
     add("npcCompanion 结伴同行", friendly, {

@@ -28,7 +28,6 @@ import {
 } from "./systems/jobs";
 import { NemesisStateSchema } from "./systems/nemesis";
 import {
-  AFFINITY_SIZES,
   deathKnown,
   KNOWN_SOURCE_LABELS,
   LEDGER_KIND_LABELS,
@@ -39,7 +38,6 @@ import {
   onStage,
 } from "./systems/npc";
 import {
-  CHAT_AFFINITY_SCENE_CAP,
   CHAT_SCENE_TURN_SOFT_CAP,
   hasContactChannel,
   type Message,
@@ -94,21 +92,16 @@ export const PhoneChatLlmReplySchema = z.object({
     .describe(
       "消耗的游戏分钟数：寒暄闲聊写 1；认真交流/砍价/确认事写 2；详细约事、查情报或派单写 3",
     ),
-  affinity: z
-    .enum(["none", "upSmall", "downSmall", "downMedium"])
-    .describe(
-      "好感变动档位：闲聊、客套、常规砍价一律写 none；只有在玩家明显帮上忙、说对心坎或认真担事时写 upSmall（+2）；惹恼对方、踩底线或食言写 downSmall（-2）或 downMedium（-5）",
-    ),
-  affinityReason: z
-    .string()
-    .trim()
-    .max(80)
-    .describe("affinity 不为 none 时简述原因，否则写空字符串"),
   memory: z
     .string()
     .trim()
     .max(120)
     .describe("只在这轮记下了值得以后重提的承诺、人情或翻脸事时写一句，否则写空字符串"),
+  relation: z
+    .string()
+    .trim()
+    .max(120)
+    .describe("只在这段私信里双方关系出现实质性转折时写一句新的关系定性，否则写空字符串"),
   job: z.object({
     action: z
       .enum(["none", "accept", "offer", "note", "abandon"])
@@ -221,9 +214,8 @@ function threadHistoryLines(messages: readonly Message[], contact: string): stri
 const PHONE_CHAT_EXAMPLE = JSON.stringify({
   reply: "晚上十点老地方碰头，别带尾巴。",
   minutes: 2,
-  affinity: "none",
-  affinityReason: "",
   memory: "",
+  relation: "",
   job: { action: "none", jobId: "", note: "", summary: "", offer: null },
 });
 
@@ -240,7 +232,7 @@ function phoneChatSystem(): string {
     "核心规则：",
     "1. 口吻完全照人物卡的说话方式与台词样本，像手机短信：短、利落、带人味和当下处境；不要写长篇大论，不要替玩家做行动或代写旁白。",
     "2. 如果玩家在手机里试图遥控打架、过检定、远程潜入/黑入、直接隔空买装备/装义体，或要求立刻把正在进行的委托当场结清收钱：在口吻里自然回绝（让对方到现场或走正事见面解决），job.action 一律写 none，绝不发放任何金钱或物品。",
-    "3. 严禁通过闲聊轻易刷好感：纯客套、打招呼、常规砍价写 none；只有真正说到心坎、切实替对方分忧、或担下重要承诺才写 upSmall（最多 +2）；踩到底线、挑衅、敷衍或食言写 downSmall / downMedium。",
+    "3. 人物冷热完全按共同记忆、人情/仇怨账本、关系定位与当下处境演绎；只有真的定下重要承诺或翻脸时才写 memory / relation，平时闲聊一律留空字符串。",
     "4. 委托控制与对话节奏须严格遵守用户消息里的【本条对话约束】。",
     phoneChatOutput(),
   ].join("\n");
@@ -259,7 +251,6 @@ export function buildPhoneChatPrompt(
   readonly isFixer: boolean;
   readonly isFixerBlocked: boolean;
   readonly activeNemesis: boolean;
-  readonly remainingAffinityBudget: number;
   readonly scene: number;
 } {
   const clock = WorldClockStateSchema.parse(world.slices.world);
@@ -276,8 +267,6 @@ export function buildPhoneChatPrompt(
   const scene = clock.scene;
   const prevBudget = phoneState.chatBudget[npc.id];
   const sceneTurns = prevBudget?.scene === scene ? prevBudget.turns : 0;
-  const gained = prevBudget?.scene === scene ? prevBudget.affinityGained : 0;
-  const remainingAffinityBudget = Math.max(0, CHAT_AFFINITY_SCENE_CAP - gained);
   const jobsOfferedThisScene =
     prevBudget?.scene === scene ? (prevBudget.jobsOffered ?? (prevBudget.jobOffered ? 1 : 0)) : 0;
 
@@ -286,13 +275,14 @@ export function buildPhoneChatPrompt(
   const factionAttitude = factionDef ? currentAttitude(factions, factionDef) : undefined;
   const isFixerBlocked = fixerBlocked(factionAttitude);
   const activeNemesis = nemeses.nemeses.some((n) => n.npc === npc.id);
+  const hasGrudge = npc.ledger.some((e) => e.settledAt === null && e.kind === "grudge");
 
   const relatedJobs = jobsState.jobs.filter(
     (j) => isOpen(j) && (j.fixer === npc.id || j.asker === npc.id || j.client === npc.name),
   );
   const relatedOfferedCount = relatedJobs.filter((j) => j.status === "offered").length;
   // 中间人允许同时挂出多单待接委托供玩家挑选（同联系人最多 3 单待接、单场景最多新挂 3 单）；
-  // 普通熟人无未结托事且好感非负时可托 1 单，避免给第二单时把第一单挤掉或彻底拒绝。
+  // 普通熟人无未结托事且无未解旧仇时可托 1 单。
   const maxOfferedFromContact = isFixer ? 3 : 1;
   const maxSceneOffers = isFixer ? 3 : 1;
   const canOfferJob =
@@ -300,7 +290,7 @@ export function buildPhoneChatPrompt(
     !isFixerBlocked &&
     jobsOfferedThisScene < maxSceneOffers &&
     relatedOfferedCount < maxOfferedFromContact &&
-    (isFixer || (npc.affinity >= 0 && relatedJobs.length === 0));
+    (isFixer || (!hasGrudge && relatedJobs.length === 0));
 
   const here =
     npc.met && onStage(npc, { location: clock.location, sceneStartedAt: clock.sceneStartedAt });
@@ -329,7 +319,7 @@ export function buildPhoneChatPrompt(
       canOfferJob
         ? '如果玩家明确在找活、问门路、求委托、或让你再多给一个单子挑选，且符合你的身份与双方交情，可以通过 job.action="offer" 挂出一单新的委托（必须与你之前挂出的单子不同，绝不会覆盖或作废先前的待接委托；不派新单就写 none）。如果玩家明确答应接下某单已挂出的委托，写 job.action="accept" 并务必在 job.jobId 填对应 id'
         : activeNemesis || isFixerBlocked
-          ? "对方当前与你处于敌对或拉黑/宿敌状态：不要给好感加成，不要派新活"
+          ? "对方当前与你处于敌对或拉黑/宿敌状态：冷淡回应或回绝，不要派新活"
           : "你手头眼下已经挂出足够多的待接委托或暂不适合再派新活，请如实回复并保留既有待接委托（绝不能假装没提过先前的单子）；如需接下待接的旧委托，写 accept 并在 job.jobId 写明对应 id；更新进展记 note；玩家明确拒绝/弃单可用 abandon"
     }。`,
     sceneTurns >= CHAT_SCENE_TURN_SOFT_CAP
@@ -345,7 +335,7 @@ export function buildPhoneChatPrompt(
       ? "照面状态：你们尚未当面见过，仅通过全息通讯联络（不要写成已经见过面或描写当面外貌细节）"
       : "",
     `势力：${factionDef ? `${factionDef.name}（态度：${factionAttitude}）` : NO_FACTION_LABEL}`,
-    `好感度：${npc.affinity}${npc.relation ? `｜关系笔记：${npc.relation.text}` : ""}`,
+    `关系定位：${npc.relation ? npc.relation.text : "尚未建立特别关系"}`,
     `性格口吻：${npc.voice}`,
     npc.samples.length > 0 ? `台词参考：${npc.samples.join(" / ")}` : "",
     `诉求：${npc.want}`,
@@ -386,7 +376,7 @@ export function buildPhoneChatPrompt(
           .join("\n")}`
       : "",
     `【当前状态】时间：${formatGameTime(world.time)}（${PERIOD_LABELS[periodOf(world.time)]}）｜玩家所在：${placeName(clock.location)}｜是否同一场景在场：${here ? "是" : "否"}`,
-    `玩家名：${character.name ?? "匿名佣兵"}｜本场对 TA 正向好感剩余可用额度：+${remainingAffinityBudget}（每场封顶 +${CHAT_AFFINITY_SCENE_CAP}）`,
+    `玩家名：${character.name ?? "匿名佣兵"}`,
     !phoneStatus.answered && phoneStatus.reason ? `作息/忙碌提示：${phoneStatus.reason}` : "",
     urgentLines.length > 0 ? `紧急时限提醒：${urgentLines.join("；")}` : "",
   ]
@@ -412,7 +402,6 @@ export function buildPhoneChatPrompt(
     isFixer,
     isFixerBlocked,
     activeNemesis,
-    remainingAffinityBudget,
     scene,
   };
 }
@@ -483,12 +472,8 @@ export function parsePhoneChatReply(
   const normalized = {
     reply: typeof rec.reply === "string" ? clipText(rec.reply, 240) : rec.reply,
     minutes: normalizeBoundedInt(rec.minutes, 1, 3, 1),
-    affinity:
-      rec.affinity === undefined || rec.affinity === null || rec.affinity === ""
-        ? "none"
-        : rec.affinity,
-    affinityReason: clipText(rec.affinityReason, 80),
     memory: clipText(rec.memory, 120),
+    relation: clipText(rec.relation, 120),
     job: {
       action,
       jobId: clipText(rawJob.jobId, 80),
@@ -678,31 +663,12 @@ ${reply.reply}`;
     }
   }
 
-  let affinityDelta = 0;
-  let affinityGained = 0;
-  if (reply.affinity === "upSmall") {
-    if (!ctx.activeNemesis && !ctx.isFixerBlocked && ctx.remainingAffinityBudget > 0) {
-      affinityDelta = Math.min(AFFINITY_SIZES.small, ctx.remainingAffinityBudget);
-      affinityGained = affinityDelta;
-    }
-  } else if (reply.affinity === "downSmall") {
-    affinityDelta = -AFFINITY_SIZES.small;
-  } else if (reply.affinity === "downMedium") {
-    affinityDelta = -AFFINITY_SIZES.medium;
-  }
-
   const tailCommands: Command[] = [];
-  if (affinityDelta !== 0) {
-    tailCommands.push({
-      type: "affinity",
-      id: npc.id,
-      delta: affinityDelta,
-      reason: reply.affinityReason || "手机私信交谈",
-      channel: "phone",
-    });
-  }
   if (reply.memory !== "") {
     tailCommands.push({ type: "memory", id: npc.id, text: reply.memory, source: "phone" });
+  }
+  if (reply.relation !== "" && npc.met) {
+    tailCommands.push({ type: "relation", id: npc.id, text: reply.relation });
   }
   tailCommands.push({
     type: "phone.receive",
@@ -714,7 +680,6 @@ ${reply.reply}`;
     type: "phone.chatMeta",
     npc: npc.id,
     scene: ctx.scene,
-    ...(affinityGained > 0 ? { affinityGained } : {}),
     ...(jobOfferedOk ? { jobOffered: true } : {}),
   });
 

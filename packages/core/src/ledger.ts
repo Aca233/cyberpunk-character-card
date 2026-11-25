@@ -49,14 +49,6 @@ export function hardStats(world: WorldState): ReadonlyMap<string, number> {
   put("通缉星", num(s.heat, "stars") ?? 0);
   const deeds = (s.character as Bag)?.deeds;
   if (Array.isArray(deeds)) put("外界事迹", deeds.length);
-  const npcs = (s.npc as Bag)?.npcs;
-  if (typeof npcs === "object" && npcs !== null) {
-    for (const [id, n] of Object.entries(npcs as Record<string, Bag>)) {
-      const name = typeof n?.name === "string" ? n.name : id;
-      const label = out.has(`好感·${name}`) ? `好感·${name}（${id}）` : `好感·${name}`;
-      put(label, num(n, "affinity"));
-    }
-  }
   return out;
 }
 

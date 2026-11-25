@@ -47,7 +47,6 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
             ? {
                 name: card.name,
                 alive: card.alive,
-                affinity: card.affinity,
                 faction: factionSide(card.faction, ctx.data, ctx.read("factions")),
               }
             : undefined;

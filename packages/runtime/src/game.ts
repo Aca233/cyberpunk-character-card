@@ -22,6 +22,7 @@ import {
   collectPresentedContentMedia,
   commerceRules,
   effectiveTurns,
+  extractEdgeLedgerState,
   HISTORY_TURNS,
   isSnapshotValid,
   judgeCandidates,
@@ -83,6 +84,7 @@ import type { CharacterStore } from "./characters";
 import type { TurnCheckpointStore } from "./checkpoints";
 import type { ConfigService } from "./config";
 import type { EmbeddingCacheStore } from "./embedding-cache";
+import type { ImageStore } from "./images";
 import { KeyedMutex } from "./mutex";
 import { SaveMovedError, type SaveStorage } from "./ports";
 import type { PresetStore } from "./presets";
@@ -181,6 +183,8 @@ export interface GameDeps {
   readonly checkpoints?: TurnCheckpointStore | undefined;
   /** 本地持久化向量缓存：按存档缓存旧记忆文档向量 */
   readonly embeddingCache?: EmbeddingCacheStore | undefined;
+  /** 本地图片绑定存储：删档时顺手清理该存档的图片绑定 */
+  readonly images?: ImageStore | undefined;
   readonly workshop?: WorkshopStore | undefined;
 }
 
@@ -239,6 +243,23 @@ export class GameService {
       }
     }
     return out;
+  }
+
+  async deleteSave(saveId: string): Promise<Reply> {
+    return this.locks.run(saveId, async () => {
+      if (this.deps.hub.running(saveId) !== undefined) {
+        return { status: 409, body: { error: "这个存档正在生成回合，请先停止后再删除" } };
+      }
+      const removed = await this.deps.saves.remove(saveId);
+      if (!removed) return { status: 404, body: { error: "没有这个存档" } };
+      this.pendingSpends.delete(saveId);
+      await Promise.all([
+        this.deps.checkpoints?.clear(saveId).catch(() => undefined),
+        this.deps.embeddingCache?.remove(saveId).catch(() => undefined),
+        this.deps.images?.removeSaveBindings(saveId).catch(() => undefined),
+      ]);
+      return { status: 200, body: { ok: true } };
+    });
   }
 
   async create(input: z.output<typeof CreateSaveSchema>): Promise<Reply> {
@@ -1172,8 +1193,8 @@ export class GameService {
 
   /**
    * 导出单个存档的脱敏诊断快照（无需打开剧透开关）：
-   * 包含最近 N 轮结构化输入/判断/裁决/decided/commands/dropped/正文、界面操作、当前活跃报价与挂起断点，
-   * 便于快速复盘剧情卡死、交易异常或模型报错。
+   * 包含全部世界状态切片（35+ 子系统）、聚合核心状态、最近 N 轮全链路记录（含检定/骰子/召回/检索/守则提醒/抽取考量）、
+   * 界面操作、当前活跃报价与挂起断点，勾选时还附带最后一轮全阶段提示词，覆盖全游戏各类 bug 排查。
    */
   diagnostics(
     id: string,
@@ -1181,6 +1202,7 @@ export class GameService {
       readonly turns?: number;
       readonly includeThought?: boolean;
       readonly includePrompt?: boolean;
+      readonly includeWorldState?: boolean;
     } = {},
   ): Promise<Record<string, unknown>> {
     return this.locks.run(id, async () => {
@@ -1195,22 +1217,27 @@ export class GameService {
           ? checkpointSummaryOf(storedCheckpoint)
           : null;
 
-      const limit = Math.max(1, Math.min(30, Math.floor(options.turns ?? 8)));
+      const limit = Math.max(1, Math.min(30, Math.floor(options.turns ?? 10)));
       const includeThought = options.includeThought !== false;
       const includePrompt = options.includePrompt === true;
+      const includeWorldState = options.includeWorldState !== false;
       const turns = effectiveTurns(records);
       const slicedTurns = turns.slice(-limit);
       const seqMap = new Map<TurnRecord, number>();
+      let voidedCount = 0;
+      let actionCount = 0;
       for (let i = 0; i < records.length; i += 1) {
         const rec = records[i];
         if (rec?.kind === "turn") seqMap.set(rec, i);
+        else if (rec?.kind === "action") actionCount += 1;
+        else if (rec?.kind === "void") voidedCount += 1;
       }
       const firstSeq = slicedTurns[0] ? (seqMap.get(slicedTurns[0]) ?? 0) : 0;
       const recentActions = records
         .map((rec, seq) => ({ rec, seq }))
         .filter(
           (entry): entry is { rec: ActionRecord; seq: number } =>
-            entry.seq >= Math.max(0, firstSeq - 3) && entry.rec.kind === "action",
+            entry.seq >= Math.max(0, firstSeq - 5) && entry.rec.kind === "action",
         )
         .map(({ rec, seq }) => ({
           seq,
@@ -1224,16 +1251,32 @@ export class GameService {
         seq: seqMap.get(t) ?? -1,
         at: t.at,
         ooc: t.ooc ?? false,
+        draft: t.draft ?? false,
+        scene: t.scene ?? null,
+        title: t.title ?? null,
         input: t.input,
         read: t.read ?? null,
         ruling: t.ruling ?? null,
         decided: t.decided ?? [],
+        dice: t.dice ?? [],
+        check: t.check ?? null,
+        resolves: t.resolves ?? null,
         commands: t.commands,
         dropped: t.dropped,
-        notes: t.notes,
+        considered: t.considered ?? [],
+        flags: t.flags ?? [],
+        notes: t.notes ?? [],
         unsettled: t.unsettled ?? null,
-        check: t.check ?? null,
+        recalled: t.recalled ?? [],
+        expanded: t.expanded ?? [],
+        retrieval: t.retrieval ?? null,
+        lore: t.lore ?? null,
         offscreenSkip: t.offscreenSkip ?? null,
+        offscreen: t.offscreen ?? null,
+        summary: t.summary ?? null,
+        closeup: t.closeup ?? null,
+        clutch: t.clutch ?? false,
+        choices: t.choices ?? [],
         modules: t.modules ?? [],
         usage: t.usage ?? null,
         budget: t.budget ?? null,
@@ -1241,7 +1284,9 @@ export class GameService {
         ...(includeThought && t.thought !== undefined ? { thought: t.thought } : {}),
       }));
 
+      let lastTurnStages: StagePrompt[] | undefined;
       let lastTurnMessages: readonly LlmMessage[] | undefined;
+      let promptRebuildError: string | null = null;
       const lastTurn = slicedTurns[slicedTurns.length - 1];
       if (includePrompt && lastTurn) {
         const lastSeq = seqMap.get(lastTurn);
@@ -1250,29 +1295,117 @@ export class GameService {
           try {
             const before = records.slice(0, lastSeq);
             const beforeWorld = await this.worldAt(id, meta, before);
-            const opening = openingPremise(
-              meta.opening,
-              meta.startLocation,
-              openingContextOf(beforeWorld, meta.startTime),
+            const plan: NarratorPlan = { kind: "action", input: parsedInput.data };
+            const extras = {
+              data: runtime.data,
+              startTime: meta.startTime,
+              opening: openingPremise(
+                meta.opening,
+                meta.startLocation,
+                openingContextOf(beforeWorld, meta.startTime),
+              ),
+            };
+            const stage = (
+              stageId: StagePrompt["stage"],
+              label: string,
+              built: { messages: readonly LlmMessage[]; modules: readonly string[] },
+            ): StagePrompt => ({
+              stage: stageId,
+              label,
+              messages: [...built.messages],
+              modules: [...built.modules],
+              chars: built.messages.reduce((n, m) => n + m.content.length, 0),
+            });
+            const stages: StagePrompt[] = [];
+            if (parsedInput.data.mode !== "ooc") {
+              const lately = effectiveTurns(before)
+                .slice(-2)
+                .map((t) => t.text)
+                .join("\n");
+              const pool = memoryPool(
+                beforeWorld,
+                before,
+                lastTurn.budget?.history ?? HISTORY_TURNS,
+                lastTurn.budget?.recapTokens,
+              );
+              const memories = judgeCandidates(pool, beforeWorld, {
+                input: parsedInput.data.text,
+                context: lately,
+              });
+              stages.push(
+                stage(
+                  "judge",
+                  "① 判断",
+                  buildJudgePrompt(beforeWorld, before, plan, extras, memories),
+                ),
+              );
+            }
+            const boosted = lastTurn.commands.some(
+              (c) =>
+                typeof c === "object" &&
+                c !== null &&
+                (c as { type?: unknown }).type === "cyberware.boost",
             );
-            const rebuilt = buildNarratorPrompt(
-              beforeWorld,
-              before,
-              { kind: "action", input: parsedInput.data },
-              {
-                data: runtime.data,
-                startTime: meta.startTime,
-                opening,
+            const livePlan: NarratorPlan =
+              boosted && plan.input.sandevistan !== true
+                ? { ...plan, input: { ...plan.input, sandevistan: true } }
+                : plan;
+            const narrateStage = stage(
+              "narrate",
+              "③ 写正文",
+              buildNarratorPrompt(beforeWorld, before, livePlan, {
+                ...extras,
                 decided: lastTurn.decided,
                 recalled: [...(lastTurn.recalled ?? []), ...(lastTurn.expanded ?? [])],
                 lore: lastTurn.lore?.section,
                 history: lastTurn.budget?.history,
                 recapTokens: lastTurn.budget?.recapTokens,
-              },
+              }),
             );
-            lastTurnMessages = rebuilt.messages;
-          } catch {
-            lastTurnMessages = undefined;
+            stages.push(narrateStage);
+            if (lastTurn.ooc !== true) {
+              stages.push(
+                stage(
+                  "extract",
+                  "④ 抽取",
+                  buildExtractPrompt(
+                    beforeWorld,
+                    before,
+                    livePlan,
+                    { ...extras, decided: lastTurn.decided },
+                    lastTurn.text,
+                  ),
+                ),
+              );
+            }
+            if (lastTurn.offscreen) {
+              stages.push(
+                stage("offscreen", "⑥ 场外推演", {
+                  messages: [
+                    { role: "system", content: OFFSCREEN_SYSTEM },
+                    { role: "user", content: lastTurn.offscreen.prompt },
+                    { role: "assistant", content: lastTurn.offscreen.reply },
+                  ],
+                  modules: [],
+                }),
+              );
+            }
+            if (lastTurn.summary) {
+              stages.push(
+                stage("summary", "⑦ 场景摘要", {
+                  messages: [
+                    { role: "system", content: SUMMARY_SYSTEM },
+                    { role: "user", content: lastTurn.summary.prompt },
+                    { role: "assistant", content: lastTurn.summary.reply },
+                  ],
+                  modules: [],
+                }),
+              );
+            }
+            lastTurnStages = stages;
+            lastTurnMessages = narrateStage.messages;
+          } catch (error) {
+            promptRebuildError = error instanceof Error ? error.message : String(error);
           }
         }
       }
@@ -1290,34 +1423,67 @@ export class GameService {
         typeof (world.slices.economy as { eddies?: unknown } | undefined)?.eddies === "number"
           ? (world.slices.economy as { eddies: number }).eddies
           : 0;
+      let edgeLedger: unknown = null;
+      try {
+        edgeLedger = extractEdgeLedgerState(world, runtime.data);
+      } catch {
+        edgeLedger = null;
+      }
 
       return {
         meta: {
           id,
           title: meta.title,
+          characterId: meta.characterId,
           createdAt: meta.createdAt,
+          startTime: meta.startTime,
+          opening: meta.opening ?? null,
           startLocation: meta.startLocation ?? null,
           characterName: view.character.name ?? null,
+          loadouts: meta.loadouts ?? [],
+          workshopPacks: (meta.workshopPacks ?? []).map((pack) => ({
+            id: pack.id,
+            title: pack.title,
+            version: pack.version,
+          })),
         },
         snapshot: {
           version: logVersion(records),
           totalTurns: view.totalTurns,
+          totalRecords: records.length,
+          actionCount,
+          voidedCount,
           locationId: clock.success ? clock.data.location : null,
           locationName: hereDest?.name ?? null,
           gameTime: view.time.text,
+          worldTimeMinutes: world.time,
           eddies,
           death: view.death !== null,
           ended: view.ended !== null,
+          sliceKeys: Object.keys(world.slices).sort(),
         },
+        edgeLedger,
         checkpoint,
         commerce: {
           activeQuotes,
           activeSessions,
           registeredParties: commerce.success ? Object.values(commerce.data.parties) : [],
         },
+        ...(includeWorldState
+          ? {
+              worldState: {
+                time: world.time,
+                slices: world.slices,
+              },
+              characterMeta: meta.character ?? null,
+              boardStart: meta.board ?? null,
+            }
+          : {}),
         recentActions,
         recentTurns,
+        ...(lastTurnStages ? { lastTurnStages } : {}),
         ...(lastTurnMessages ? { lastTurnMessages } : {}),
+        ...(promptRebuildError ? { promptRebuildError } : {}),
       };
     });
   }

@@ -136,7 +136,7 @@ export function sendPlayerMessage(
   return { ok: true, notes: [`发给 ${name}：${text}`] };
 }
 
-/** 记录本场景同人物手机私聊的轮数、已加好感与派单占用，同时清理过期场景条目 */
+/** 记录本场景同人物手机私聊的轮数与派单占用，同时清理过期场景条目 */
 export function applyChatMeta(draft: Draft<PhoneState>, command: ChatMeta): ApplyOutcome {
   for (const [key, entry] of Object.entries(draft.chatBudget)) {
     if (entry.scene < command.scene) delete draft.chatBudget[key];
@@ -145,13 +145,12 @@ export function applyChatMeta(draft: Draft<PhoneState>, command: ChatMeta): Appl
   const base =
     prev && prev.scene === command.scene
       ? prev
-      : { scene: command.scene, turns: 0, affinityGained: 0, jobOffered: false, jobsOffered: 0 };
+      : { scene: command.scene, turns: 0, jobOffered: false, jobsOffered: 0 };
   const prevCount = base.jobsOffered ?? (base.jobOffered ? 1 : 0);
   const nextCount = prevCount + (command.jobOffered ? 1 : 0);
   draft.chatBudget[command.npc] = {
     scene: command.scene,
     turns: base.turns + 1,
-    affinityGained: base.affinityGained + (command.affinityGained ?? 0),
     jobOffered: nextCount > 0,
     jobsOffered: nextCount,
   };

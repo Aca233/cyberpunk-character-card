@@ -3,6 +3,7 @@ import {
   type Board,
   BoardSchema,
   CharacterCardSchema,
+  cyberwareRules,
   type RelationKind,
   START_CYBERWARE_RARITIES,
   type StartCyberware,
@@ -23,6 +24,7 @@ const chrome = (id: string): StartCyberware => {
   if (def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity)) {
     throw new Error(`开局预设义体不能使用 ${id}`);
   }
+  const group = cyberwareRules.cyberwareExclusiveGroup(def);
   return {
     id: def.id,
     name: def.name,
@@ -32,6 +34,7 @@ const chrome = (id: string): StartCyberware => {
     ...(def.armor ? { armor: true } : {}),
     ...(def.accelerator ? { accelerator: true } : {}),
     ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
+    ...(group ? { exclusiveGroup: group } : {}),
   };
 };
 
@@ -76,10 +79,11 @@ const loBoard: Board = BoardSchema.parse({
   ],
   cyberware: [
     chrome("ballistic-coprocessor"),
+    chrome("tool-hand-fingers"),
+    chrome("chemo-olfactory-filter"),
     chrome("subdermal-armor"),
     chrome("fortified-ankles"),
   ],
-  tolerance: "normal",
   kit: {
     cashTier: "standard",
     weapons: ["pipe-wrench"],
@@ -118,11 +122,14 @@ const qingyiBoard: Board = BoardSchema.parse({
   flaws: [library("silenced-witness"), library("insomnia-static")],
   cyberware: [
     chrome("visual-cortex-support"),
+    chrome("audio-suite"),
+    chrome("chroma-iris-overlay"),
+    chrome("jaw-stash-implant"),
     chrome("synaptic-accelerator"),
     chrome("optical-camo"),
+    chrome("hidden-personal-link"),
     chrome("lynx-paws"),
   ],
-  tolerance: "normal",
   kit: {
     cashTier: "stash",
     weapons: ["kenshin"],
@@ -136,7 +143,7 @@ const qingyiBoard: Board = BoardSchema.parse({
   startLocation: "corpo-plaza",
 });
 
-/** 3. 林零「断线客」：叛逃企业网行者（黑墙边缘低耐受纯粹黑客流） */
+/** 3. 林零「断线客」：叛逃企业网行者（黑墙边缘纯粹潜网黑客流） */
 const linlingBoard: Board = BoardSchema.parse({
   origin: library("origin-arasaka-netrunner"),
   tarot: "moon",
@@ -148,8 +155,15 @@ const linlingBoard: Board = BoardSchema.parse({
     library("disguise-infiltration"),
   ],
   flaws: [library("corpo-blacklist"), library("memory-gaps")],
-  cyberware: [chrome("arasaka-deck"), chrome("ex-disk"), chrome("self-ice"), chrome("monowire")],
-  tolerance: "low",
+  cyberware: [
+    chrome("arasaka-deck"),
+    chrome("ex-disk"),
+    chrome("self-ice"),
+    chrome("audio-suite"),
+    chrome("thermo-comfort-weave"),
+    chrome("hidden-personal-link"),
+    chrome("monowire"),
+  ],
   kit: {
     cashTier: "standard",
     weapons: ["shingen"],
@@ -163,7 +177,7 @@ const linlingBoard: Board = BoardSchema.parse({
   startLocation: "kabuki-market",
 });
 
-/** 4. 阿列克谢·科瓦尔「铁砧」：公司战争退伍兵（恶土高耐受斯安威斯坦重装独狼） */
+/** 4. 阿列克谢·科瓦尔「铁砧」：公司战争退伍兵（恶土斯安威斯坦外骨骼重装独狼） */
 const alexeiBoard: Board = BoardSchema.parse({
   origin: library("origin-war-vet"),
   tarot: "strength",
@@ -179,9 +193,11 @@ const alexeiBoard: Board = BoardSchema.parse({
     chrome("zetatech-sandevistan"),
     chrome("gorilla-arms"),
     chrome("titanium-bones"),
+    chrome("linear-frame-sigma"),
+    chrome("neural-sync-bridge"),
+    chrome("chemo-olfactory-filter"),
     chrome("blood-pump"),
   ],
-  tolerance: "high",
   kit: {
     cashTier: "standard",
     weapons: ["tactician", "overture"],
@@ -211,9 +227,11 @@ const carmenBoard: Board = BoardSchema.parse({
     chrome("kerenzikov"),
     chrome("mantis-blades"),
     chrome("reinforced-tendons"),
+    chrome("lynx-paws"),
+    chrome("light-tattoo-circuit"),
+    chrome("endorphin-micro-pump"),
     chrome("adrenaline-booster"),
   ],
-  tolerance: "high",
   kit: {
     cashTier: "standard",
     weapons: ["katana", "liberty"],
@@ -242,10 +260,12 @@ const mingyuanBoard: Board = BoardSchema.parse({
   cyberware: [
     chrome("braindance-recorder"),
     chrome("visual-cortex-support"),
+    chrome("audio-suite"),
+    chrome("tactile-nerve-amp"),
+    chrome("synth-pheromone-glands"),
     chrome("biomonitor"),
     chrome("smart-link"),
   ],
-  tolerance: "normal",
   kit: {
     cashTier: "standard",
     weapons: ["yukimura"],
@@ -259,7 +279,7 @@ const mingyuanBoard: Board = BoardSchema.parse({
   startLocation: "lizzies-bar",
 });
 
-/** 官方预设角色模板：覆盖四大生态、不同命牌、义体耐受与玩法流派，可直接开档或另存微调 */
+/** 官方预设角色模板：覆盖四大生态、不同命牌、义体流派与生活/感官改造，可直接开档或另存微调 */
 export const sampleCharacters = CharacterCardSchema.array().parse([
   {
     name: "洛·门多萨",
@@ -303,7 +323,7 @@ export const sampleCharacters = CharacterCardSchema.array().parse([
     voice:
       "语调偏平、句式简练，偶尔夹杂潜网协议术语与冷幽默；思考时会下意识轻敲指节，被人强行打断思路时语气会瞬间变得锋利刻薄。",
     skills:
-      "深谙企业级冰墙架构与快速破解，搭载荒坂接入仓、外接盘与自我 ICE，可远程接管监控、无人机与自动炮塔；近身以单分子线和伪装潜入周旋。因黑墙烧灼留下低义体耐受与记忆断层，忌讳长时间肉搏与硬吃神经反冲。",
+      "深谙企业级冰墙架构与快速破解，搭载荒坂接入仓、外接盘、自我 ICE 与隐蔽备用链路，可远程接管监控、无人机与自动炮塔；近身以单分子线和伪装潜入周旋。因黑墙烧灼留下神经隐痛与记忆断层，忌讳长时间肉搏与硬吃神经反冲。",
     board: linlingBoard,
   },
   {
@@ -318,7 +338,7 @@ export const sampleCharacters = CharacterCardSchema.array().parse([
     voice:
       "嗓音低沉沙哑，说话慢条斯理却自带压迫感，习惯用简短的战术口令式表达交代重点；喝上两口烈酒后才会松弛下来，偶尔冒出几句带着苦涩味的老兵冷笑话。",
     skills:
-      "精通步枪、霰弹枪、大口径左轮与近身肉搏，凭借高义体耐受稳定驾驭泽塔斯安威斯坦、大猩猩手臂与钛金骨骼，正面破门压制与野外车队护卫极其老练。不懂网络破解，也不屑玩弯弯绕绕的办公室政治。",
+      "精通步枪、霰弹枪、大口径左轮与近身肉搏，凭着多年战壕磨出的铁骨与定力驾驭泽塔斯安威斯坦、大猩猩手臂、钛金骨骼与军用外骨骼承重架，正面破门压制与野外车队护卫极其老练。不懂网络破解，也不屑玩弯弯绕绕的办公室政治。",
     board: alexeiBoard,
   },
   {

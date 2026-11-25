@@ -4,8 +4,6 @@ import { z } from "zod";
 export const PHONE_KEPT = 80;
 /** 每个会话在总容量满了之后至少保底保留几条最近往来（连同进行中委托附件） */
 export const PHONE_THREAD_MIN = 8;
-/** 同场景同人物私信好感累计上限（+2/+4 封顶） */
-export const CHAT_AFFINITY_SCENE_CAP = 4;
 /** 同场景同人物私信自然收尾软上限（超过后引导转回线下正文） */
 export const CHAT_SCENE_TURN_SOFT_CAP = 6;
 /** 叙事模型每轮最多发几条 */
@@ -64,7 +62,6 @@ export type Call = z.infer<typeof CallSchema>;
 export const ChatSceneBudgetSchema = z.object({
   scene: z.number().int().min(0),
   turns: z.number().int().min(0).default(0),
-  affinityGained: z.number().int().min(0).default(0),
   jobOffered: z.boolean().default(false),
   /** 本场该联系人已通过私信挂出的委托数量（支持中间人一次拿出多单供挑选） */
   jobsOffered: z.number().int().min(0).default(0),
@@ -188,12 +185,11 @@ export const SendSchema = z.object({
 });
 export type SendCommand = z.infer<typeof SendSchema>;
 
-/** 只能由代码发出：记录当前场景同人物私聊次数、好感配额与是否已派单 */
+/** 只能由代码发出：记录当前场景同人物私聊次数与是否已派单 */
 export const ChatMetaSchema = z.object({
   type: z.literal("phone.chatMeta"),
   npc: z.string().min(1),
   scene: z.number().int().min(0),
-  affinityGained: z.number().int().min(0).optional(),
   jobOffered: z.boolean().optional(),
 });
 export type ChatMeta = z.infer<typeof ChatMetaSchema>;

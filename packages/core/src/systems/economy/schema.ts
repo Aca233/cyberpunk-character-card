@@ -16,18 +16,15 @@ export const RARITY_LABELS: Readonly<Record<Rarity, string>> = {
 /** 店主：人物卡上的名字和好感 */
 export interface Keeper {
   readonly name: string;
-  readonly affinity: number;
 }
 
 /** 按人物卡找店主；没写店主人物、没有这张卡、还没见过或已经死了都返回 undefined */
 export function keeperOf(
   npc: string | undefined,
-  npcs: Readonly<
-    Record<string, { name: string; affinity: number; met: boolean; alive: boolean } | undefined>
-  >,
+  npcs: Readonly<Record<string, { name: string; met: boolean; alive: boolean } | undefined>>,
 ): Keeper | undefined {
   const card = npc === undefined ? undefined : npcs[npc];
-  return card?.met && card.alive ? { name: card.name, affinity: card.affinity } : undefined;
+  return card?.met && card.alive ? { name: card.name } : undefined;
 }
 
 export const MONEY_CAP = 100_000;

@@ -7,19 +7,37 @@ type Raw = Readonly<Record<string, unknown>>;
 const isRaw = (v: unknown): v is Raw => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
- * 势力 id 换成「名字，对玩家什么态度」（用户 2026-10-31："势力还是感觉好没存在感"）：
- * 人物卡上带着所属势力现在的态度，模型演这个人时照着定冷热。
- * 不能引势力系统，直接读内容数据的 factions 和势力切片的 stances；态度写势力规则里的那几档 id
- * （kos、hostile、neutral、friendly、family），没变过的按势力卡的 initial；没有势力表时只写 id
+ * 势力 id 与人物 id 换成「势力名、态度、成员/靠山关系与内部派系立场」：
+ * 人物卡上带着所属势力与内部派系关系，模型演这个人时照着定冷热与口风。
+ * 不引势力系统，直接读内容数据的 factions 和势力切片。
  */
 function factionResolver(
   data: Raw | undefined,
   slice: unknown,
-): ((faction: string) => string | undefined) | undefined {
+): ((faction: string, npcId?: string) => string | undefined) | undefined {
   const raw = data?.factions;
   if (!Array.isArray(raw)) return undefined;
   const stances = isRaw(slice) && isRaw(slice.stances) ? slice.stances : {};
-  return (faction) => {
+  const membership = isRaw(slice) && isRaw(slice.membership) ? slice.membership : null;
+  const wingsState = isRaw(slice) && isRaw(slice.wings) ? slice.wings : {};
+
+  const memberFaction =
+    membership && typeof membership.faction === "string" ? membership.faction : null;
+  const memberRank = membership && typeof membership.rank === "string" ? membership.rank : "";
+  const memberSponsor =
+    membership && typeof membership.sponsor === "string" ? membership.sponsor : null;
+  const memberStrikes = membership && Array.isArray(membership.strikes) ? membership.strikes : [];
+  const memberDef = memberFaction
+    ? raw.find((f): f is Raw => isRaw(f) && f.id === memberFaction)
+    : undefined;
+  const memberFactionName =
+    memberDef && typeof memberDef.name === "string" ? memberDef.name : memberFaction;
+
+  return (faction, npcId) => {
+    const isSponsor = npcId !== undefined && memberSponsor === npcId;
+    if (faction === "none") {
+      return isSponsor && memberFactionName ? `玩家加入${memberFactionName}的引荐人` : undefined;
+    }
     const def = raw.find((f): f is Raw => isRaw(f) && f.id === faction);
     if (!def || typeof def.name !== "string") return undefined;
     const stance = stances[faction];
@@ -29,7 +47,36 @@ function factionResolver(
         : typeof def.initial === "string"
           ? def.initial
           : "neutral";
-    return `${def.name}，对玩家 ${attitude}`;
+    const parts = [`${def.name}，对玩家 ${attitude}`];
+    if (memberFaction === faction) {
+      parts.push(
+        `同属组织（玩家：${memberRank}${memberStrikes.length > 0 ? `，污点 ${memberStrikes.length}/3` : ""}）`,
+      );
+    }
+    if (isSponsor) parts.push("当年引荐玩家入伙的人");
+    if (npcId !== undefined && Array.isArray(def.wings) && def.wings.length > 0) {
+      const ws = isRaw(wingsState[faction]) ? wingsState[faction] : null;
+      const rulingId =
+        ws && typeof ws.ruling === "string"
+          ? ws.ruling
+          : isRaw(def.wings[0]) && typeof def.wings[0].id === "string"
+            ? def.wings[0].id
+            : null;
+      const playerSide = ws && typeof ws.playerSide === "string" ? ws.playerSide : null;
+      const leaderNpc = ws && typeof ws.leaderNpc === "string" ? ws.leaderNpc : null;
+      const matchedWing = def.wings.find((w): w is Raw => {
+        if (!isRaw(w) || typeof w.id !== "string") return false;
+        const leaders = Array.isArray(w.leaders) ? w.leaders : [];
+        return leaders.includes(npcId) || (w.id === rulingId && leaderNpc === npcId);
+      });
+      if (matchedWing && typeof matchedWing.name === "string") {
+        const isRuling = matchedWing.id === rulingId;
+        const sideNote =
+          playerSide === matchedWing.id ? "，与玩家同派" : playerSide ? "，与玩家对立派系" : "";
+        parts.push(`属「${matchedWing.name}」${isRuling ? "（当前掌权）" : "（在野）"}${sideNote}`);
+      }
+    }
+    return parts.join("；");
   };
 }
 

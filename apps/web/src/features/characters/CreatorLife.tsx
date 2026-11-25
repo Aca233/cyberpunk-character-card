@@ -31,16 +31,15 @@ const LEDGER_EFFECT_LABELS: Readonly<Record<string, string>> = {
   grudge: "挂旧仇标记（见面自带敌意）",
 };
 
-/** 6 种关系的完整开局数值与机制说明 */
+/** 6 种关系的开局机制说明（纯事实关系与人情/仇怨账本） */
 function relationEffect(r: RelationKind): string {
   const info = RELATION_INFO[r];
-  const affinity = info.affinity > 0 ? `+${info.affinity}` : `${info.affinity}`;
-  const parts = [`好感 ${affinity}`];
+  const parts: string[] = [];
   if (info.ledger) {
     parts.push(LEDGER_EFFECT_LABELS[info.ledger] ?? info.ledger);
   }
   if (info.note) {
-    parts.push("写入私人关系备注");
+    parts.push(`写入关系「${info.label}」`);
   }
   return parts.join(" · ");
 }
@@ -215,6 +214,10 @@ export function PeoplePicker({
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftRole, setDraftRole] = useState("");
+  const [ownNameDraft, setOwnNameDraft] = useState<{
+    readonly id: string;
+    readonly value: string;
+  } | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PeopleFilter>("all");
 
@@ -388,7 +391,7 @@ export function PeoplePicker({
           </span>
           <span className={styles.note}>
             {board.acquaintances.length > 0
-              ? "点击标签快速定位详情；所设关系将在入城时写入通讯录好感与人情债账本。"
+              ? "点击标签快速定位详情；所设关系将在入城时写入通讯录、关系档案与人情/仇怨账本。"
               : "尚未建立额外旧识：从下方名录点选人物设定关系，或保持孤狼状态入城。"}
           </span>
         </div>
@@ -399,7 +402,7 @@ export function PeoplePicker({
                 key={item.id}
                 className={styles.peopleChip}
                 data-active={current?.id === item.id || undefined}
-                data-tone={RELATION_INFO[item.relation].affinity < 0 ? "bad" : undefined}
+                data-tone={item.relation === "grudge" ? "bad" : undefined}
               >
                 <button
                   type="button"
@@ -662,11 +665,13 @@ export function PeoplePicker({
                   <FrameBox className={styles.compactBox}>
                     <input
                       maxLength={20}
-                      value={a.name}
+                      value={ownNameDraft?.id === current.id ? ownNameDraft.value : a.name}
                       onChange={(e) => {
                         const v = e.target.value.slice(0, 20);
-                        if (v.trim() !== "") updateOwnField(current.id, { name: v });
+                        setOwnNameDraft({ id: current.id, value: v });
+                        if (v.trim() !== "") updateOwnField(current.id, { name: v.trim() });
                       }}
+                      onBlur={() => setOwnNameDraft(null)}
                     />
                   </FrameBox>
                 </label>
@@ -723,7 +728,7 @@ export function PeoplePicker({
                   type="button"
                   className={styles.relation}
                   aria-pressed={a?.relation === r}
-                  data-tone={RELATION_INFO[r].affinity < 0 ? "bad" : undefined}
+                  data-tone={r === "grudge" ? "bad" : undefined}
                   onClick={() => setRelation(current, r)}
                 >
                   <CellFrame />

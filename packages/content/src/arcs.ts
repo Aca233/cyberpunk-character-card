@@ -12,7 +12,7 @@ import { arcRules } from "@cp/core";
 export const arcs = arcRules.ArcSeedSchema.array().parse([
   {
     npc: "judy",
-    unlock: { affinity: 30, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "judy-evelyn",
@@ -67,7 +67,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "panam",
-    unlock: { affinity: 30, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "panam-saul",
@@ -106,7 +106,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "river",
-    unlock: { affinity: 25, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "river-case",
@@ -150,7 +150,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "kerry",
-    unlock: { affinity: 30, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "kerry-samurai",
@@ -203,7 +203,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "jackie",
-    unlock: { affinity: 20, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "jackie-bigjob",
@@ -231,7 +231,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "misty",
-    unlock: { affinity: 25, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "misty-cards",
@@ -259,7 +259,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "viktor",
-    unlock: { affinity: 25, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "viktor-ring",
@@ -288,7 +288,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "regina",
-    unlock: { affinity: 25, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "regina-psychos",
@@ -325,7 +325,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "rogue",
-    unlock: { affinity: 40, memories: 3 },
+    unlock: { memories: 3 },
     concerns: [
       {
         id: "rogue-johnny",
@@ -362,7 +362,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "wakako",
-    unlock: { affinity: 40, memories: 3 },
+    unlock: { memories: 3 },
     concerns: [
       {
         id: "wakako-boys",
@@ -390,7 +390,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "dex",
-    unlock: { affinity: 35, memories: 2 },
+    unlock: { memories: 2 },
     concerns: [
       {
         id: "dex-heist",
@@ -423,7 +423,7 @@ export const arcs = arcRules.ArcSeedSchema.array().parse([
   },
   {
     npc: "padre",
-    unlock: { affinity: 35, memories: 3 },
+    unlock: { memories: 3 },
     concerns: [
       {
         id: "padre-feud",

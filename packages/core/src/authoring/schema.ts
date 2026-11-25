@@ -3,7 +3,7 @@ import { SlangSchema, TwistSchema } from "../schemas/lore";
 import { CyberwareCatalogSchema } from "../systems/cyberware";
 import { ItemDefSchema } from "../systems/inventory";
 import { JobTemplateSchema } from "../systems/jobs";
-import { AffinitySchema, NpcCardSchema } from "../systems/npc";
+import { NpcCardSchema } from "../systems/npc";
 import { contentPriceIssues } from "./prices";
 
 /** 先开放已有运行时 schema 的条目；时间线和偶遇等对应系统实现后再加入。 */
@@ -27,7 +27,7 @@ export const AUTHORING_LABELS: Readonly<Record<AuthoringKind, string>> = {
 };
 
 export const AUTHORING_SCHEMAS = {
-  npc: NpcCardSchema.extend({ affinity: AffinitySchema.shape.delta.optional() }),
+  npc: NpcCardSchema,
   item: ItemDefSchema,
   cyberware: CyberwareCatalogSchema.element,
   jobTemplate: JobTemplateSchema,

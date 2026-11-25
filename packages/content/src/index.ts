@@ -114,6 +114,7 @@ export const gameContent: GameContent = {
   quickhacks,
   vehicles,
   homes,
+  factions,
   mapData,
   defaultCast: openings[0]?.cast ?? [],
 };

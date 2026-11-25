@@ -47,6 +47,25 @@ export class WorkshopStore {
     return installed;
   }
 
+  async replace(
+    id: string,
+    pack: WorkshopPack,
+    now: Date,
+  ): Promise<InstalledWorkshopPack | undefined> {
+    if (pack.id !== id) throw new Error("更新内容包时不能修改包 id");
+    const path = this.path(id);
+    const raw = await this.docs.read(path);
+    if (raw === undefined) return undefined;
+    const previous = InstalledWorkshopPackSchema.parse(JSON.parse(raw));
+    const updated = InstalledWorkshopPackSchema.parse({
+      pack,
+      enabled: previous.enabled,
+      installedAt: now.toISOString(),
+    });
+    await this.docs.write(path, `${JSON.stringify(updated, null, 2)}\n`);
+    return updated;
+  }
+
   async setEnabled(id: string, enabled: boolean): Promise<InstalledWorkshopPack | undefined> {
     const path = this.path(id);
     const raw = await this.docs.read(path);

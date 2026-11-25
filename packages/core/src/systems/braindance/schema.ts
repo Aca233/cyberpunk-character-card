@@ -184,9 +184,9 @@ export const BraindanceCommandSchema = z
     z.object({
       ...Event,
       action: z.literal("stop"),
-      outcome: z.enum(["paused", "exited", "finished"]).describe(
-        "paused 暂停交流；exited 中途退出保留进度；finished 略写看完剩余时长并结束",
-      ),
+      outcome: z
+        .enum(["paused", "exited", "finished"])
+        .describe("paused 暂停交流；exited 中途退出保留进度；finished 略写看完剩余时长并结束"),
     }),
   ])
   .describe(

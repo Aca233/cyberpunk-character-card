@@ -1,3 +1,4 @@
+import { cyberwareRules } from "@cp/core";
 import { type CSSProperties, useMemo, useState } from "react";
 import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
@@ -36,6 +37,13 @@ function money(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+function ripLoadTag(cost: number): { readonly label: string; readonly tone?: "ok" | "warn" } {
+  if (cost <= 0) return { label: "零负荷", tone: "ok" };
+  if (cost >= 10) return { label: "高压核心", tone: "warn" };
+  if (cost >= 5) return { label: "中负荷" };
+  return { label: "轻负荷" };
+}
+
 /** 义体医生诊所终端：支持部位标签、稀有度与文本检索、已装拆修以及真实手术条件预览 */
 export function Ripperdoc({
   view,
@@ -58,6 +66,7 @@ export function Ripperdoc({
 }) {
   const [slotFilter, setSlotFilter] = useState<SlotFilter>("all");
   const [rarityFilter, setRarityFilter] = useState<string>("all");
+  const [onlyZeroLoad, setOnlyZeroLoad] = useState(false);
   const [onlyAffordable, setOnlyAffordable] = useState(false);
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [query, setQuery] = useState("");
@@ -74,6 +83,46 @@ export function Ripperdoc({
   const eddies = view.money.eddies;
   const brokenCount = view.cyberware.filter((c) => c.broken).length;
   const neuralRisk = view.humanity.stage !== "stable" && !view.humanity.suppressed;
+  const activeInstalledProbes = useMemo(
+    () =>
+      view.cyberware
+        .filter((c) => !c.broken)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          slot: c.slot,
+          humanityCost: c.humanityCost,
+          iconic: c.iconic,
+          armor: c.armor,
+          accelerator: c.accelerator,
+          ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
+          ...(c.deckTraits ? { deckTraits: c.deckTraits } : {}),
+          ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
+        })),
+    [view.cyberware],
+  );
+  const currentLoad = useMemo(
+    () => cyberwareRules.cyberwareLoadProfile(activeInstalledProbes),
+    [activeInstalledProbes],
+  );
+  const previewLoadAfterInstall = (item: ShelfItem) => {
+    const next = [
+      ...activeInstalledProbes.filter((p) => p.id !== item.replacesId && p.id !== item.id),
+      {
+        id: item.id,
+        name: item.name,
+        slot: item.slot,
+        humanityCost: item.humanityCost,
+        iconic: item.iconic,
+        armor: item.armor,
+        accelerator: item.accelerator,
+        ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+        ...(item.deckTraits ? { deckTraits: item.deckTraits } : {}),
+        ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
+      },
+    ];
+    return cyberwareRules.cyberwareLoadProfile(next);
+  };
 
   const availableCredit = Math.max(0, doc.credit - (doc.debt?.amount ?? 0));
   const creditable = (item: ShelfItem) =>
@@ -123,6 +172,7 @@ export function Ripperdoc({
     return doc.shelf.filter((item) => {
       if (slotFilter !== "all" && item.slot !== slotFilter) return false;
       if (rarityFilter !== "all" && item.rarity !== rarityFilter) return false;
+      if (onlyZeroLoad && item.humanityCost > 0) return false;
       if (onlyInStock && item.inStock <= 0) return false;
       if (onlyAffordable && item.net > eddies + availableCredit) return false;
       if (!normalizedQuery) return true;
@@ -134,6 +184,7 @@ export function Ripperdoc({
     doc.shelf,
     slotFilter,
     rarityFilter,
+    onlyZeroLoad,
     onlyInStock,
     onlyAffordable,
     eddies,
@@ -168,6 +219,17 @@ export function Ripperdoc({
       const rarityLabel = rarityLabelOf(item.rarity, item.iconic);
       const short = item.net > eddies;
       const credit = short && creditable(item);
+      const loadTag = ripLoadTag(item.humanityCost);
+      const afterLoad = !item.installed ? previewLoadAfterInstall(item) : null;
+      const triggersDualCore = Boolean(afterLoad && !currentLoad.dualCore && afterLoad.dualCore);
+      const triggersFbc = Boolean(afterLoad && !currentLoad.fullBorg && afterLoad.fullBorg);
+      const loadEscalated = Boolean(
+        afterLoad &&
+          (afterLoad.tier === "extreme" ||
+            (afterLoad.tier === "heavy" &&
+              currentLoad.tier !== "heavy" &&
+              currentLoad.tier !== "extreme")),
+      );
 
       return (
         <div
@@ -190,6 +252,8 @@ export function Ripperdoc({
               {[
                 rarityLabel,
                 CYBER_LABELS[item.slot],
+                loadTag.label,
+                item.exclusiveGroupLabel ?? "可自由叠加",
                 item.installed ? "已装备" : null,
                 item.locked ? "不可手术" : item.inStock > 0 ? `现货 ${item.inStock} 件` : "无现货",
               ]
@@ -202,12 +266,30 @@ export function Ripperdoc({
 
           <div className={rip.impactList}>
             <div className={rip.impactRow}>
+              <span>装配方式</span>
+              <strong data-tone={item.replaces ? undefined : "cyan"}>
+                {item.replaces
+                  ? `物理互斥（${item.exclusiveGroupLabel ?? "同组"}）· 换下 ${item.replaces}`
+                  : item.slot === "arms"
+                    ? (equippedBySlot.get("arms") ?? 0) === 1
+                      ? "直接加装（与已装义臂组成左右臂混搭）"
+                      : cyberwareRules.isSingleArmCyberware(item.id)
+                        ? "直接加装（单臂装配，另一臂仍可混搭）"
+                        : "直接加装（默认双臂成对；再装第 2 件改左右混搭）"
+                    : item.exclusiveGroup === "optics"
+                      ? "直接加装（双眼成对主义眼，不占用耳/鼻/虹膜等感官件）"
+                      : item.exclusiveGroup === "legDrive"
+                        ? "直接加装（双腿成对驱动，不占用脚掌/暗格等附挂件）"
+                        : "直接加装（不替换现有义体）"}
+              </strong>
+            </div>
+            <div className={rip.impactRow}>
               <span>手术报价</span>
               <strong>{money(item.price)} 欧元</strong>
             </div>
             {item.replaces && (
               <div className={rip.impactRow}>
-                <span>替换 · {item.replaces}</span>
+                <span>旧件折抵 · {item.replaces}</span>
                 <strong data-tone="cyan">折抵 −{money(item.tradeIn)} 欧元</strong>
               </div>
             )}
@@ -223,10 +305,20 @@ export function Ripperdoc({
                 {item.inStock > 0 ? `${item.inStock} 件现货` : "缺货"}
               </strong>
             </div>
+            {afterLoad && (triggersDualCore || triggersFbc || loadEscalated) && (
+              <p className={rip.impactWarn}>
+                术后负荷提醒：
+                {triggersFbc
+                  ? `植入「${item.name}」将转为全身义体化（${afterLoad.label}），日常维护需专业诊所且神经疏离风险显著上升。`
+                  : triggersDualCore
+                    ? `将构成「双中枢并行」（接入仓 + 脊柱加速/狂暴，术后负荷「${afterLoad.label}」），并发超载极易诱发神经症状。`
+                    : `术后全身义体负荷将升至「${afterLoad.label}」，建议常备免疫抑制剂并定期校准。`}
+              </p>
+            )}
             {neuralRisk && (
               <p className={rip.impactWarn}>
                 神经风险提醒：当前处于「{view.humanity.stageLabel}
-                」状态，继续植入或更换高负载义体可能加重神经排异。
+                」状态，继续植入或更换高压义体可能加重神经排异。
               </p>
             )}
             {item.locked && <p className={rip.impactWarn}>{item.locked}</p>}
@@ -306,7 +398,20 @@ export function Ripperdoc({
           <div className={rip.impactList}>
             <div className={rip.impactRow}>
               <span>安装部位</span>
-              <strong>{CYBER_LABELS[part.slot]}</strong>
+              <strong>
+                {CYBER_LABELS[part.slot]}
+                {part.slot === "arms"
+                  ? (equippedBySlot.get("arms") ?? 0) >= 2
+                    ? " · 左右臂混搭（2/2）"
+                    : cyberwareRules.isSingleArmCyberware(part.id)
+                      ? " · 单臂装配"
+                      : " · 双臂成对"
+                  : part.exclusiveGroup === "optics"
+                    ? " · 双眼成对"
+                    : part.exclusiveGroup === "legDrive"
+                      ? " · 双腿成对"
+                      : ""}
+              </strong>
             </div>
             <div className={rip.impactRow}>
               <span>硬件状况</span>
@@ -382,7 +487,6 @@ export function Ripperdoc({
                     {[
                       doc.blackMarket ? "黑市货源 · −20%（无保修）" : "认证诊所",
                       doc.credit > 0 ? `剩余可赊 ${money(availableCredit)} 欧元` : null,
-                      doc.affinity !== null ? `好感 ${doc.affinity}` : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -394,8 +498,20 @@ export function Ripperdoc({
                 <span>
                   <b>{money(eddies)}</b> 欧元
                 </span>
+                <span
+                  data-tone={
+                    currentLoad.tone === "bad"
+                      ? "bad"
+                      : currentLoad.tone === "warn"
+                        ? undefined
+                        : "cyan"
+                  }
+                >
+                  负荷：{currentLoad.label}
+                  {currentLoad.dualCore ? "（双中枢）" : ""}
+                </span>
                 <span data-tone={neuralRisk ? "bad" : "cyan"}>
-                  神经状态：{view.humanity.stageLabel}
+                  神经：{view.humanity.stageLabel}
                 </span>
                 {brokenCount > 0 && <span data-tone="bad">损毁 {brokenCount}</span>}
                 <Button small onClick={onClose}>
@@ -458,7 +574,8 @@ export function Ripperdoc({
                       aria-pressed={slotFilter === slot}
                       onClick={() => setSlotFilter(slot)}
                     >
-                      {CYBER_LABELS[slot]}
+                      <span>{CYBER_LABELS[slot]}</span>
+                      {eq > 0 && <small className={rip.slotCount}>{eq}</small>}
                     </button>
                   );
                 })}
@@ -488,6 +605,14 @@ export function Ripperdoc({
                   ))}
                   {slotFilter !== "installed" && (
                     <>
+                      <button
+                        type="button"
+                        className={rip.filterChip}
+                        aria-pressed={onlyZeroLoad}
+                        onClick={() => setOnlyZeroLoad((v) => !v)}
+                      >
+                        零负荷生活/感官
+                      </button>
                       <button
                         type="button"
                         className={rip.filterChip}
@@ -649,8 +774,9 @@ export function Ripperdoc({
                                     <span className={rip.cardSub}>
                                       {[
                                         item.rarityLabel,
+                                        ripLoadTag(item.humanityCost).label,
                                         item.inStock > 0 ? `现货 ${item.inStock}` : "缺货",
-                                        item.replaces ? `换下 ${item.replaces}` : null,
+                                        item.replaces ? `互斥换下 ${item.replaces}` : "直接加装",
                                       ]
                                         .filter(Boolean)
                                         .join(" · ")}

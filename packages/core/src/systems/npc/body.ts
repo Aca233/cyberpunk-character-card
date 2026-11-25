@@ -1,5 +1,14 @@
 import type { ApplyOutcome } from "../../kernel/system";
-import { type CyberwareSlot, cyberwareCatalog, SLOT_CAPACITY, SLOT_LABELS } from "../cyberware";
+import {
+  type CyberwareDef,
+  cyberwareCatalog,
+  cyberwareConflicts,
+  cyberwareExclusiveGroup,
+  EXCLUSIVE_GROUP_LABELS,
+  EXCLUSIVE_GROUP_LIMIT,
+  type ExclusiveGroup,
+  SLOT_LABELS,
+} from "../cyberware";
 import type { DamageTier } from "../dice";
 import { RARITY_LABELS, type Rarity } from "../economy";
 import { BODY_PART_LABELS, type BodyPart, INJURY_HEAL_MINUTES } from "../health";
@@ -167,8 +176,8 @@ export function sanitizeNpcBody(
   };
 
   const cyberware: string[] = [];
+  const placedDefs: CyberwareDef[] = [];
   const droppedChrome: string[] = [];
-  const slotCounts = new Map<CyberwareSlot, number>();
   for (const raw of body.cyberware) {
     if (cyberware.length >= NPC_CHROME_MAX) break;
     let id = raw;
@@ -187,12 +196,12 @@ export function sanitizeNpcBody(
     if (cyberware.includes(id)) continue;
     const def = chrome?.get(id);
     if (def) {
-      const used = slotCounts.get(def.slot) ?? 0;
-      if (used >= SLOT_CAPACITY[def.slot]) {
-        droppedChrome.push(`${def.name}（${SLOT_LABELS[def.slot]}已满）`);
+      const conflict = cyberwareConflicts(def, placedDefs);
+      if (!conflict.ok) {
+        droppedChrome.push(`${def.name}（与${conflict.label}冲突）`);
         continue;
       }
-      slotCounts.set(def.slot, used + 1);
+      placedDefs.push(def);
     }
     cyberware.push(id);
   }
@@ -229,25 +238,27 @@ export function bodyProblems(body: NpcBodyCard | undefined, data: Data, npcId?: 
 }
 
 /**
- * 按部位数格子（用户 2026-11-02 选的"按部位给 NPC 定规矩"）：和玩家同一套 SLOT_CAPACITY，
- * 操作系统只有 1 格，所以网络接入仓、斯安威斯坦、狂暴只能装一个；表里没有的 id 不算
+ * 按物理互斥组校验 NPC 义体：和玩家同一套 EXCLUSIVE_GROUP_LIMIT，
+ * 同一脊柱加速主驱、主义眼、全身表皮主甲等物理冲突才拦截，支持双中枢、左右双臂混搭与非互斥生活/感官改造。
  */
 export function slotProblems(
   ids: readonly string[],
-  chrome: ReadonlyMap<string, { readonly slot: CyberwareSlot; readonly name: string }>,
+  chrome: ReadonlyMap<string, CyberwareDef>,
 ): string[] {
-  const bySlot = new Map<CyberwareSlot, string[]>();
+  const byGroup = new Map<ExclusiveGroup, string[]>();
   for (const id of ids) {
     const def = chrome.get(id);
     if (!def) continue;
-    bySlot.set(def.slot, [...(bySlot.get(def.slot) ?? []), def.name]);
+    const group = cyberwareExclusiveGroup(def);
+    if (!group) continue;
+    byGroup.set(group, [...(byGroup.get(group) ?? []), def.name]);
   }
   const problems: string[] = [];
-  for (const [slot, list] of bySlot) {
-    const cap = SLOT_CAPACITY[slot];
+  for (const [group, list] of byGroup) {
+    const cap = EXCLUSIVE_GROUP_LIMIT[group];
     if (list.length > cap) {
       problems.push(
-        `${SLOT_LABELS[slot]}最多装 ${cap} 件，现在装了 ${list.length} 件（${list.join("、")}）`,
+        `${EXCLUSIVE_GROUP_LABELS[group]}最多装 ${cap} 件，现在装了 ${list.length} 件（${list.join("、")}）`,
       );
     }
   }
@@ -411,9 +422,13 @@ export function applyNpcBody(
       let swapped: string | undefined;
       if (command.action === "install") {
         if (has) return { ok: true };
-        // 部位装满了换下这个部位最早装的那件，和玩家的 cyberware 指令一样；操作系统只有 1 格
-        const sameSlot = body.cyberware.filter((c) => catalog.get(c)?.slot === def.slot);
-        const out = sameSlot.length >= SLOT_CAPACITY[def.slot] ? sameSlot[0] : undefined;
+        // 物理互斥组满额时换下同互斥组最早装的那件，非互斥义体直接加装
+        const installedDefs = body.cyberware.flatMap((c) => {
+          const d = catalog.get(c);
+          return d ? [d] : [];
+        });
+        const conflict = cyberwareConflicts(def, installedDefs);
+        const out = conflict.ok ? undefined : conflict.blockers[0]?.id;
         const kept = out === undefined ? body.cyberware : body.cyberware.filter((c) => c !== out);
         if (kept.length >= NPC_CHROME_MAX) {
           return {
@@ -461,7 +476,12 @@ export function applyNpcBody(
     }
     case "npcScan": {
       const { v } = settle(npc, data, now);
+      const alreadyScanned = v.scannedAt !== null;
       v.scannedAt = now;
+      if (alreadyScanned) {
+        // 重复扫描/复扫仅静默刷新档案时间戳，不重复写入界面行动提示与下一轮正文上下文
+        return { ok: true };
+      }
       const tactical = scanTacticalProfile(npc, data, now);
       return {
         ok: true,

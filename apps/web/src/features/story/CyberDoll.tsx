@@ -1,24 +1,25 @@
+import { cyberwareRules } from "@cp/core";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import type { AssetId } from "../../assets";
-import { Asset, NineSlice } from "../../ui/Asset";
+import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Panel } from "../../ui/Panel";
 import { ITEM_ELEMENT_META, itemArtOf, itemElementOf } from "./art";
-import { CYBER_BODY_ART, CYBER_BODY_FRAME, CYBER_SLOT_ICON, humanityToneOf } from "./cyberwareMeta";
+import { CYBER_BODY_ART, CYBER_BODY_FRAME, CYBER_SLOT_ICON } from "./cyberwareMeta";
 import neural from "./neural.module.css";
 import type { View } from "./view";
 
 /**
- * 义体页的人体、部位格和人性条（原作 2.0 义体医生那一页的排法），从 NeuralPages 抽出来共用：
- * 剧情里的义体页和捏人时选开局义体都用它（用户定的，2026-10-30："选择义体的界面要改成新的那个"）。
- * 只管排法和交互；每格装着什么、详情里写什么由调用方给
+ * 2077 自由装配义体拓扑图（创角与局内共用）：
+ * - 移除过时的左侧假 100/100 人性数值条，人体严格居中、10 组解剖节点左右对称展开；
+ * - 不再绘制暗示固定上限的多余空格子：未装部位只显 1 个带解剖图标的空挂载格；
+ * - 已装件按装机顺序呈现（最多单排 3 格，超过 3 件时第 4 格以「+N」收纳），绝不撑爆或遮挡相邻部位。
  */
 
 export type CyberSlot = View["cyberware"][number]["slot"];
 
-/** 部位名照原作 2.0 义体医生那一页上写的字（额皮质、胳臂、面部、手掌、表皮系统），和 core 的 SLOT_LABELS 叫法不全一样 */
 export const CYBER_LABELS: Readonly<Record<CyberSlot, string>> = {
   frontalCortex: "额皮质",
-  eyes: "面部",
+  eyes: "面部与感官",
   nervous: "神经系统",
   os: "操作系统",
   circulatory: "循环系统",
@@ -29,29 +30,26 @@ export const CYBER_LABELS: Readonly<Record<CyberSlot, string>> = {
   legs: "腿部",
 };
 
-/**
- * 义体页的部位组，位置和每组格数照原作 2.0 义体医生那一页（第五节第 4 条）：
- * 左边额皮质 3、胳臂 1、骨骼 3、神经系统 3、表皮系统 3，右边操作系统 1、面部 2、手掌 2、循环系统 3、腿部 1。
- * 第三个数是这组离人体往外错开几格：原作第二、三行顺着张开的胳膊往外排，其余贴着人体。
- * 格数就是这个部位能装几件（core 的 SLOT_CAPACITY 和这里一致；原来一个部位只装一件、多出来的格子只是画上，
- * 用户 2026-10-31 说"现在 ui 和能装的义体数量对不上"，改成每格都能装）
- */
-const CYBER_SIDES: readonly (readonly (readonly [CyberSlot, number, number])[])[] = [
+/** 左右两侧 10 个解剖部位排布：[部位 id, 顺着肩臂指尖轮廓向外错开系数] */
+const CYBER_SIDES: readonly (readonly (readonly [CyberSlot, number])[])[] = [
   [
-    ["frontalCortex", 3, 0],
-    ["arms", 1, 0.7],
-    ["skeleton", 3, 1.4],
-    ["nervous", 3, 0],
-    ["integumentary", 3, 0],
+    ["frontalCortex", 0],
+    ["arms", 0.45],
+    ["skeleton", 0.85],
+    ["nervous", 0.3],
+    ["integumentary", 0],
   ],
   [
-    ["os", 1, 0],
-    ["eyes", 2, 0.6],
-    ["hands", 2, 1.3],
-    ["circulatory", 3, 0],
-    ["legs", 1, 0],
+    ["os", 0],
+    ["eyes", 0.45],
+    ["hands", 0.85],
+    ["circulatory", 0.3],
+    ["legs", 0],
   ],
 ];
+
+/** 单部位最多同排展示 3 格（超过 3 件时显示 2 件 +「+N」收纳格，永不撑爆宽度） */
+const MAX_INLINE_CELLS = 3;
 
 /** 全图与局部图都预先挂载；切换时只显示当前视图，避免重新取图或多张完整人体混叠。 */
 const BODY_BASE_ASSETS = [...new Set(Object.values(CYBER_BODY_ART).map(({ base }) => base))];
@@ -91,10 +89,7 @@ function CyberCellFace() {
   );
 }
 
-/**
- * 选择框里一件义体的格子：和部位格同样的原作底子、电路纹和义体图；装着的框亮成原作选中的黄
- * （用户 2026-10-31："保留弹窗，样式改成原作义体医生那样"）
- */
+/** 列表/诊所里单件义体的缩略方格 */
 export function CyberItemCell({
   id,
   name,
@@ -109,7 +104,6 @@ export function CyberItemCell({
   readonly name: string;
   readonly slot?: CyberSlot | undefined;
   readonly on?: boolean;
-  /** 稀有度，给左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"） */
   readonly rarity?: string | undefined;
   readonly iconic?: boolean | undefined;
   readonly broken?: boolean | undefined;
@@ -134,10 +128,13 @@ export function CyberItemCell({
       {art ? (
         <Asset id={art as AssetId} alt={name} className={neural.cyberArt} />
       ) : slot ? (
-        <Asset
-          id={CYBER_SLOT_ICON[slot]}
-          tint="rgb(245 240 232 / 78%)"
+        <span
+          aria-hidden
           className={neural.cellFallbackIcon}
+          style={{
+            maskImage: cssUrl(CYBER_SLOT_ICON[slot]),
+            WebkitMaskImage: cssUrl(CYBER_SLOT_ICON[slot]),
+          }}
         />
       ) : (
         <span className={neural.cyberCellName}>{name}</span>
@@ -158,105 +155,42 @@ export function CyberItemCell({
   );
 }
 
-export interface GaugeValue {
-  readonly current: number;
-  readonly cap: number;
-  readonly stageLabel: string;
-  readonly suppressed?: boolean | undefined;
-}
-
-/**
- * 人性条：放在原作义体容量条的位置（用户选的「只要左边人性」）。
- * 刻度是原作 cw_barbg，填满的部分是同一张图染亮色、按当前人性占上限的比例从下往上露出来；
- * 在 40 点处标出感知失真警戒线
- */
-function HumanityGauge({ humanity }: { readonly humanity: GaugeValue }) {
-  const fill = humanity.cap > 0 ? Math.min(1, Math.max(0, humanity.current / humanity.cap)) : 0;
-  const tone = humanityToneOf(humanity.current);
-  return (
-    <div
-      className={neural.gauge}
-      data-tone={tone}
-      style={{ "--fill": fill } as CSSProperties}
-      title={`人性 ${humanity.current}/${humanity.cap} · ${humanity.stageLabel}${humanity.suppressed ? "（阻断中）" : ""}`}
-    >
-      <span className={neural.gaugeHead}>人性</span>
-      <span className={neural.gaugeTrack}>
-        <NineSlice id="cyber.gaugeBg" tint="rgb(255 190 40 / 16%)" slice={0} />
-        <span className={neural.gaugeFill}>
-          <NineSlice id="cyber.gaugeBg" tint="rgb(255 190 40)" slice={0} />
-        </span>
-        {/* 原作顶上是上限：右边一块实心黄牌，左边三道越来越短的线收进刻度 */}
-        <span className={neural.gaugeTop}>
-          <span className={neural.gaugeFan}>
-            {[100, 72, 48].map((w) => (
-              <span key={w} style={{ width: `${w}%` }}>
-                <NineSlice id="cyber.gaugeBar" tint="rgb(255 190 40)" slice={0} />
-              </span>
-            ))}
-          </span>
-          <span className={neural.gaugeTag}>
-            <NineSlice id="cyber.gaugeLabel" tint="rgb(255 190 40)" slice={4} />
-            <b>{humanity.cap}</b>
-          </span>
-        </span>
-        {/* 原作中间是当前值：一道红线压在刻度上，左边一块空心红牌 */}
-        <span className={neural.gaugeLevel}>
-          <NineSlice id="cyber.gaugeBar" tint="var(--cp-red)" slice={0} />
-          <span className={neural.gaugeNow}>
-            <NineSlice id="cyber.gaugeLabelStroke" tint="var(--cp-red)" slice={4} />
-            <b>{humanity.current}</b>
-          </span>
-        </span>
-      </span>
-    </div>
-  );
-}
-
-/** 一格里放的东西：有原作图就画图，没有就写名字 */
+/** 单件已装义体的投影数据 */
 export interface DollPart {
   readonly id: string;
   readonly name: string;
   readonly broken?: boolean;
-  /** 稀有度，给左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"） */
   readonly rarity?: string | null | undefined;
-  /** 标志性义体，竖条用标志性的金色 */
   readonly iconic?: boolean | undefined;
 }
 
 /**
- * 人体、两侧部位组和人性条。悬停或聚焦的那组才弹详情（原作没有常驻的详情栏）；点一下钉住，移开也不收，再点收起。
- * 每个部位按原作格数装，装着的义体依次排在前面几格（用户 2026-10-31："为什么每个地方的义体只能选一个"）。
- * tip 给出某个部位的只读详情（剧情页）；捏人时不传 tip，传 onCell 和 selected，候选列在右栏（用户 2026-10-31："改成右侧整栏列表"）
+ * 居中对称人体解剖拓扑图：
+ * - 点击任意部位标题、已装义体格或空挂载格均可切换 selected 部位；
+ * - 若调用方传了 tip 则支持悬停预览浮窗（默认新版局内页与创角页都使用右侧常驻检视栏，不挡人体）。
  */
 export function CyberDoll({
   parts,
-  humanity,
   tip,
   tipLine,
   corner,
   selected = null,
+  showAddSlots = false,
   onCell,
 }: {
-  /** 每个部位装着的义体，按装上的先后排 */
   readonly parts: ReadonlyMap<CyberSlot, readonly DollPart[]>;
-  readonly humanity: GaugeValue;
-  /** 悬停或钉住单个格子时弹出的详情；不传就不弹（捏人时详情放右边整栏，用户 2026-10-31："框关不掉还挡格子"） */
   readonly tip?: (slot: CyberSlot, parts: readonly DollPart[], index: number) => ReactNode;
-  /** 详情框线的颜色；不传按当前这格有没有打坏给 */
   readonly tipLine?: (slot: CyberSlot, parts: readonly DollPart[], index: number) => string;
-  /** 右下角的东西：已装几件、断肢、义体医生入口、点数 */
   readonly corner?: ReactNode;
-  /** 调用方明确选择的部位；值改变时同步切换人体 */
   readonly selected?: CyberSlot | null;
-  /** 点格子交给调用方切换部位；不传就是钉住单个格子的详情 */
+  /** 创角等可编辑场景开启：未装满的部位旁额外显示「+」开放挂载格，直觉传达可继续叠装 / 双臂混搭 */
+  readonly showAddSlots?: boolean;
   readonly onCell?: (slot: CyberSlot, part: DollPart | undefined) => void;
 }) {
   const [hovered, setHovered] = useState<{ slot: CyberSlot; index: number } | null>(null);
   const [focused, setFocused] = useState<{ slot: CyberSlot; index: number } | null>(null);
   const [pinned, setPinned] = useState<{ slot: CyberSlot; index: number } | null>(null);
   const [bodyView, setBodyView] = useState({ selected, slot: selected });
-  // 人体只跟随查看动作或调用方的新选择，详情收起、失焦和固定状态不能把它切回去。
   if (bodyView.selected !== selected) setBodyView({ selected, slot: selected });
   const bodySlot = bodyView.selected === selected ? bodyView.slot : selected;
   const shown = hovered ?? focused ?? pinned;
@@ -268,10 +202,49 @@ export function CyberDoll({
     previewBody(slot);
   };
 
-  /** 一个部位组：部位名下面一排格子；装着的义体依次放在前面几格，后面留空 */
-  const group = ([slot, count, shift]: readonly [CyberSlot, number, number]) => {
+  const renderGroup = ([slot, shift]: readonly [CyberSlot, number]) => {
     const list = parts.get(slot) ?? [];
     const label = CYBER_LABELS[slot];
+    const isSelectedSlot = slot === selected;
+    const hasBroken = list.some((p) => p.broken);
+    const hasOverflow = list.length > MAX_INLINE_CELLS;
+    const visible = hasOverflow ? list.slice(0, MAX_INLINE_CELLS - 1) : list;
+    const overflow = hasOverflow ? list.length - visible.length : 0;
+    const isArms = slot === "arms";
+    const pairTag =
+      isArms && list.length >= 2
+        ? "混搭"
+        : isArms && list.length === 1 && list[0]
+          ? cyberwareRules.isSingleArmCyberware(list[0].id)
+            ? "单臂"
+            : "双臂"
+          : slot === "eyes" &&
+              list.some(
+                (p) =>
+                  cyberwareRules.cyberwareExclusiveGroup({
+                    id: p.id,
+                    name: p.name,
+                    slot: "eyes",
+                  }) === "optics",
+              )
+            ? "双目"
+            : slot === "legs" &&
+                list.some(
+                  (p) =>
+                    cyberwareRules.cyberwareExclusiveGroup({
+                      id: p.id,
+                      name: p.name,
+                      slot: "legs",
+                    }) === "legDrive",
+                )
+              ? "双腿"
+              : null;
+    const emptyMounts = isArms ? (["primary", "secondary"] as const) : (["primary"] as const);
+    const canShowTrailingAdd =
+      showAddSlots &&
+      list.length > 0 &&
+      list.length < MAX_INLINE_CELLS &&
+      (!isArms || list.length < 2);
     const shownCell = shown?.slot === slot ? shown.index : null;
     const cellPart = shownCell !== null ? list[shownCell] : undefined;
     const isPinnedTip = pinned?.slot === slot && pinned.index === shownCell;
@@ -279,79 +252,205 @@ export function CyberDoll({
       shownCell !== null
         ? (tipLine?.(slot, list, shownCell) ??
           (cellPart?.broken ? "var(--cp-red)" : "var(--cp-yellow)"))
-        : list.some((p) => p.broken)
+        : hasBroken
           ? "var(--cp-red)"
           : "var(--cp-yellow)";
+
     return (
       <li
         key={slot}
         className={neural.cyberGroup}
         data-focus={bodySlot === slot || undefined}
+        data-selected={isSelectedSlot || undefined}
+        data-equipped={list.length > 0 || undefined}
+        data-broken={hasBroken || undefined}
         style={{ "--shift": shift } as CSSProperties}
       >
-        <span className={neural.cyberLabel}>{label}</span>
+        <button
+          type="button"
+          className={neural.cyberLabelBtn}
+          aria-pressed={isSelectedSlot}
+          onMouseEnter={() => previewBody(slot)}
+          onFocus={() => previewBody(slot)}
+          onClick={() => {
+            previewBody(slot);
+            onCell?.(slot, list[0]);
+          }}
+        >
+          <span className={neural.cyberLabel}>{label}</span>
+          {pairTag && <span className={neural.cyberPairTag}>{pairTag}</span>}
+          {list.length > 0 && <span className={neural.cyberSlotCount}>{list.length}</span>}
+        </button>
+
         <span className={neural.cyberCells}>
-          {Array.from({ length: count }, (_, i) => {
-            const part = list[i];
-            const art = part ? itemArtOf(part.id) : null;
-            const element = part ? itemElementOf(part.id) : undefined;
-            return (
+          {visible.length === 0 ? (
+            emptyMounts.map((mountKey, idx) => (
               <button
-                // biome-ignore lint/suspicious/noArrayIndexKey: 格子照原作格数排，空格子没有别的身份
-                key={i}
+                key={`empty-${slot}-${mountKey}`}
                 type="button"
                 className={neural.cyberCell}
                 aria-pressed={
-                  onCell ? slot === selected : pinned?.slot === slot && pinned.index === i
+                  onCell ? isSelectedSlot : pinned?.slot === slot && pinned.index === idx
                 }
-                aria-label={`${label}第 ${i + 1} 格：${part ? part.name : "空"}`}
-                data-empty={!part || undefined}
-                data-broken={part?.broken || undefined}
-                data-rarity={part?.rarity}
-                data-iconic={part?.iconic || undefined}
-                data-element={element}
-                onMouseEnter={() => previewCell(slot, i)}
+                aria-label={
+                  isArms
+                    ? `${label}（${idx === 0 ? "主臂/成对" : "副臂混搭"}）：尚未装配，点击查看可选义体`
+                    : `${label}：尚未装配，点击查看可选义体`
+                }
+                title={
+                  isArms
+                    ? "单装成对件默认双臂生效；也可装 2 件左右臂混搭"
+                    : `${label}：点击装配（可自由叠加）`
+                }
+                data-empty=""
+                data-slot-active={isSelectedSlot || undefined}
+                onMouseEnter={() => previewCell(slot, idx)}
                 onMouseLeave={() => setHovered(null)}
                 onFocus={(event) => {
                   previewBody(slot);
-                  if (event.currentTarget.matches(":focus-visible")) setFocused({ slot, index: i });
+                  if (event.currentTarget.matches(":focus-visible")) {
+                    setFocused({ slot, index: idx });
+                  }
                 }}
                 onBlur={() => setFocused(null)}
                 onClick={() => {
                   previewBody(slot);
-                  if (onCell) onCell(slot, part);
-                  else
+                  if (onCell) onCell(slot, undefined);
+                  else {
                     setPinned((p) =>
-                      p?.slot === slot && p.index === i ? null : { slot, index: i },
+                      p?.slot === slot && p.index === idx ? null : { slot, index: idx },
                     );
+                  }
                 }}
               >
                 <CyberCellFace />
-                {part &&
-                  (art ? (
-                    <Asset id={art as AssetId} alt={part.name} className={neural.cyberArt} />
-                  ) : (
-                    <span className={neural.cyberCellName}>{part.name}</span>
-                  ))}
-                {element && (
-                  <span className={neural.cyberElementBadge}>
-                    {ITEM_ELEMENT_META[element].badge}
-                  </span>
-                )}
-                {part?.broken && (
-                  <Asset
-                    id="cyber.disabled"
-                    tint="var(--cp-danger)"
-                    height={16}
-                    alt="打坏了"
-                    className={neural.cyberBroken}
-                  />
-                )}
+                <span
+                  aria-hidden
+                  className={neural.cellEmptyIcon}
+                  style={{
+                    maskImage: cssUrl(CYBER_SLOT_ICON[slot]),
+                    WebkitMaskImage: cssUrl(CYBER_SLOT_ICON[slot]),
+                  }}
+                />
+                {showAddSlots && <span className={neural.cellPlusMark}>+</span>}
               </button>
-            );
-          })}
+            ))
+          ) : (
+            <>
+              {visible.map((part, i) => {
+                const art = itemArtOf(part.id);
+                const element = itemElementOf(part.id);
+                return (
+                  <button
+                    key={part.id}
+                    type="button"
+                    className={neural.cyberCell}
+                    aria-pressed={
+                      onCell ? isSelectedSlot : pinned?.slot === slot && pinned.index === i
+                    }
+                    aria-label={`${label}：${part.name}${part.broken ? "（已损毁）" : ""}`}
+                    data-slot-active={isSelectedSlot || undefined}
+                    data-broken={part.broken || undefined}
+                    data-rarity={part.rarity}
+                    data-iconic={part.iconic || undefined}
+                    data-element={element}
+                    onMouseEnter={() => previewCell(slot, i)}
+                    onMouseLeave={() => setHovered(null)}
+                    onFocus={(event) => {
+                      previewBody(slot);
+                      if (event.currentTarget.matches(":focus-visible")) {
+                        setFocused({ slot, index: i });
+                      }
+                    }}
+                    onBlur={() => setFocused(null)}
+                    onClick={() => {
+                      previewBody(slot);
+                      if (onCell) onCell(slot, part);
+                      else {
+                        setPinned((p) =>
+                          p?.slot === slot && p.index === i ? null : { slot, index: i },
+                        );
+                      }
+                    }}
+                  >
+                    <CyberCellFace />
+                    {art ? (
+                      <Asset id={art as AssetId} alt={part.name} className={neural.cyberArt} />
+                    ) : (
+                      <span
+                        aria-hidden
+                        className={neural.cellFallbackIcon}
+                        style={{
+                          maskImage: cssUrl(CYBER_SLOT_ICON[slot]),
+                          WebkitMaskImage: cssUrl(CYBER_SLOT_ICON[slot]),
+                        }}
+                      />
+                    )}
+                    {element && (
+                      <span className={neural.cyberElementBadge}>
+                        {ITEM_ELEMENT_META[element].badge}
+                      </span>
+                    )}
+                    {part.broken && (
+                      <Asset
+                        id="cyber.disabled"
+                        tint="var(--cp-danger)"
+                        height={16}
+                        alt="打坏了"
+                        className={neural.cyberBroken}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+              {canShowTrailingAdd && (
+                <button
+                  type="button"
+                  className={`${neural.cyberCell} ${neural.cyberAddCell}`}
+                  aria-pressed={isSelectedSlot}
+                  aria-label={
+                    isArms ? `${label}：点击为另一臂混搭第 2 件义体` : `${label}：点击继续叠装义体`
+                  }
+                  title={
+                    isArms
+                      ? "当前单装成对件默认双臂生效；点击可再选第 2 件改左右臂混搭"
+                      : `${label}不限格数，点击继续叠装`
+                  }
+                  data-empty=""
+                  data-slot-active={isSelectedSlot || undefined}
+                  onMouseEnter={() => previewBody(slot)}
+                  onFocus={() => previewBody(slot)}
+                  onClick={() => {
+                    previewBody(slot);
+                    onCell?.(slot, undefined);
+                  }}
+                >
+                  <CyberCellFace />
+                  <span className={neural.cyberAddText}>＋</span>
+                </button>
+              )}
+              {overflow > 0 && (
+                <button
+                  type="button"
+                  className={`${neural.cyberCell} ${neural.cyberMoreCell}`}
+                  aria-pressed={isSelectedSlot}
+                  aria-label={`${label}另有 ${overflow} 件已装义体`}
+                  data-slot-active={isSelectedSlot || undefined}
+                  onMouseEnter={() => previewBody(slot)}
+                  onFocus={() => previewBody(slot)}
+                  onClick={() => {
+                    previewBody(slot);
+                    onCell?.(slot, list[MAX_INLINE_CELLS - 1]);
+                  }}
+                >
+                  <CyberCellFace />
+                  <span className={neural.cyberMoreText}>+{overflow}</span>
+                </button>
+              )}
+            </>
+          )}
         </span>
-        {/* 悬停或钉住那一格才弹详情；简洁呈现不堆杂框 */}
+
         {tip && shownCell !== null && (
           <div className={neural.cyberTip} role="tooltip">
             <Panel as="section" title={isPinnedTip ? `${label} · 已固定` : label} line={line}>
@@ -365,9 +464,12 @@ export function CyberDoll({
 
   return (
     <div className={neural.cyberScreen}>
-      <HumanityGauge humanity={humanity} />
+      <div className={neural.cyberBackdrop} aria-hidden>
+        <span className={neural.cyberAxis} />
+        <span className={neural.cyberRing} />
+      </div>
       <ul className={neural.cyberSide} data-side="left" aria-label="头部和躯干">
-        {CYBER_SIDES[0]?.map(group)}
+        {CYBER_SIDES[0]?.map(renderGroup)}
       </ul>
       <div className={neural.cyberBody} aria-hidden>
         {BODY_BASE_ASSETS.map((id) => (
@@ -395,9 +497,8 @@ export function CyberDoll({
         ))}
       </div>
       <ul className={neural.cyberSide} data-side="right" aria-label="操作系统和四肢">
-        {CYBER_SIDES[1]?.map(group)}
+        {CYBER_SIDES[1]?.map(renderGroup)}
       </ul>
-      {/* 原作右下角是空的：额外的东西收在这里，不挡人体和部位格 */}
       {corner && <div className={neural.cyberCorner}>{corner}</div>}
     </div>
   );

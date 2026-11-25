@@ -388,6 +388,7 @@ export function StoryScreen() {
       const activeEffects = effectsOf(n.name, isBreached);
       return {
         key: `npc:${n.id}`,
+        npcId: n.id,
         kind: "person",
         name: n.name,
         role: n.role || undefined,
@@ -395,6 +396,7 @@ export function StoryScreen() {
         breached: isBreached,
         breachedVia: hit?.via ?? null,
         activeEffects: activeEffects.length > 0 ? activeEffects : undefined,
+        netStatus: scanInfo?.netStatus ?? null,
         netLabel: scanInfo?.netLabel ?? null,
         chromeSummary: scanInfo?.chrome.length ? scanInfo.chrome.slice(0, 3).join("、") : null,
       };
@@ -489,10 +491,8 @@ export function StoryScreen() {
   const [atAutofixer, setAtAutofixer] = useState(false);
   // 准备买下的公寓 id：先弹确认框
   const [buyingHome, setBuyingHome] = useState<string | null>(null);
-  // 按住 Tab 或点击按钮切换扫描；H 沉浸模式柔隐两侧角块；Esc 菜单
-  const [scanHold, setScanHold] = useState(false);
-  const [scanPinned, setScanPinned] = useState(false);
-  const scan = scanHold || scanPinned;
+  // 点按 Tab 或点击扫描按钮切换义眼扫描模式（开启时自动全扫在场目标）；H 沉浸模式；Esc 菜单
+  const [scan, setScan] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [atEsc, setAtEsc] = useState(false);
   const [atEndStory, setAtEndStory] = useState(false);
@@ -524,8 +524,7 @@ export function StoryScreen() {
     setAtShop(null);
     setAtAutofixer(false);
     setBuyingHome(null);
-    setScanHold(false);
-    setScanPinned(false);
+    setScan(false);
     setAtEsc(false);
     setAtEndStory(false);
   }, [saveId]);
@@ -800,14 +799,26 @@ export function StoryScreen() {
   }, [view, busy, version, saveId, refresh, warn]);
 
   const toggleScan = useCallback(() => {
-    const next = !scanPinned;
-    setScanPinned(next);
+    const next = !scan;
     if (next && view && !busy && !view.death && !view.ended) {
       const intactEye = view.cyberware.find((c) => c.slot === "eyes" && !c.broken);
+      if (!intactEye) {
+        const brokenEye = view.cyberware.find((c) => c.slot === "eyes" && c.broken);
+        warn(
+          "scan",
+          brokenEye
+            ? "义眼打坏了，扫描不了；先去义体医生处修好"
+            : "没装义眼，扫描不了；去义体医生那里装一副",
+        );
+        return;
+      }
+      setScan(true);
       const hasUnscanned = view.npcs.some((n) => n.here && n.alive && !n.body?.scan);
-      if (intactEye && hasUnscanned) void scanAllPresent();
+      if (hasUnscanned) void scanAllPresent();
+      return;
     }
-  }, [scanPinned, view, busy, scanAllPresent]);
+    setScan(next);
+  }, [scan, view, busy, scanAllPresent, warn]);
 
   // 夜之城难度死亡后重来：作废这个场景的回合，回到场景开头
   const restart = useCallback(async () => {
@@ -1129,7 +1140,7 @@ export function StoryScreen() {
           return;
         }
         e.preventDefault();
-        if (!e.repeat) setScanHold(true);
+        if (!e.repeat) toggleScan();
         return;
       }
       if (e.repeat) return;
@@ -1176,27 +1187,20 @@ export function StoryScreen() {
         e.preventDefault();
         choose(Number(e.key) - 1);
       } else if (e.key === "Escape" && !story.failure) {
-        if (scanPinned) setScanPinned(false);
+        if (scan) setScan(false);
         else setAtEsc(true);
       }
     };
-    const onUp = (e: KeyboardEvent) => {
-      if (e.key === "Tab") setScanHold(false);
-    };
-    const onBlur = () => setScanHold(false);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("keyup", onUp);
-    window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup", onUp);
-      window.removeEventListener("blur", onBlur);
     };
   }, [
     choose,
     expand,
     inventoryViewKeys,
-    scanPinned,
+    scan,
+    toggleScan,
     story.failure,
     story.spend,
     showGear,
@@ -1257,7 +1261,7 @@ export function StoryScreen() {
             text: `${story.draft.text}${story.draft.text ? "\n" : ""}${text}`,
           });
           closePinned();
-          setScanPinned(false);
+          setScan(false);
           setPerson(null);
         };
   const deckLoadHandler =
@@ -1486,7 +1490,10 @@ export function StoryScreen() {
           onReadShard={(id) => void act({ type: "readShards", ids: [id] }, "shards")}
         />
       ) : unreadTab === "factions" ? (
-        <FactionsBody view={view} />
+        <FactionsBody
+          view={view}
+          onDraftAction={view.death || view.ended ? undefined : draftAction}
+        />
       ) : (
         <MessagesPage
           key={unreadTab}
@@ -1570,10 +1577,12 @@ export function StoryScreen() {
   );
 
   const glitch = glitchLevel(view);
+  const draftBoost = view.sandevistan != null && story.draft.sandevistan === true;
   const screenBoost =
-    story.phase !== "idle" &&
-    (story.boost !== null ||
-      (story.pending?.kind === "input" && story.pending.input.sandevistan === true));
+    draftBoost ||
+    (story.phase !== "idle" &&
+      (story.boost !== null ||
+        (story.pending?.kind === "input" && story.pending.input.sandevistan === true)));
   const currentDistrict =
     view.names.district ?? view.travel.destinations.find((d) => d.here)?.district ?? null;
   const unreadBadgeCount =
@@ -1836,6 +1845,15 @@ export function StoryScreen() {
               sandevistan={view.sandevistan}
               hacking={view.hacking}
               hackTargets={hackTargets}
+              hasOptics={Boolean(intactEye)}
+              onScanTarget={
+                busy || view.death || view.ended
+                  ? undefined
+                  : (id) => void act({ type: "scanNpc", id }, "scan")
+              }
+              onScanAllTargets={
+                busy || view.death || view.ended ? undefined : () => void scanAllPresent()
+              }
               onOpenDeckTab={view.hacking ? openDeckTab : undefined}
               lastSentText={lastSentText}
               inputRef={inputRef}
@@ -1874,7 +1892,7 @@ export function StoryScreen() {
                 keyId="key.tab"
                 label="扫描"
                 active={scan}
-                title="按住 Tab 或点击开启 Kiroshi 义眼扫描并一键透视在场目标"
+                title="按 Tab 或点击切换 Kiroshi 义眼扫描（开启时自动扫描在场目标）"
                 onClick={toggleScan}
               />
               <KeyHint

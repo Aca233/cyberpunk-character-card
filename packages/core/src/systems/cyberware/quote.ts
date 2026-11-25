@@ -5,7 +5,13 @@ import { EconomyStateSchema, MONEY_CAP } from "../economy";
 import { HealthStateSchema } from "../health";
 import { merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, repairCost, ripperdocList, tradeInValue } from "./apply";
-import { CyberwareStateSchema, type CyberwareTerms, type Ripperdoc, SLOT_CAPACITY } from "./schema";
+import {
+  CyberwareStateSchema,
+  type CyberwareTerms,
+  cyberwareConflicts,
+  cyberwareExclusiveGroup,
+  type Ripperdoc,
+} from "./schema";
 import { actualStock, clinicState } from "./stock";
 
 export const DoctorRosterSchema = z.object({
@@ -16,7 +22,6 @@ export const DoctorRosterSchema = z.object({
         name: z.string(),
         alive: z.boolean(),
         location: z.string().nullable().optional(),
-        affinity: z.number().default(0),
         met: z.boolean().default(false),
       }),
     )
@@ -205,16 +210,43 @@ export function quoteCyberware(
       return { ok: false, reason: `${def.name}已经装着了` };
     if (owned?.condition === "damaged")
       return { ok: false, reason: "自带件已损坏，需先维修再安装" };
-    const inSlot = state.installed.filter((c) => c.slot === def.slot);
+    const installedDefs = state.installed.flatMap((c) => {
+      const d = catalog.get(c.id);
+      return d ? [d] : [];
+    });
+    const targetGroup = cyberwareExclusiveGroup(def);
     if (request.replace) {
-      const previous = inSlot.find((c) => c.id === request.replace);
-      const old = previous ? catalog.get(previous.id) : undefined;
-      if (!old) return { ok: false, reason: "指定换下的义体没有装在这个部位，不能替换" };
+      const old = installedDefs.find(
+        (d) =>
+          d.id === request.replace &&
+          (d.slot === def.slot ||
+            (targetGroup !== null && cyberwareExclusiveGroup(d) === targetGroup)),
+      );
+      if (!old) return { ok: false, reason: "指定换下的义体没有装在对应部位或互斥组，不能替换" };
       if (!disposition) return { ok: false, reason: `尚未授权${old.name}的保留、出售或报废去向` };
+      const after = cyberwareConflicts(
+        def,
+        installedDefs.filter((d) => d.id !== old.id),
+      );
+      if (!after.ok) {
+        return {
+          ok: false,
+          reason: `换下${old.name}后仍与「${after.label}」冲突（${after.blockers.map((b) => b.name).join("、")}）`,
+        };
+      }
       replaces = { id: old.id, name: old.name };
       tradeIn = disposition === "sell" ? tradeInValue(old) : 0;
-    } else if (request.action === "install" && inSlot.length >= SLOT_CAPACITY[def.slot]) {
-      return { ok: false, reason: "这个部位已经装满；请先明确要换下哪件义体以及是否同意出售旧件" };
+    } else if (request.action === "install") {
+      const conflict = cyberwareConflicts(def, installedDefs);
+      if (!conflict.ok) {
+        return {
+          ok: false,
+          reason: `「${conflict.label}」最多装 ${conflict.limit} 件（已装 ${conflict.blockers.map((b) => b.name).join("、")}）；请先明确要换下哪件义体以及旧件去向`,
+        };
+      }
+      if (disposition) {
+        return { ok: false, reason: "折抵旧件需要指定实际换下的义体" };
+      }
     } else if (disposition) {
       return { ok: false, reason: "折抵旧件需要指定实际换下的义体" };
     }

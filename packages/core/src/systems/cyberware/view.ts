@@ -7,7 +7,9 @@ import {
   type BehaviorChipMode,
   type CyberwareDef,
   CyberwareStateSchema,
+  cyberwareExclusiveGroup,
   DECK_TRAIT_LABELS,
+  EXCLUSIVE_GROUP_LABELS,
   SLOT_LABELS,
 } from "./schema";
 
@@ -54,6 +56,14 @@ export function cyberwareView({ world, data }: ViewContext) {
       // 稀有度和标志性给义体页格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）
       rarity: def?.rarity ?? null,
       iconic: def?.iconic ?? false,
+      humanityCost: def?.humanityCost ?? 0,
+      exclusiveGroup: def ? cyberwareExclusiveGroup(def) : null,
+      exclusiveGroupLabel: def
+        ? (() => {
+            const g = cyberwareExclusiveGroup(def);
+            return g ? EXCLUSIVE_GROUP_LABELS[g] : null;
+          })()
+        : null,
       ability: def?.ability ?? null,
       bonusText: def ? bonusText(def) : "",
       armor: def?.armor ?? false,

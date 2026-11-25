@@ -430,7 +430,10 @@ const run = (world: World, commands: Parameters<typeof registry.applyCommands>[1
   expect("有可测的来电人物", id !== undefined);
   if (id) {
     const ready = set(base, "npc", {
-      npcs: { ...npcs, [id]: { ...npcs[id], met: true, alive: true, affinity: 60 } },
+      npcs: {
+        ...npcs,
+        [id]: { ...npcs[id], met: true, alive: true, relation: { text: "熟络旧识", at: 0 } },
+      },
     });
     const about = "仅供叙事模型的来电用意";
     const raw = JSON.stringify({ npcs: [], messages: [], calls: [{ from: id, about }] });

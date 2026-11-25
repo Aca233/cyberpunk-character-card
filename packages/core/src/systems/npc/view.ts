@@ -90,7 +90,6 @@ export function npcsView({ world, data }: ViewContext) {
         sourceLabel: KNOWN_SOURCE_LABELS[k.source],
         at: formatGameTime(k.at),
       })),
-      affinity: n.affinity,
       /** 玩家知道的生死：屏幕外死的，听说以前照旧显示活着 */
       alive: !deathKnown(n),
       /** 是否正与玩家结伴同行 */

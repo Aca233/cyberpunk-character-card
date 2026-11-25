@@ -1,6 +1,7 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
 import type { ripperdocDebtsView, ripperdocView } from "./ripperdoc";
 import type { sandevistanView } from "./sandevistan";
+import { cyberwareLoadProfile } from "./schema";
 import type { cyberwareView } from "./view";
 
 /** 【当前状态】里义体的几组行：装着的义体、硬件级别概括、加速义体、当前地点的义体医生、欠医生的钱 */
@@ -77,6 +78,25 @@ export const cyberwareStatus: readonly SystemStatus[] = [
       ];
       const tierLine = chromeTierSummary(installed);
       if (tierLine) lines.push(tierLine);
+      const load = cyberwareLoadProfile(
+        installed
+          .filter((c) => !c.broken)
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            slot: c.slot,
+            humanityCost: c.humanityCost,
+            iconic: c.iconic,
+            armor: c.armor,
+            accelerator: c.accelerator,
+            ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
+            ...(c.deckTraits ? { deckTraits: c.deckTraits } : {}),
+            ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
+          })),
+      );
+      if (load.tier === "heavy" || load.tier === "extreme" || load.dualCore || load.fullBorg) {
+        lines.push(`义体神经负荷（${load.label}）：${load.summary}`);
+      }
       const eyes = installed.filter((c) => c.slot === "eyes" && !c.broken);
       if (eyes.length > 0) {
         const eyeNotes = eyes.map(

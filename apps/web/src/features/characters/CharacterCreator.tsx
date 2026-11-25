@@ -3,7 +3,6 @@ import {
   type Board,
   CASH_TIER_INFO,
   type CharacterCard,
-  cyberwareRules,
   FLAW_MAX,
   type ImagePromptRequest,
   PAST_MAX,
@@ -12,7 +11,6 @@ import {
   TAROT_CARDS,
   TAROT_INFO,
   type TarotCard,
-  TOLERANCE_LEVELS,
 } from "@cp/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -37,6 +35,7 @@ import {
   TraitPicker,
 } from "./CreatorSteps";
 import {
+  boardLoadProfile,
   type CheckTarget,
   CREATOR_STEPS,
   type CreatorStepId,
@@ -45,7 +44,9 @@ import {
   defaultStartLocationFor,
   emptyBoard,
   inherentCyberware,
+  LOCAL_CYBERWARE_EVENT,
   LOCAL_MODULES_EVENT,
+  loadLocalCustomCyberware,
   loadLocalCustomModules,
   mergeCreatorCatalog,
   ORIGIN_ECOSYSTEM_LABELS,
@@ -53,14 +54,11 @@ import {
   originEcosystem,
   stepForCheckTarget,
   stepProgress,
-  toleranceSummary,
 } from "./creator";
 import { DossierAppearancePanel } from "./DossierAppearancePanel";
 import { anchorLabel, StartMapPicker, startAnchor } from "./StartMapPicker";
 import wb from "./workbench.module.css";
 
-type Tolerance = Board["tolerance"];
-const TOLERANCES: readonly Tolerance[] = ["low", "normal", "high"];
 const PRONOUN_PRESETS: readonly string[] = ["他", "她", "TA"];
 
 type TraitsTab = "past" | "skill" | "flaw";
@@ -164,19 +162,26 @@ export function CharacterCreator({
   const [portraitModalOpen, setPortraitModalOpen] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [localModules, setLocalModules] = useState(() => loadLocalCustomModules());
+  const [localCyberware, setLocalCyberware] = useState(() => loadLocalCustomCyberware());
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const sync = () => setLocalModules(loadLocalCustomModules());
-    window.addEventListener(LOCAL_MODULES_EVENT, sync);
-    return () => window.removeEventListener(LOCAL_MODULES_EVENT, sync);
+    const syncModules = () => setLocalModules(loadLocalCustomModules());
+    const syncChrome = () => setLocalCyberware(loadLocalCustomCyberware());
+    window.addEventListener(LOCAL_MODULES_EVENT, syncModules);
+    window.addEventListener(LOCAL_CYBERWARE_EVENT, syncChrome);
+    return () => {
+      window.removeEventListener(LOCAL_MODULES_EVENT, syncModules);
+      window.removeEventListener(LOCAL_CYBERWARE_EVENT, syncChrome);
+    };
   }, []);
 
   const data = useMemo(
-    () => (boardData ? mergeCreatorCatalog(boardData, localModules) : undefined),
-    [boardData, localModules],
+    () =>
+      boardData ? mergeCreatorCatalog(boardData, localModules, [], localCyberware) : undefined,
+    [boardData, localModules, localCyberware],
   );
   const fallbackLoc = defaultStartLocationFor(card, data);
   const validBoardLoc =
@@ -280,10 +285,10 @@ export function CharacterCreator({
     }
   };
 
-  // ———— 义体与神经耐受 ————
+  // ———— 义体与纯事实神经负荷 ————
   const inherent = inherentCyberware(card, data);
   const activeInherentCount = inherent.filter((i) => !i.replaced).length;
-  const tolInfo = toleranceSummary(board.tolerance);
+  const loadInfo = boardLoadProfile(card, data);
   const slotOf = new Map(data?.cyberware.map((o) => [o.id, o.slot]) ?? []);
   const rarityOf = new Map(data?.cyberware.map((o) => [o.id, o.rarity]) ?? []);
 
@@ -419,7 +424,7 @@ export function CharacterCreator({
 
         <div className={wb.mobileSummaryToggle}>
           <span className={wb.note}>
-            {card.name.trim() || "未命名角色"} · 耐受：{tolInfo.label} ·{" "}
+            {card.name.trim() || "未命名角色"} · {loadInfo.label} ·{" "}
             {checks.length === 0 ? "✓ 已就绪" : `待完善 ${checks.length} 项`}
           </span>
           <Button small pressed={sidebarOpen} onClick={() => setSidebarOpen((open) => !open)}>
@@ -800,8 +805,8 @@ export function CharacterCreator({
                     onClick={() => setCyberTab("topology")}
                   >
                     <span>
-                      义体拓扑与耐受 ({board.cyberware.length + activeInherentCount} 件 ·{" "}
-                      {tolInfo.label})
+                      义体装配与负荷 ({board.cyberware.length + activeInherentCount} 件 ·{" "}
+                      {loadInfo.label})
                     </span>
                     <span
                       className={wb.subTabLine}
@@ -845,42 +850,26 @@ export function CharacterCreator({
                         <div className={wb.dollStage}>
                           <CyberDoll
                             parts={dollParts}
-                            humanity={{
-                              current: 100,
-                              cap: 100,
-                              stageLabel: `稳定 · ${tolInfo.label}`,
-                              suppressed: false,
-                            }}
                             selected={activeSlot}
+                            showAddSlots
                             onCell={handleDollCell}
                           />
                         </div>
                       </div>
 
-                      <section className={wb.humanityConsole} aria-label="生理神经耐受">
+                      <section className={wb.humanityConsole} aria-label="全身义体神经负荷">
                         <div className={wb.toleranceRow}>
-                          <span className={wb.toleranceLabel}>生理耐受</span>
-                          <fieldset className={wb.tolerancePills} aria-label="选择义体耐受档位">
-                            {TOLERANCES.map((t) => (
-                              <Button
-                                key={t}
-                                small
-                                pressed={board.tolerance === t}
-                                onClick={() => commit({ ...board, tolerance: t })}
-                              >
-                                {TOLERANCE_LEVELS[t].label}
-                              </Button>
-                            ))}
-                          </fieldset>
-                          <span className={wb.stageBadge} data-tone={tolInfo.tone}>
-                            {tolInfo.label} · {mountedChromeNames.length} 件义体
+                          <span className={wb.toleranceLabel}>神经负荷</span>
+                          <span className={wb.stageBadge} data-tone={loadInfo.tone}>
+                            {loadInfo.label} · {mountedChromeNames.length} 件义体
+                            {loadInfo.dualCore ? " · 双中枢并行" : ""}
+                            {loadInfo.fullBorg ? " · 全身义体化" : ""}
                           </span>
                         </div>
-                        <p className={wb.humanityNote} data-tone={tolInfo.tone}>
-                          {tolInfo.note}
-                          {TOLERANCE_LEVELS[board.tolerance].hook
-                            ? `（${TOLERANCE_LEVELS[board.tolerance].hook}）`
-                            : ""}
+                        <p className={wb.humanityNote} data-tone={loadInfo.tone}>
+                          {loadInfo.summary}{" "}
+                          （生活/时尚/感官/亲密件不占负荷；想演排异敏感或抗压异类体质，可在「履历与特质
+                          / 缺陷」中设定。）
                         </p>
                       </section>
                     </div>
@@ -890,10 +879,7 @@ export function CharacterCreator({
                         <div className={wb.shelfPanelHead}>
                           <h3 className={wb.cardTitle}>
                             当前部位：{CYBER_LABELS[activeSlot]}
-                            <small className={wb.note}>
-                              {" "}
-                              （容量上限 {cyberwareRules.SLOT_CAPACITY[activeSlot]}）
-                            </small>
+                            <small className={wb.note}> （不限格数 · 仅按物理互斥）</small>
                           </h3>
                           {board.cyberware.length > 0 && (
                             <ActionButton onClick={() => commit({ ...board, cyberware: [] })}>
@@ -1074,11 +1060,11 @@ export function CharacterCreator({
 
                 <div className={wb.asideMeter}>
                   <div className={wb.asideMeterHead}>
-                    <span>神经耐受</span>
-                    <b data-tone={tolInfo.tone}>{tolInfo.label}</b>
+                    <span>义体负荷</span>
+                    <b data-tone={loadInfo.tone}>{loadInfo.label}</b>
                   </div>
-                  <p className={wb.humanityNote} data-tone={tolInfo.tone}>
-                    {tolInfo.note}
+                  <p className={wb.humanityNote} data-tone={loadInfo.tone}>
+                    {loadInfo.summary}
                   </p>
                 </div>
 
@@ -1120,7 +1106,7 @@ export function CharacterCreator({
               <div className={wb.teleCell}>
                 <span className={wb.teleKey}>装配义体</span>
                 <strong className={wb.teleVal}>{mountedChromeNames.length} 件</strong>
-                <span className={wb.teleSub}>耐受 {TOLERANCE_LEVELS[board.tolerance].label}</span>
+                <span className={wb.teleSub}>{loadInfo.label}</span>
               </div>
               <div className={wb.teleCell}>
                 <span className={wb.teleKey}>履历特质</span>

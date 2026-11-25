@@ -8,11 +8,12 @@ import {
   type CyberwareCommand,
   type CyberwareDef,
   type CyberwareState,
+  cyberwareConflicts,
+  cyberwareExclusiveGroup,
   REPAIR_RATE,
   type Ripperdoc,
   type RipperdocDebtCommand,
   RipperdocListSchema,
-  SLOT_CAPACITY,
   SLOT_LABELS,
   TRADE_IN_RATE,
 } from "./schema";
@@ -87,14 +88,17 @@ export function ripperdocShelf(
   catalog: ReadonlyMap<string, CyberwareDef>,
   installed: readonly { readonly id: string; readonly slot: string }[],
 ): ShelfItem[] {
+  const installedDefs = installed.flatMap((c) => {
+    const d = catalog.get(c.id);
+    return d ? [d] : [];
+  });
   return doc.shelf.flatMap((id) => {
     const def = catalog.get(id);
     if (!def) return [];
     const locked = null;
-    // 满位时为原确认面板选出候选；实际结算仍必须明确授权该旧件。
-    const inSlot = installed.filter((c) => c.slot === def.slot && c.id !== id);
-    const old = inSlot.length >= SLOT_CAPACITY[def.slot] ? inSlot[0] : undefined;
-    const replaces = old ? (catalog.get(old.id) ?? null) : null;
+    // 只有发生物理互斥冲突时才提出替换候选（同互斥组最早装的）；非互斥义体直接加装。
+    const conflict = cyberwareConflicts(def, installedDefs);
+    const replaces = conflict.ok ? null : (conflict.blockers[0] ?? null);
     const price = Math.round((def.price * doc.priceFactor) / 100) * 100;
     const tradeIn = replaces ? Math.min(price, tradeInValue(replaces)) : 0;
     return [
@@ -140,13 +144,33 @@ export function install(
     };
   }
   const notes: string[] = [];
-  const inSlot = draft.installed.filter((c) => c.slot === def.slot).length;
+  const targetGroup = cyberwareExclusiveGroup(def);
   const old = purchase?.replace
-    ? draft.installed.findIndex((c) => c.id === purchase.replace && c.slot === def.slot)
+    ? draft.installed.findIndex((c) => {
+        if (c.id !== purchase.replace) return false;
+        const prevDef = catalog.get(c.id);
+        return (
+          c.slot === def.slot ||
+          (targetGroup !== null &&
+            prevDef !== undefined &&
+            cyberwareExclusiveGroup(prevDef) === targetGroup)
+        );
+      })
     : -1;
-  if (purchase?.replace && old < 0) return { ok: false, reason: "指定换下的义体没有装在这个部位" };
-  if (inSlot >= SLOT_CAPACITY[def.slot] && old < 0) {
-    return { ok: false, reason: "这个部位已装满，尚未授权替换具体义体" };
+  if (purchase?.replace && old < 0)
+    return { ok: false, reason: "指定换下的义体与目标义体不在同一部位或互斥组" };
+  const remainingDefs = draft.installed
+    .filter((_, index) => index !== old)
+    .flatMap((c) => {
+      const d = catalog.get(c.id);
+      return d ? [d] : [];
+    });
+  const conflict = cyberwareConflicts(def, remainingDefs);
+  if (!conflict.ok) {
+    return {
+      ok: false,
+      reason: `物理互斥：「${conflict.label}」最多装 ${conflict.limit} 件（当前已装 ${conflict.blockers.map((b) => b.name).join("、")}），尚未授权替换具体旧件`,
+    };
   }
   const emit: Command[] = [];
   if (old >= 0) {

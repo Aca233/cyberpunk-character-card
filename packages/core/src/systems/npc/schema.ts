@@ -80,10 +80,6 @@ export function inferNpcCircle(npc: {
   return "merc";
 }
 
-export const AFFINITY_MIN = -100;
-export const AFFINITY_MAX = 100;
-/** 单条好感变化的上限，超出的截断 */
-export const AFFINITY_STEP_CAP = 10;
 /** 每个人物保留最近这么多条共同记忆 */
 export const MEMORY_KEPT = 12;
 /** 人物经历时间线最多留这么多条；到了 TIMELINE_SQUASH 条场外推演就该压成摘要，超过上限时代码直接删最早的 */
@@ -117,7 +113,7 @@ const NpcIdSchema = z
 
 /** 装备与植入物记录上限。 */
 export const NPC_GEAR_MAX = 12;
-export const NPC_CHROME_MAX = 8;
+export const NPC_CHROME_MAX = 14;
 /** 具体装备、义体与已确认的初始症状，不含阶层、HP 或人性点数。 */
 export const NpcBodyCardSchema = z
   .object({
@@ -371,7 +367,6 @@ export type SeedTag = z.infer<typeof SeedTagSchema>;
 
 const BaseNpcSchema = NpcCardSchema.extend({
   behaviorChips: z.record(z.string(), BehaviorChipStateSchema).optional(),
-  affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX),
   /** 历史存档兼容字段 */
   vectors: NpcVectorsSchema.optional(),
   /** 自走人生目标进度与当前面临的危机 */
@@ -537,78 +532,6 @@ export const MeetSchema = z
     "已有人物卡的人出场（第一次见面也用这条），或换了地点；id 必须是【人物】里有卡的。没卡的路人（酒保、店员、路过的帮派成员）不写 meet；要和他有实质来往、以后还会出场，先写 npc 建卡",
   );
 export type Meet = z.infer<typeof MeetSchema>;
-
-export const AffinitySchema = z
-  .object({
-    type: z.literal("affinity"),
-    id: NpcIdSchema,
-    delta: z
-      .number()
-      .int()
-      .refine((v) => v !== 0, "好感变化不能为 0"),
-    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
-    /** 可选渠道标记：代码侧 phone-chat 传 phone 时允许对未见面但已通联的联系人记好感 */
-    channel: z.enum(["scene", "phone"]).optional(),
-  })
-  .describe(
-    `好感变化（结算用；模型写的是方向和大小，见 AffinityProposalSchema）；单条最多 ±${AFFINITY_STEP_CAP}，范围 ${AFFINITY_MIN} 到 ${AFFINITY_MAX}，代码截断`,
-  );
-export type Affinity = z.infer<typeof AffinitySchema>;
-
-/** 好感的大小档：小事、帮了忙或伤了感情、救命之恩或背叛；换算表只在这里写一份（暂定，试玩时调） */
-export const AFFINITY_SIZES = { small: 2, medium: 5, large: 10 } as const;
-export type AffinitySize = keyof typeof AFFINITY_SIZES;
-const AFFINITY_SIZE_LABELS: Readonly<Record<AffinitySize, string>> = {
-  small: "小",
-  medium: "中",
-  large: "大",
-};
-
-/** 模型写的好感：只选方向和大小，代码按 AFFINITY_SIZES 换成数字 */
-export const AffinityProposalSchema = z
-  .object({
-    type: z.literal("affinity"),
-    id: NpcIdSchema,
-    dir: z.enum(["up", "down"]).describe("up 态度变好，down 变差"),
-    size: z
-      .enum(["small", "medium", "large"])
-      .describe("small 小事（一句好话、一点冒犯），medium 帮了忙或伤了感情，large 救命之恩或背叛"),
-    reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
-  })
-  .describe("好感变化：只选方向和大小，不写数字，代码换算并截断")
-  .transform(
-    ({ dir, size, ...rest }): Affinity => ({
-      ...rest,
-      delta: (dir === "up" ? 1 : -1) * AFFINITY_SIZES[size],
-    }),
-  );
-
-/** 模型仍写了数字好感时：换成最近的大小档（一样近取小的），方向看正负；同时温和截断超长 reason */
-export function legacyAffinity(
-  raw: Readonly<Record<string, unknown>>,
-): { readonly value: Record<string, unknown>; readonly note: string } | undefined {
-  let out: Record<string, unknown> = { ...raw };
-  const notes: string[] = [];
-  if ("delta" in raw) {
-    const { delta, ...rest } = raw;
-    if (rest.dir !== undefined && rest.size !== undefined) {
-      out = { ...rest };
-      notes.push("好感写了数字，按写的方向和大小处理，数字不用");
-    } else if (typeof delta === "number" && Number.isFinite(delta) && delta !== 0) {
-      const abs = Math.abs(delta);
-      const sizes = Object.entries(AFFINITY_SIZES) as [AffinitySize, number][];
-      const [size] = sizes.reduce((best, cur) =>
-        Math.abs(cur[1] - abs) < Math.abs(best[1] - abs) ? cur : best,
-      );
-      out = { ...rest, dir: delta > 0 ? "up" : "down", size };
-      notes.push(`好感写了数字，已按最近的档位（${AFFINITY_SIZE_LABELS[size]}）处理`);
-    }
-  }
-  if (normalizeTextField(out, "reason", NPC_NOTE_CHARS, false)) {
-    notes.push("好感原因已按长度上限微调");
-  }
-  return notes.length > 0 ? { value: out, note: notes.join("；") } : undefined;
-}
 
 export const MemorySchema = z
   .object({
@@ -801,7 +724,7 @@ export const NpcChromeSchema = z
     cyberware: z.string().min(1).describe("义体表里的 id"),
   })
   .describe(
-    `有卡的人装上或拆掉一件义体；最多 ${NPC_CHROME_MAX} 件，每个部位按格数装（额叶皮质、神经系统、循环系统、皮肤、骨骼 3 件，眼部、手部 2 件，操作系统、手臂、腿部 1 件；网络接入仓、斯安威斯坦、狂暴都占操作系统，只能装一个），部位装满了再装会换下这个部位最早装的那件；安装本身不自动生成神经症状。玩家角色出钱装的，同时写 money 扣钱`,
+    `有卡的人装上或拆掉一件义体；最多 ${NPC_CHROME_MAX} 件，仅按物理互斥组约束（主接入仓限 1、脊柱加速/狂暴限 1 二者可双装、主义眼限 1、重型臂部武装限 2 可左右混搭、腿部主驱/全覆表皮主甲/全身义体 FBC/核心亲密义体各限 1，其余感官/时尚/暗格/工具等不限件数）；触发物理互斥时会换下同组最早装的那件；安装本身不自动生成神经症状。玩家角色出钱装的，同时写 money 扣钱`,
   );
 export type NpcChrome = z.infer<typeof NpcChromeSchema>;
 
@@ -867,7 +790,6 @@ export type NpcCommand =
   | NewNpc
   | NpcUpdate
   | Meet
-  | Affinity
   | Memory
   | NpcDeath
   | Doing
@@ -1037,10 +959,9 @@ export function normalizeNpcTextProposal(
   return changed ? { value: out, note: `${type} 描述文本已按长度上限微调` } : undefined;
 }
 
-/** 只能由代码发出：新存档放进原作人物卡和主板模块带出的旧识，开局好感按卡上写的 */
+/** 只能由代码发出：新存档放进原作人物卡和主板模块带出的旧识 */
 export const SeedNpcSchema = NpcCardSchema.extend({
   type: z.literal("npc.seed"),
-  affinity: z.number().int().min(AFFINITY_MIN).max(AFFINITY_MAX).default(0),
   /** 主板带出的人物是角色过去就认识的 */
   met: z.boolean().default(false),
   /**

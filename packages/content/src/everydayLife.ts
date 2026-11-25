@@ -50,7 +50,14 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
         "blank-shard",
         "holo-phone",
       ],
-      cyberware: ["kiroshi-mk2", "fuyutsuki-deck", "self-ice", "smart-link"],
+      cyberware: [
+        "kiroshi-mk2",
+        "fuyutsuki-deck",
+        "self-ice",
+        "smart-link",
+        "tool-hand-fingers",
+        "hidden-personal-link",
+      ],
     },
   },
   {
@@ -84,7 +91,13 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: ["club-dress", "dress-shoes", "holo-phone", "shard-intel-clouds-manual"],
-      cyberware: ["kiroshi-mk1", "self-ice"],
+      cyberware: [
+        "kiroshi-mk1",
+        "chroma-iris-overlay",
+        "chemskin-pigment",
+        "light-tattoo-circuit",
+        "self-ice",
+      ],
     },
   },
   {
@@ -115,7 +128,16 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
     hangouts: ["japantown"],
     initialDoing: "刚结束上一班托管，在包厢化妆台前缓神喝温水，揉着发胀的后颈接口等待下一次呼叫。",
     canon: true,
-    body: { gear: ["club-dress", "dress-shoes", "holo-phone"], cyberware: ["doll-behavior-chip"] },
+    body: {
+      gear: ["club-dress", "dress-shoes", "holo-phone"],
+      cyberware: [
+        "doll-behavior-chip",
+        "tactile-nerve-amp",
+        "synth-pheromone-glands",
+        "chemskin-pigment",
+        "thermo-comfort-weave",
+      ],
+    },
   },
   {
     id: "angel-clouds",
@@ -147,7 +169,13 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: ["silk-shirt", "tailored-slacks", "dress-shoes", "holo-phone"],
-      cyberware: ["doll-behavior-chip"],
+      cyberware: [
+        "doll-behavior-chip",
+        "tactile-nerve-amp",
+        "synth-pheromone-glands",
+        "chemskin-pigment",
+        "thermo-comfort-weave",
+      ],
     },
   },
   {
@@ -191,7 +219,7 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
         "synth-cigs",
         "blank-shard",
       ],
-      cyberware: ["kiroshi-mk1"],
+      cyberware: ["kiroshi-mk1", "jaw-stash-implant", "hidden-personal-link"],
     },
   },
 ]);

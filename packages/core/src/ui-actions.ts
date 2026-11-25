@@ -78,18 +78,46 @@ export interface UiActionEntry {
   readonly summary: string;
 }
 
+function scanTargetIdOf(record: ActionRecord): string | undefined {
+  const raw = record.action;
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const { type, id } = raw as { type?: unknown; id?: unknown };
+  return type === "scanNpc" && typeof id === "string" && id !== "" ? id : undefined;
+}
+
 function effectiveUiActions(
   records: readonly LogRecord[],
   afterSeq: number,
   beforeSeq?: number,
 ): UiActionEntry[] {
   const voided = voidedSeqs(records);
+  const previouslyScanned = new Set<string>();
   const out: UiActionEntry[] = [];
   for (const record of records) {
-    if (record.kind !== "action") continue;
     if (voided.has(record.seq)) continue;
-    if (record.seq <= afterSeq) continue;
+    if (record.kind === "turn") {
+      if (record.seq <= afterSeq) {
+        for (const cmd of record.commands) {
+          if (typeof cmd !== "object" || cmd === null) continue;
+          const { type, id } = cmd as { type?: unknown; id?: unknown };
+          if (type === "npcScan" && typeof id === "string" && id !== "") {
+            previouslyScanned.add(id);
+          }
+        }
+      }
+      continue;
+    }
+    if (record.kind !== "action") continue;
+    const scanId = scanTargetIdOf(record);
+    if (record.seq <= afterSeq) {
+      if (scanId) previouslyScanned.add(scanId);
+      continue;
+    }
     if (beforeSeq !== undefined && record.seq >= beforeSeq) continue;
+    if (scanId) {
+      if (previouslyScanned.has(scanId)) continue;
+      previouslyScanned.add(scanId);
+    }
     const type = actionTypeOf(record);
     const summary = summarizeUiAction(record);
     if (!type || !summary) continue;

@@ -1,12 +1,6 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import type {
-  HumanityCommand,
-  HumanityStage,
-  HumanityState,
-  SuppressHumanity,
-  Tolerance,
-} from "./schema";
+import type { HumanityCommand, HumanityStage, HumanityState, SuppressHumanity } from "./schema";
 
 export type { HumanityStage } from "./schema";
 export const STAGE_LABELS: Readonly<Record<HumanityStage, string>> = {
@@ -87,8 +81,4 @@ export function applySuppressHumanity(
 ): ApplyOutcome {
   draft.immunosuppressantUntil = now + command.durationMinutes;
   return { ok: true, notes: ["压制剂暂时缓解神经症状，诱因与实际损伤仍需处理"] };
-}
-export function setTolerance(draft: Draft<HumanityState>, tolerance: Tolerance): ApplyOutcome {
-  draft.tolerance = tolerance;
-  return { ok: true };
 }

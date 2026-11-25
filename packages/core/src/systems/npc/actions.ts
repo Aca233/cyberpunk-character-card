@@ -57,7 +57,12 @@ export const npcActions = {
         const clock = WorldClockStateSchema.parse(world.slices.world);
         const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
         if (!onStage(npc, stage)) return `${npc.name} 不在现场，先碰面再结伴同行`;
-        if (npc.affinity < 15) return `${npc.name} 和你交情还不够深，先在剧情里谈妥一起走`;
+        if (npc.ledger.some((e) => e.settledAt === null && e.kind === "grudge")) {
+          return `${npc.name} 对你还记着未解的仇，不会直接随行`;
+        }
+        if (!npc.relation && npc.memories.length === 0) {
+          return `${npc.name} 和你还没建立交情，先在剧情里谈妥一起走`;
+        }
       }
       return [{ type: "npcCompanion", id: npc.id, following: action.following }];
     },

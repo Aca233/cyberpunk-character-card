@@ -159,6 +159,15 @@
   background: var(--cp-surface-hover);
 }
 
+.slotCount {
+  padding: 0 4px;
+  background: rgb(94 246 255 / 14%);
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 .slotBtn[aria-pressed="true"] {
   border-color: var(--cp-cyan);
   color: var(--cp-cyan);

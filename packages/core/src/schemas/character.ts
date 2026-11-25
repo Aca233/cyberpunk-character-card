@@ -157,13 +157,13 @@ export function boardPeople(board: Board): BoardStart["people"] {
         limit: "有自己的生活和打算，不会为了玩家角色无条件冒险",
         body: { gear: [], cyberware: [] },
         canon: false,
-        affinity: flaw ? -10 : 0,
+        ...(flaw ? { relation: `旧账：${m.label}`.slice(0, 60) } : {}),
         met: true,
         ledger: [],
       });
     });
   }
-  // 捏人给模块带出的人改过关系的，按关系表盖过上面的默认好感
+  // 捏人给模块带出的人改过关系的，按关系表盖过上面的默认关系
   const seeded = people.map((p) => {
     const a = board.acquaintances.find((x) => x.id === p.id);
     return a ? { ...p, ...acquaintanceSeed(a) } : p;
@@ -197,18 +197,16 @@ export function boardPeople(board: Board): BoardStart["people"] {
 }
 
 /**
- * 一个旧识按关系表换成开局的好感、关系笔记和人情（用户定的关系表，2026-10-30）。
- * "是什么事"没写时（一键成稿也没补上），关系笔记写关系名，人情和仇写一句占位，叙事模型第一次提起时再定细节
+ * 一个旧识按关系表换成开局的关系笔记与人情/仇怨账本。
+ * "是什么事"没写时，关系笔记写关系名，人情和仇写一句占位，叙事模型第一次提起时再定细节
  */
 export function acquaintanceSeed(a: Acquaintance): StartAcquaintance {
   const info = RELATION_INFO[a.relation];
   const note = a.note.trim();
-  // 老朋友、前任一定写关系笔记；别的关系手写了"是什么事"又没有人情可记的，也记成关系笔记，免得丢掉
   const relation =
     info.note || (!info.ledger && note) ? (note ? `${info.label}：${note}` : info.label) : "";
   return {
     id: a.id,
-    affinity: info.affinity,
     ...(relation ? { relation: relation.slice(0, 60) } : {}),
     ledger: info.ledger
       ? [
@@ -221,7 +219,7 @@ export function acquaintanceSeed(a: Acquaintance): StartAcquaintance {
   };
 }
 
-/** 建档时从主板带进存档的东西：开局义体、自定义义体快照、义体耐受、开局行装定制、模块带出的人物和原作人物旧识 */
+/** 建档时从主板带进存档的东西：开局义体、自定义义体快照、开局行装定制、模块带出的人物和原作人物旧识 */
 export function boardStart(card: CharacterCard): BoardStart | undefined {
   if (!card.board) return undefined;
   const people = boardPeople(card.board);
@@ -229,7 +227,6 @@ export function boardStart(card: CharacterCard): BoardStart | undefined {
   return {
     cyberware: card.board.cyberware.map((c) => c.id),
     customCyberware,
-    tolerance: card.board.tolerance,
     ...(card.board.origin ? { origin: card.board.origin.id } : {}),
     ...(card.board.kit ? { kit: card.board.kit } : {}),
     people,

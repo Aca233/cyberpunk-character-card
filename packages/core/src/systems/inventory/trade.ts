@@ -573,10 +573,9 @@ export function applyTrade(
       case "favor":
         if (quoted.party.npc?.met) {
           emitted.push({
-            type: "affinity",
+            type: "memory",
             id: quoted.party.npc.id,
-            delta: 1,
-            reason: `打点示好：${command.reason.trim()}`.slice(0, NPC_NOTE_CHARS),
+            text: `玩家花钱打点示好：${command.reason.trim()}`.slice(0, NPC_NOTE_CHARS),
           });
         }
         break;

@@ -1487,10 +1487,67 @@
 
 .inputBar[data-boost] {
   --composer-fill: var(--cp-panel-strong);
-  --composer-line: var(--cp-yellow);
-  --composer-accent: var(--cp-yellow);
-  --composer-divider: rgb(252 238 10 / 28%);
-  --glare-tint: 255 248 196;
+  --composer-line: var(--cp-cyan);
+  --composer-accent: var(--cp-cyan);
+  --composer-divider: rgb(94 246 255 / 34%);
+  --glare-tint: 180 250 255;
+}
+
+.boostBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.42rem;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgb(94 246 255 / 44%);
+  border-left: 3px solid var(--cp-cyan);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
+  font-size: 11.5px;
+  animation: sandy-banner-in 180ms var(--ease-snap) both;
+}
+
+.boostTag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--cp-cyan);
+}
+
+.boostBannerText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cp-text);
+}
+
+.boostBannerText b {
+  color: var(--cp-cyan);
+}
+
+.boostLiveTag {
+  padding: 0 4px;
+  background: rgb(94 246 255 / 22%);
+  color: var(--cp-cyan);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.45;
+}
+
+@keyframes sandy-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .inputBar[data-deck] {
@@ -1512,6 +1569,10 @@
   position: relative;
   isolation: isolate;
   transform-origin: center center;
+}
+
+.inputBar[data-boost] .composerShell {
+  filter: drop-shadow(0 0 14px rgb(94 246 255 / 32%));
 }
 
 .composerShell[data-tilting] {
@@ -2537,14 +2598,33 @@
 .docNote[data-factions-note] {
   flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.4rem 0.75rem;
   padding: 0.45rem 0.65rem;
   border: 1px solid rgb(255 220 0 / 24%);
   background: rgb(255 220 0 / 5%);
 }
 
 [data-factions-note] > b {
+  color: var(--cp-yellow);
+}
+
+.factionAffil {
+  padding: 0.08rem 0.45rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 4%);
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.factionAffil[data-joined] {
+  border-color: rgb(94 246 255 / 45%);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
+}
+
+.factionAffil > b {
   color: var(--cp-yellow);
 }
 
@@ -6022,6 +6102,207 @@ ul.mapLegend > li {
   --box-line: rgb(252 238 10 / 50%);
 }
 
+[data-factions] .feedCard[data-member] {
+  --box-fill: rgb(94 246 255 / 8%);
+  --box-line: rgb(94 246 255 / 62%);
+}
+
+.factionBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.factionMemberBadge {
+  padding: 0.12rem 0.42rem;
+  border: 1px solid rgb(94 246 255 / 55%);
+  background: rgb(94 246 255 / 14%);
+  color: var(--cp-cyan);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.factionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.factionActionBtn {
+  padding: 0.22rem 0.58rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 4%);
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-flash),
+    background-color var(--dur-flash),
+    color var(--dur-flash);
+}
+
+.factionActionBtn:hover {
+  border-color: rgb(252 238 10 / 55%);
+  background: rgb(252 238 10 / 10%);
+  color: var(--cp-yellow);
+}
+
+.factionActionBtn[data-tone="accent"] {
+  border-color: rgb(94 246 255 / 42%);
+  background: rgb(94 246 255 / 9%);
+  color: var(--cp-cyan);
+}
+
+.factionActionBtn[data-tone="accent"]:hover {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 18%);
+  color: var(--cp-text);
+}
+
+.factionActionBtn[data-tone="danger"] {
+  border-color: rgb(255 68 85 / 42%);
+  background: rgb(255 68 85 / 8%);
+  color: var(--cp-red);
+}
+
+.factionActionBtn[data-tone="danger"]:hover {
+  border-color: var(--cp-red);
+  background: rgb(255 68 85 / 18%);
+  color: var(--cp-text);
+}
+
+.factionWarPill,
+.factionStrikePill {
+  padding: 0.1rem 0.42rem;
+  border: 1px solid rgb(255 68 85 / 55%);
+  background: rgb(255 68 85 / 14%);
+  color: var(--cp-red);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.factionStrikeNote {
+  margin: 0.25rem 0 0;
+  padding: 0.28rem 0.48rem;
+  border-left: 2px solid var(--cp-red);
+  background: rgb(255 68 85 / 8%);
+  color: var(--cp-red);
+  font-size: var(--fs-label);
+  line-height: 1.45;
+}
+
+.factionWings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.factionWingTag {
+  padding: 0.16rem 0.45rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 3%);
+  color: var(--cp-text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.factionWingTag > b {
+  color: var(--cp-text);
+  font-weight: 600;
+}
+
+.factionWingTag > small {
+  color: var(--cp-text-dim);
+  font-size: 10px;
+}
+
+.factionWingTag[data-ruling] {
+  border-color: rgb(252 238 10 / 42%);
+  background: rgb(252 238 10 / 7%);
+  color: var(--cp-yellow);
+}
+
+.factionWingTag[data-vacant] {
+  border-color: rgb(255 68 85 / 55%);
+  background: rgb(255 68 85 / 10%);
+  color: var(--cp-red);
+}
+
+.factionWingTag[data-side] {
+  border-color: rgb(94 246 255 / 52%);
+  background: rgb(94 246 255 / 10%);
+  color: var(--cp-cyan);
+}
+
+.factionNpcs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.factionNpcLabel {
+  color: var(--cp-text-dim);
+  font-size: 11px;
+}
+
+.factionNpcChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.14rem 0.44rem;
+  border: 1px solid rgb(94 246 255 / 26%);
+  background: rgb(94 246 255 / 6%);
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-flash),
+    background-color var(--dur-flash),
+    color var(--dur-flash);
+}
+
+.factionNpcChip:hover:not(:disabled) {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
+}
+
+.factionNpcChip > small {
+  color: var(--cp-yellow);
+  font-size: 10px;
+}
+
+.factionNpcChip[data-sponsor] {
+  border-color: rgb(252 238 10 / 50%);
+  background: rgb(252 238 10 / 9%);
+}
+
+.factionNpcChip[data-dead] {
+  border-color: rgb(255 255 255 / 12%);
+  background: rgb(255 255 255 / 3%);
+  color: var(--cp-text-dim);
+  text-decoration: line-through;
+  cursor: default;
+  opacity: 0.7;
+}
+
 .docBody[data-factions] {
   align-content: start;
   grid-template-columns: minmax(0, 1fr);
@@ -6255,6 +6536,34 @@ ul.mapLegend > li {
     sandy-pulse 2s ease-in-out 0.4s infinite;
 }
 
+.screen[data-boost]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 13;
+  pointer-events: none;
+  border: 2px solid color-mix(in srgb, var(--cp-cyan) 85%, transparent);
+  box-shadow:
+    inset 0 0 120px color-mix(in srgb, var(--cp-cyan) 55%, transparent),
+    0 0 24px color-mix(in srgb, var(--cp-cyan) 45%, transparent);
+  animation: sandy-ignite 0.48s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes sandy-ignite {
+  0% {
+    opacity: 0.95;
+    transform: scale(1.03);
+  }
+  40% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 .screen[data-boost] .cityImage,
 .screen[data-boost] .cityThemePoster,
 .screen[data-boost] .cityThemeVideo {
@@ -6371,8 +6680,13 @@ ul.mapLegend > li {
   .screen[data-glitch="3"] .cityImage,
   .screen[data-glitch="2"] .turn:last-of-type,
   .screen[data-glitch="3"] .turn:last-of-type,
-  .screen[data-boost]::before {
+  .screen[data-boost]::before,
+  .screen[data-boost]::after,
+  .boostBanner {
     animation: none;
+  }
+  .screen[data-boost]::after {
+    opacity: 0;
   }
   .screen[data-glitch="2"] .turn:last-of-type::after,
   .screen[data-glitch="3"] .turn:last-of-type::after {

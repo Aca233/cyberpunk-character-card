@@ -1929,4 +1929,191 @@ export const cyberware = cyberwareRules.CyberwareCatalogSchema.parse([
       "全天候环境自适应分子重塑皮。随所处险境主动调整表皮结构——进火场隔热、入毒雾闭孔、遭爆破吸震、遇流弹硬化，宛如长在身上的全能防护服；但在极端温差或毒火齐袭下切换需要数秒适应空当。",
     checks: ["tech"],
   },
+  // ———— 世界观扩展义体：感官与音频 / 时尚与生活 / 亲密与感官同步 / 暗格工具 / 外骨骼与全身义体化（FBC） ————
+  {
+    id: "audio-suite",
+    name: "音频增强套件",
+    slot: "eyes",
+    rarity: "uncommon",
+    price: 7000,
+    humanityCost: 0,
+    ability:
+      "耳蜗内嵌定向拾音与降噪阵列。可过滤夜场嘈杂背景音、隔门听清隔壁房间的低声密谈、捕捉远距脚步与枪栓拉动声，并在强爆炸或闪光弹来袭时瞬间切断过载分贝保护听觉。",
+  },
+  {
+    id: "chemo-olfactory-filter",
+    name: "化学嗅觉与防毒鼻腔滤器",
+    slot: "eyes",
+    rarity: "uncommon",
+    price: 6500,
+    humanityCost: 0,
+    ability:
+      "鼻腔微分子传感与主动气溶胶过滤阀。能嗅出空气中的硝烟、炸药引信、氯仿、劣质合成药剂与隐藏血腥味，并在毒气或催泪瓦斯弥漫时自动闭路过滤，降低吸入中毒与迷烟致晕风险。",
+  },
+  {
+    id: "jaw-stash-implant",
+    name: "颌骨微型暗格",
+    slot: "eyes",
+    rarity: "common",
+    price: 2500,
+    humanityCost: 0,
+    ability:
+      "下颌骨内侧微型防扫描密封舱。可隐蔽藏匿一枚数据芯片、毒囊、微型解码器或备用密钥，常规搜身与基础手持安检棒几乎无法察觉；仅在全身医用级透视扫描下会露出金属轮廓。",
+  },
+  {
+    id: "chroma-iris-overlay",
+    name: "时尚变色虹膜覆层",
+    slot: "eyes",
+    rarity: "common",
+    price: 1800,
+    humanityCost: 0,
+    ability:
+      "覆盖于角膜表层的零负荷时尚光学薄膜，不占用主义眼位置。可随时切换瞳色、霓虹微光图案或遮蔽义眼特有的扫描反光，用于夜场造型、伪装身份或让旁人看不出你是否正在扫描。",
+  },
+  {
+    id: "tactile-nerve-amp",
+    name: "全身触觉神经增幅链路",
+    slot: "nervous",
+    rarity: "uncommon",
+    price: 8500,
+    humanityCost: 0,
+    ability:
+      "沿着末梢神经铺设的高保真触觉回传与放大微网。可将指尖与全身肌肤的温感、压感与震动反馈放大数倍——拆弹摸线、蒙眼开锁更敏锐，在亲密接触中大幅放大感官体验，也能让重度镀铬或全身义体化者重新找回近乎真实的肉身触感。",
+  },
+  {
+    id: "neural-sync-bridge",
+    name: "双人神经感官直连桥接",
+    slot: "nervous",
+    rarity: "rare",
+    price: 22000,
+    humanityCost: 2,
+    ability:
+      "源自军用双人载具神经同步与超梦互感技术的近距直连模块。当双方同意并通过个人链路接入后，可实时共享心跳、体感温度、触觉与部分情绪波动，在双人协同驾驶、配合潜行或极度亲密的相处中形成难分彼此的共感体验；强行断连或一方受剧痛时会反冲轻微眩晕。",
+  },
+  {
+    id: "endorphin-micro-pump",
+    name: "内啡肽与多巴胺微调泵",
+    slot: "nervous",
+    rarity: "uncommon",
+    price: 9000,
+    humanityCost: 1,
+    ability:
+      "可手动或按情景触发的微量神经递质平衡泵。高压对峙时轻压焦躁稳住手腕、痛楚时释放微量天然镇痛肽、亲密或放松时刻温和放大愉悦与松弛感；过度频繁调高档位会带来短暂的倦怠空虚期。",
+  },
+  {
+    id: "mr-studd",
+    name: "午夜绅士（Mr. Studd）",
+    slot: "circulatory",
+    rarity: "uncommon",
+    price: 8000,
+    humanityCost: 0,
+    exclusiveGroup: "intimateCore",
+    ability:
+      "夜之城街头巷尾广告不断的经典亲密机能改造（正规诊所无故障版）。采用拟真温控微循环与精密神经反馈结构，提供全天候可控持久力、灵敏度调节与生理节律管理，零神经负荷。",
+  },
+  {
+    id: "midnight-lady",
+    name: "午夜佳人（Midnight Lady）",
+    slot: "circulatory",
+    rarity: "uncommon",
+    price: 8000,
+    humanityCost: 0,
+    exclusiveGroup: "intimateCore",
+    ability:
+      "赛博朋克世界观经典高端亲密与体感改造。内置柔韧拟真组织、可控温感微循环与高保真神经愉悦回传，支持精细调节敏感度与舒适度，日常外表与普通肉身毫无区别，零神经负荷。",
+  },
+  {
+    id: "synth-pheromone-glands",
+    name: "合成费洛蒙分泌腺",
+    slot: "circulatory",
+    rarity: "rare",
+    price: 16000,
+    humanityCost: 0,
+    ability:
+      "植入颈侧与锁骨下的可控微量信息素腺体。可根据场合释放令人放松、产生亲近感或略带暧昧吸引力的无味合成费洛蒙，在夜场搭讪、私下交涉、套话与亲密互动中悄然软化对方防备；对全封闭呼吸面罩或纯机械单位无效。",
+  },
+  {
+    id: "chemskin-pigment",
+    name: "化学变色皮肤（Chemskin）",
+    slot: "integumentary",
+    rarity: "common",
+    price: 2200,
+    humanityCost: 0,
+    ability:
+      "零负荷时尚生物色素表皮。只需几分钟就能按指令改变肤色、金属光泽或模拟自然妆容与晒痕，既适合夜之城时尚造型，也能在甩脱盯梢后迅速改变面部与裸露皮肤的辨识特征。",
+  },
+  {
+    id: "light-tattoo-circuit",
+    name: "电子光纹纹身（Light Tattoo）",
+    slot: "integumentary",
+    rarity: "common",
+    price: 1800,
+    humanityCost: 0,
+    ability:
+      "埋于真皮浅层的可编程微发光回路。可自由切换静态图案、随心跳律动的霓虹纹路或在潜行时彻底熄灭隐形，也可充当极暗环境下的微弱贴身照明，零神经负荷。",
+  },
+  {
+    id: "thermo-comfort-weave",
+    name: "全天候恒温仿生皮层",
+    slot: "integumentary",
+    rarity: "uncommon",
+    price: 7500,
+    humanityCost: 0,
+    ability:
+      "兼顾生活舒适度与外勤适应性的微温控表皮织网。酸雨夜不觉阴冷、恶土烈日下不中暑，肌肤触感始终保持自然温润，并轻微压低自身红外热成像轮廓，零神经负荷。",
+  },
+  {
+    id: "linear-frame-sigma",
+    name: "Σ 型军用外骨骼承重架",
+    slot: "skeleton",
+    rarity: "epic",
+    price: 48000,
+    humanityCost: 10,
+    ability:
+      "嵌合于脊柱与四肢主干骨的液压助力内骨骼框架。赋予远超血肉极限的承重与爆发力量——徒手掀翻掀背车、硬撬厚重安全闸门、单手稳压重机枪后坐力；体重明显增加，过精密安检极易暴露。",
+  },
+  {
+    id: "gemini-fbc-frame",
+    name: "双子星拟真全身义体（Gemini FBC）",
+    slot: "skeleton",
+    rarity: "legendary",
+    price: 95000,
+    humanityCost: 15,
+    armor: true,
+    exclusiveGroup: "fullBorg",
+    ability:
+      "将脑干生命舱封装进高度拟真全机械躯壳的顶配全身义体化改造。外表、体温与体态几乎与血肉人类无异，却拥有极强的抗创伤、免失血与全天候持久体能；受损须找专业义体医生维修而非普通急救药，且全机械躯壳本身带来极高的神经疏离负荷。",
+  },
+  {
+    id: "dragoon-fbc-chassis",
+    name: "重装战甲级全身义体框架（FBC）",
+    slot: "skeleton",
+    rarity: "legendary",
+    price: 120000,
+    humanityCost: 18,
+    armor: true,
+    exclusiveGroup: "fullBorg",
+    ability:
+      "逼近军用轻型装甲标准的重装全身义体化改造，常规轻武器与破片几乎难以伤及核心生命舱，徒手便具备拆墙掀车的恐怖怪力。代价是金属巨躯极度醒目、公司安检必报、日常衣食住行诸多不便，且神经系统长期承受极限压迫，极易走向冷酷疏离或赛博精神病边缘。",
+  },
+  {
+    id: "tool-hand-fingers",
+    name: "多功能技师工具指",
+    slot: "hands",
+    rarity: "common",
+    price: 3500,
+    humanityCost: 0,
+    ability:
+      "藏于指节内部的微型工具组：拉出指尖即可使用微型电烙铁、精密螺丝刀、绝缘剪线钳、光学撬锁针与迷你手电。修车、拆门禁盒、短接电路或现场急救改装时随时顺手，零神经负荷。",
+  },
+  {
+    id: "hidden-personal-link",
+    name: "隐蔽式备用个人链路",
+    slot: "hands",
+    rarity: "uncommon",
+    price: 6000,
+    humanityCost: 0,
+    ability:
+      "伪装在腕骨皮下或指甲内侧的第二条可伸缩微纤数据链路。当常规手腕接口被反锁拷住、缴械或被安保封堵时，仍可在暗处悄悄接入终端、车锁或贴身设备，零神经负荷。",
+  },
 ]);

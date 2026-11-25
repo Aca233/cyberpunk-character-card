@@ -1562,10 +1562,7 @@ export function Shop({
                   <div className={shopCss.titleRow}>
                     <h3>{shop.name}</h3>
                     <div className={shopCss.tags}>
-                      <span className={shopCss.tag}>
-                        店主 {shop.keeper}
-                        {shop.keeperAffinity !== null ? ` · 好感 ${shop.keeperAffinity}` : ""}
-                      </span>
+                      <span className={shopCss.tag}>店主 {shop.keeper}</span>
                       {shop.blackMarket && (
                         <span className={shopCss.tagBlackMarket}>
                           <Asset id="interaction.illegal" height={11} tint="currentColor" />

@@ -445,6 +445,25 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   "drop-damper-legs": "cyberArt.reinforcedTendons",
   "badlands-runner-legs": "cyberArt.jenkinsTendons",
   "holster-calf-legs": "cyberArt.lynxPaws",
+  // 世界观扩展义体（感官音频 / 时尚生活 / 亲密共感 / 工具暗格 / 外骨骼与 FBC）
+  "audio-suite": "cyberArt.atomicSensors",
+  "chemo-olfactory-filter": "cyberArt.toxinCleanser",
+  "jaw-stash-implant": "cyberArt.faceplate",
+  "chroma-iris-overlay": "cyberArt.kiroshiAlt3",
+  "tactile-nerve-amp": "cyberArt.tyrosineV2",
+  "neural-sync-bridge": "cyberArt.bioconductor",
+  "endorphin-micro-pump": "cyberArt.adrenalineBooster",
+  "mr-studd": "cyberArt.universalBooster",
+  "midnight-lady": "cyberArt.universalBooster",
+  "synth-pheromone-glands": "cyberArt.reverseMetabolic",
+  "chemskin-pigment": "cyberArt.holographicCamo",
+  "light-tattoo-circuit": "cyberArt.tygerTattoo",
+  "thermo-comfort-weave": "cyberArt.heatBooster",
+  "linear-frame-sigma": "cyberArt.epimorphicSkeleton",
+  "gemini-fbc-frame": "cyberArt.metalSkin",
+  "dragoon-fbc-chassis": "cyberArt.chitin",
+  "tool-hand-fingers": "cyberArt.powerGrip",
+  "hidden-personal-link": "cyberArt.smartLink",
 };
 
 /** 义体元素变体色标（热能 / 电磁 / 化学），用于在复用原作手臂图标时一眼区分属性版本 */

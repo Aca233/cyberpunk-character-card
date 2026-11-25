@@ -39,6 +39,8 @@ export interface SaveStorage extends Storage {
   appendAt(id: string, seq: number, line: string): Promise<void>;
   /** 同一次操作的多条记录：核对版本后全部写入，失败时不留下部分结果。 */
   appendManyAt(id: string, seq: number, lines: readonly string[]): Promise<void>;
+  /** 彻底删除整个存档（meta、日志、快照）；删掉了返回 true，本来就没有返回 false */
+  remove(id: string): Promise<boolean>;
 }
 
 const SAVE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;

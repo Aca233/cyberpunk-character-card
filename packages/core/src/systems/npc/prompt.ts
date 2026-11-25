@@ -30,7 +30,6 @@ export const npcRules: RuleModule<NpcState> = {
     "npc",
     "npcUpdate",
     "meet",
-    "affinity",
     "memory",
     "npcDeath",
     "doing",
@@ -79,10 +78,10 @@ export const npcRules: RuleModule<NpcState> = {
   - voice 与 samples：voice 写清语速、音色、黑话/口癖、态度反差；samples 写 1–3 句口吻鲜活的示范台词（优先取正文里他刚说过的原话，不足就照性格补一两句）。
   - want、limit 与 secret：want 写明当下真正图谋的人/钱/权/脱身，limit 写明绝不能踩的逆鳞，别用「赚钱」「活下去」敷衍；只要不是一次过场的工具人，尽量补一条暗中的 secret（真实来历、私下买卖、把柄或软肋），只写进卡里供幕后演戏，**不要同时写进 learn** 提前剧透给玩家（除非正文当场戳破或本人自曝）。若有固定据点/店面且在地点表里，顺手填 home。
   - body：先认正文已明确的型号、衣着、随身物件与无植入事实，再结合【新人物装备选型参考】按这个人的工作、财力、装备来源和行动方式选型。gear 从【物品表】选实际穿着的衣物（外套、内搭、裤鞋、头面饰件）、武器与药剂/工具/日常随身物品 id，最多 ${NPC_GEAR_MAX} 件；普通人也应有合身衣着与随身小物，能空手的普通人不硬塞枪，持枪者按隐蔽携带、近战突入、远距压制等真实用途选枪，不默认统一手枪。
-  - cyberware 从【义体表】选 0–${NPC_CHROME_MAX} 件：按夜之城常态，大多数人物（包括市民、商贩、雇员、中间人、帮派成员与佣兵）通常常配 1–3 件贴合身份、生计与财力的基础或常见义体；只有正文明确无植入、信仰排斥义体或极端拮据者才留空。普通人可按日常与生计搭配基础岐路司义眼、生物监测、合成肺叶、持握衬垫、通用义肢、防火/接地镀层等；**帮派头目、精锐打手、公司特勤、中间人与重装义体人（尤其虎爪帮、漩涡帮、巫毒帮、幽冥犬、荒坂、军用科技、康陶）应常态配置 self-ice（自我 ICE）以及贴合防线的 grounding-plating（接地镀层）/ fireproof-coating（防火涂层），帮派/公司据点里的敌方网络黑客务必实配对应档次的接入仓（如 biotech-sigma、fuyutsuki-deck、militech-paraline、arasaka-deck 等）与 self-ice**，不要把据点敌人全建成无冰白板。明确无植入或配置已定时照事实保留。留意部位上限，接入仓/斯安威斯坦/狂暴只能选一个操作系统，智能自导须有真实联锁。只用表内 id，不写属性点或档位；候选不限制完整目录，也不证明店里有货。
+  - cyberware 从【义体表】选 0–${NPC_CHROME_MAX} 件：按夜之城常态，大多数人物（包括市民、商贩、雇员、中间人、帮派成员与佣兵）通常常配 1–3 件贴合身份、生计与财力的基础或常见义体；只有正文明确无植入、信仰排斥义体或极端拮据者才留空。普通人可按日常与生计搭配基础岐路司义眼、生物监测、合成肺叶、持握衬垫、通用义肢、防火/接地镀层等；**帮派头目、精锐打手、公司特勤、中间人与重装义体人（尤其虎爪帮、漩涡帮、巫毒帮、幽冥犬、荒坂、军用科技、康陶）应常态配置 self-ice（自我 ICE）以及贴合防线的 grounding-plating（接地镀层）/ fireproof-coating（防火涂层），帮派/公司据点里的敌方网络黑客务必实配对应档次的接入仓（如 biotech-sigma、fuyutsuki-deck、militech-paraline、arasaka-deck 等）与 self-ice**，不要把据点敌人全建成无冰白板。明确无植入或配置已定时照事实保留。仅受物理互斥约束（主接入仓与脊柱加速/狂暴可双装，重型双臂武装限 2 件，感官/时尚/亲密/暗格/工具类义体可自由叠加），智能自导须有真实联锁。只用表内 id，不写属性点或档位；候选不限制完整目录，也不证明店里有货。
 - 如果【人物】里非原作人物的「长相」或「说话」还标着「还没定」（主板/自定义旧识首次真切出场），发一条 npcUpdate 把缺失字段和初始资料一次定型；已定型人物的装备与义体只能用 npcGear / npcChrome 按真实变化增减，不用 npcUpdate 整栏覆盖。原作人物（canon）核心卡面固定，不发 npcUpdate。
 - 玩家角色对有势力的人做的事大到组织会知道（杀了、救了、当众羞辱、替他办成大事），除了人物态度变化外，同时写一条 faction 改这个势力的态度；私下的小恩小怨只改个人态度。
-- 只在对方真的有理由对你改观或翻脸时才写 attitude/affinity 变动，一轮里同一个人最多一条；承诺、人情、冲突这类以后会被提起的事写一条 memory。
+- 人物对玩家没有好感度数字，完全按真实发生过的事与彼此知情边界决定冷热：承诺、帮过的忙、冲突、背叛这类以后会被提起的事写一条 memory；欠下或结下人情与仇怨写 ledger；双方关系出现实质性变化才写 relation 更新关系定性。
 - 正文透出某个有卡的人最近在做什么（本人说起、新闻、传闻、消息），写一条 doing，会替换旧的；正文没写到的不记。
 - 关系真的变了（一起扛过事、说过真心话、生死与共，或者背叛、被拆穿大谎、伤了对方在乎的人）才写一条 relation，一句话写现在的关系，会替换旧的；关系热络只说明对方愿意见你，不等于交情深。
 - 人物之间的关系不意味着消息自动互通。记录他已经得知的事时保留目击、通信或传闻来源及时间；不能仅因熟人出事就写成他已经知情。正文里透出两个有卡的人之间的关系（搭档、亲人、旧情、上下家、结仇），或者关系变了，写一条 tie，aToB、bToA 各从一边的角度写一句，会替换两人之间旧的那条；见不得光的关系 open 写 false。
@@ -135,7 +134,7 @@ export interface Stage {
    * 势力 id 换成「名字，对玩家什么态度」：
    * 由组合层按势力表和势力态度给，人物系统不引势力系统；不传只写 id
    */
-  readonly factionOf?: ((faction: string) => string | undefined) | undefined;
+  readonly factionOf?: ((faction: string, npcId?: string) => string | undefined) | undefined;
 }
 
 /** 「这一带的老面孔」最多列这么多个，见过的、最近出场的优先 */
@@ -155,8 +154,10 @@ export function onStage(npc: Npc, stage: Stage): boolean {
 
 /** 所属势力（用户 2026-10-31："npc加个所属势力 没有就填无"）：写势力 id，模型写 faction 指令时对得上 */
 function factionNote(npc: Npc, stage: Stage): string {
-  if (npc.faction === NO_FACTION) return `势力${NO_FACTION_LABEL}`;
-  const detail = stage.factionOf?.(npc.faction);
+  const detail = stage.factionOf?.(npc.faction, npc.id);
+  if (npc.faction === NO_FACTION) {
+    return detail ? `势力${NO_FACTION_LABEL}（${detail}）` : `势力${NO_FACTION_LABEL}`;
+  }
   return detail ? `势力 ${npc.faction}（${detail}）` : `势力 ${npc.faction}`;
 }
 
@@ -191,21 +192,26 @@ function appearanceLines(npc: Npc): string[] {
     : [`  长相：${npc.look}`, `  现在穿：${wearing}`];
 }
 
-/** 将内部关系积累转译为定性态度描述，不在提示词中暴露数字 */
-export function attitudeLabel(npc: Pick<Npc, "affinity">): string {
-  const a = npc.affinity;
-  if (a <= -60) return "水火不容";
-  if (a <= -25) return "敌视戒备";
-  if (a < 0) return "冷淡提防";
-  if (a < 20) return "疏离公事";
-  if (a < 45) return "熟络搭话";
-  if (a < 70) return "信得过给面子";
-  return "过命自己人";
+/** 用纯事实概括不在场人物与玩家的当前关系，不依赖任何好感数字 */
+export function relationBrief(npc: Pick<Npc, "relation" | "ledger" | "memories">): string {
+  const parts: string[] = [];
+  if (npc.relation?.text) parts.push(npc.relation.text);
+  const open = npc.ledger.filter((e) => e.settledAt === null);
+  const owesYou = open.filter((e) => e.kind === "owesYou").length;
+  const youOwe = open.filter((e) => e.kind === "youOwe").length;
+  const grudges = open.filter((e) => e.kind === "grudge").length;
+  if (grudges > 0) parts.push(`记仇 ${grudges} 笔`);
+  if (owesYou > 0) parts.push(`欠玩家人情 ${owesYou} 笔`);
+  if (youOwe > 0) parts.push(`玩家欠他人情 ${youOwe} 笔`);
+  if (parts.length === 0 && npc.memories.length > 0) {
+    parts.push(`共同经历 ${npc.memories.length} 件`);
+  }
+  return parts.length > 0 ? parts.join("，") : "交情尚浅";
 }
 
 function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   const lines = [
-    `- ${label(npc, stage)} ${npc.role}；态度：${attitudeLabel(npc)}${npc.following ? "；【同行中】" : ""}${npc.met ? "" : "；还没见过玩家角色"}`,
+    `- ${label(npc, stage)} ${npc.role}${npc.following ? "；【同行中】" : ""}${npc.met ? "" : "；还没见过玩家角色"}`,
     // 长相和穿着分两行（用户定的，2026-11-02："长相 + 当前穿着"）；旧卡没拆时只有一行外貌
     ...appearanceLines(npc),
     `  说话：${npc.voice}`,
@@ -304,7 +310,7 @@ function oneLine(npc: Npc, stage: Stage): string {
       : undefined;
   const hurt = wound ? `；${wound}` : "";
   const doing = npc.doing ? `；最近：${npc.doing.text}` : "";
-  return `- ${label(npc, stage)} ${npc.role}；态度：${attitudeLabel(npc)}${npc.location ? `，最后在 ${npc.location}` : ""}${hurt}${doing}`;
+  return `- ${label(npc, stage)} ${npc.role}；关系：${relationBrief(npc)}${npc.location ? `，最后在 ${npc.location}` : ""}${hurt}${doing}`;
 }
 
 /** 玩家角色所在的城区；不在地点表里、或者没传 districtOf 时是 undefined */

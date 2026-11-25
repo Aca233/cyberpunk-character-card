@@ -6,12 +6,12 @@ import type { WorldState } from "../kernel/world";
 import { CityStateSchema, OFFSCREEN_DEATHS } from "../systems/city";
 import { JobOfferSchema, JobsStateSchema } from "../systems/jobs";
 import {
-  attitudeLabel,
   NO_FACTION,
   NO_FACTION_LABEL,
   type Npc,
   NpcStateSchema,
   PAST_MAX,
+  relationBrief,
   TIMELINE_SQUASH,
   TieSchema,
 } from "../systems/npc";
@@ -213,7 +213,7 @@ function card(n: Npc, here: boolean, all: Readonly<Record<string, Npc>>): string
   }
   if (n.doing) parts.push(`最近：${n.doing.text}（${formatGameTime(n.doing.at)}）`);
   if (ties) parts.push(ties);
-  parts.push(n.met ? `态度：${attitudeLabel(n)}` : "玩家还没见过");
+  parts.push(n.met ? `与玩家关系：${relationBrief(n)}` : "玩家还没见过");
   if (here) parts.push("本场在场");
   const shared = n.memories.slice(-3);
   if (shared.length > 0) parts.push(`和玩家：${shared.join("；")}`);
@@ -320,9 +320,7 @@ export function buildSocialOffscreenPrompt(
       `【地点索引】（人物移动只用已有 id）\n${[...places.values()].map((p) => `${p.id}｜${p.name}｜${p.district}`).join("\n") || "（没有）"}`,
       `【能联系玩家的人】（仅限已互留联系方式的熟人；没在通讯录里的普通人物不主动发消息）\n${
         contactable(world, present)
-          .map(
-            (n) => `- ${n.id}｜${n.name}：态度「${attitudeLabel(n)}」${canAsk ? "；可以托事" : ""}`,
-          )
+          .map((n) => `- ${n.id}｜${n.name}：${relationBrief(n)}${canAsk ? "；可以托事" : ""}`)
           .join("\n") || "（这次没有：普通人物不发消息，【能派单的中间人】照常可派单）"
       }`,
       ...(lives.length > 0

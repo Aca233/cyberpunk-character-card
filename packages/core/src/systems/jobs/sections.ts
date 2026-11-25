@@ -1,6 +1,6 @@
 import type { SystemSection } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { NpcStateSchema } from "../npc";
+import { NpcStateSchema, relationBrief } from "../npc";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { jobsSection } from "./prompt";
 import { JobsStateSchema } from "./schema";
@@ -72,7 +72,10 @@ export const jobsSections: readonly SystemSection[] = [
         : undefined;
       return jobsSection(
         JobsStateSchema.parse(world.slices.jobs),
-        (id) => npcs[id]?.affinity ?? 0,
+        (id) => {
+          const card = npcs[id];
+          return card ? relationBrief(card) : "一般交道";
+        },
         // 派单人所属势力的态度（用户 2026-10-31 选的「势力进机制」）：和派单时一样算
         (id) => factionSide(npcs[id]?.faction, data ?? {}, world.slices.factions),
         temperaments,

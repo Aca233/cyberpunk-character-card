@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyHumanity, applySuppressHumanity, setTolerance } from "./apply";
+import { applyHumanity, applySuppressHumanity } from "./apply";
 import { humanityEvents } from "./events";
 import { psychosisRules } from "./prompt";
 import {
@@ -7,33 +7,23 @@ import {
   HumanityCommandSchema,
   type HumanityState,
   HumanityStateSchema,
-  type SetTolerance,
-  SetToleranceSchema,
   type SuppressHumanity,
   SuppressHumanitySchema,
 } from "./schema";
 import { humanityStatus } from "./status";
 import { humanityView } from "./view";
 
-export const humanity = defineSystem<
-  HumanityState,
-  HumanityCommand,
-  SetTolerance | SuppressHumanity
->({
+export const humanity = defineSystem<HumanityState, HumanityCommand, SuppressHumanity>({
   id: "humanity",
   state: HumanityStateSchema,
-  initial: () => ({ tolerance: "normal", symptoms: [], settled: [] }),
+  initial: () => ({ symptoms: [], settled: [] }),
   commands: { humanity: HumanityCommandSchema },
   internal: {
-    "humanity.setTolerance": SetToleranceSchema,
     "humanity.suppress": SuppressHumanitySchema,
   },
   apply(draft, command, ctx) {
     if (command.type === "humanity") return applyHumanity(draft, command, ctx.now);
-    if (command.type === "humanity.suppress") {
-      return applySuppressHumanity(draft, command, ctx.now);
-    }
-    return setTolerance(draft, command.tolerance);
+    return applySuppressHumanity(draft, command, ctx.now);
   },
   rules: [psychosisRules],
   view: { key: "humanity", project: humanityView },

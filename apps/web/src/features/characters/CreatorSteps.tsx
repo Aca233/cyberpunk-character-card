@@ -11,6 +11,7 @@ import {
   inventoryRules,
   PAST_MAX,
   SKILL_MAX,
+  type StartCyberware,
 } from "@cp/core";
 import { type ReactNode, useEffect, useState } from "react";
 import type { BoardData } from "../../api/client";
@@ -21,6 +22,7 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { itemArtOf } from "../story/art";
 import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
 import { vehicleArtOf } from "../story/vehicle-art";
+import { CustomCyberwareForm } from "./CustomCyberwareForm";
 import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
 import {
@@ -35,6 +37,7 @@ import {
   pastTheme,
   pickedLoadouts,
   pruneKitForOrigin,
+  removeLocalCustomCyberware,
   removeLocalCustomModule,
   rollPasts,
   rollTraits,
@@ -74,7 +77,78 @@ type CyberwareShelfProps = Omit<PickerProps, "change"> &
   };
 
 const isWorkshopEntry = (packId?: string): boolean => Boolean(packId && packId !== "local");
-const isLocalModule = (m: BoardModule): boolean => Boolean(m.custom && m.packId === "local");
+const isEditableLocalModule = (m: BoardModule): boolean =>
+  Boolean(m.custom && (!m.packId || m.packId === "local"));
+
+type ModuleEditorState =
+  | null
+  | { readonly mode: "create" }
+  | { readonly mode: "edit"; readonly module: BoardModule };
+
+/** 本地自创模块卡：主体选择区与集成底栏（编辑 · 删除）统一包在同一 CellFrame 内 */
+function EditableModuleCard({
+  pressed,
+  disabled,
+  tone,
+  title,
+  editLabel,
+  deleteLabel,
+  onSelect,
+  onEdit,
+  onDelete,
+  children,
+}: {
+  readonly pressed: boolean;
+  readonly disabled?: boolean;
+  readonly tone?: "flaw";
+  readonly title?: string | undefined;
+  readonly editLabel: string;
+  readonly deleteLabel: string;
+  readonly onSelect: () => void;
+  readonly onEdit: () => void;
+  readonly onDelete: () => void;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div
+      className={styles.pickCard}
+      data-on={pressed || undefined}
+      data-tone={tone}
+      data-disabled={disabled || undefined}
+    >
+      <CellFrame />
+      <button
+        type="button"
+        className={styles.pickCardMain}
+        aria-pressed={pressed}
+        disabled={disabled}
+        title={title}
+        onClick={onSelect}
+      >
+        {children}
+      </button>
+      <div className={styles.pickCardFoot}>
+        <button
+          type="button"
+          className={styles.pickCardAct}
+          aria-label={editLabel}
+          onClick={onEdit}
+        >
+          编辑
+        </button>
+        <span className={styles.pickCardSep} aria-hidden />
+        <button
+          type="button"
+          className={`${styles.pickCardAct} ${styles.pickCardDanger}`}
+          aria-label={deleteLabel}
+          onClick={onDelete}
+        >
+          删除
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** 卡片上一行带小标题的说明（用于行装/载具等明细） */
 export function Line({ k, children }: { readonly k: string; readonly children: ReactNode }) {
@@ -106,7 +180,7 @@ function matchesModuleQuery(m: BoardModule, query: string): boolean {
 export function OriginPicker({ card, board, data, commit }: OriginPickerProps) {
   const [ecoFilter, setEcoFilter] = useState<OriginEcosystem | "all">("all");
   const [query, setQuery] = useState("");
-  const [writing, setWriting] = useState(false);
+  const [editor, setEditor] = useState<ModuleEditorState>(null);
   const library = data.modules.filter((m) => m.slot === "origin");
   const extra =
     board.origin && !library.some((m) => m.id === board.origin?.id) ? [board.origin] : [];
@@ -134,8 +208,8 @@ export function OriginPicker({ card, board, data, commit }: OriginPickerProps) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </FrameBox>
-        {!writing && (
-          <Button small onClick={() => setWriting(true)}>
+        {!editor && (
+          <Button small onClick={() => setEditor({ mode: "create" })}>
             ＋ 自定义出身
           </Button>
         )}
@@ -153,15 +227,19 @@ export function OriginPicker({ card, board, data, commit }: OriginPickerProps) {
           );
         })}
       </fieldset>
-      {writing && (
+      {editor && (
         <CustomModuleForm
+          key={editor.mode === "edit" ? editor.module.id : "new"}
           slot="origin"
           board={board}
-          onCancel={() => setWriting(false)}
+          {...(editor.mode === "edit" ? { initial: editor.module } : {})}
+          onCancel={() => setEditor(null)}
           onAccept={(m) => {
-            const nextCard = { ...card, origin: m.label };
-            commit(pruneKitForOrigin(nextCard, { ...board, origin: m }, data), m.label);
-            setWriting(false);
+            if (editor.mode === "create" || board.origin?.id === m.id) {
+              const nextCard = { ...card, origin: m.label };
+              commit(pruneKitForOrigin(nextCard, { ...board, origin: m }, data), m.label);
+            }
+            setEditor(null);
           }}
         />
       )}
@@ -175,63 +253,70 @@ export function OriginPicker({ card, board, data, commit }: OriginPickerProps) {
           <ul className={styles.originGrid}>
             {g.list.map((m) => {
               const active = board.origin?.id === m.id;
-              const deletable = isLocalModule(m);
+              const editable = isEditableLocalModule(m);
               const preview = originPreview(m, data);
               const locName = startAnchor(preview.locationId)?.name ?? "沃森 H10";
+              const selectOrigin = () => {
+                const nextCard = { ...card, origin: m.label };
+                commit(pruneKitForOrigin(nextCard, { ...board, origin: m }, data), m.label);
+              };
+              const body = (
+                <>
+                  <span className={styles.pickHead}>
+                    <strong className={styles.pickName}>{m.label}</strong>
+                    <span className={styles.moduleBadges}>
+                      {isWorkshopEntry(m.packId) && (
+                        <span className={styles.moduleBadge} data-tone="workshop">
+                          工坊
+                        </span>
+                      )}
+                      {active && (
+                        <span className={styles.moduleBadge} data-tone="active">
+                          已选
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
+                  <span className={styles.pickMetaRow}>
+                    <span className={styles.metaChip} data-tone="eddies">
+                      €{preview.eddies.toLocaleString("en-US")}
+                    </span>
+                    <span className={styles.metaChip}>{locName}</span>
+                    {preview.extras.map((extraLabel) => (
+                      <span key={extraLabel} className={styles.metaChip} data-tone="perk">
+                        {extraLabel}
+                      </span>
+                    ))}
+                  </span>
+                </>
+              );
               return (
                 <li key={m.id} className={styles.pickItem}>
-                  <button
-                    type="button"
-                    className={styles.pick}
-                    aria-pressed={active}
-                    onClick={() => {
-                      const nextCard = { ...card, origin: m.label };
-                      commit(pruneKitForOrigin(nextCard, { ...board, origin: m }, data), m.label);
-                    }}
-                  >
-                    <CellFrame />
-                    <span className={styles.pickHead}>
-                      <strong className={styles.pickName}>{m.label}</strong>
-                      <span className={styles.moduleBadges}>
-                        {isWorkshopEntry(m.packId) && (
-                          <span className={styles.moduleBadge} data-tone="workshop">
-                            工坊
-                          </span>
-                        )}
-                        {active && (
-                          <span className={styles.moduleBadge} data-tone="active">
-                            已选
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                    {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
-                    <span className={styles.pickMetaRow}>
-                      <span className={styles.metaChip} data-tone="eddies">
-                        €{preview.eddies.toLocaleString("en-US")}
-                      </span>
-                      <span className={styles.metaChip}>{locName}</span>
-                      {preview.extras.map((extraLabel) => (
-                        <span key={extraLabel} className={styles.metaChip} data-tone="perk">
-                          {extraLabel}
-                        </span>
-                      ))}
-                    </span>
-                  </button>
-                  {deletable && (
-                    <button
-                      type="button"
-                      className={styles.localDelBtn}
-                      title="删除这条本地自定义出身"
-                      aria-label={`删除本地自定义出身 ${m.label}`}
-                      onClick={() => {
+                  {editable ? (
+                    <EditableModuleCard
+                      pressed={active}
+                      editLabel={`编辑本地自定义出身 ${m.label}`}
+                      deleteLabel={`删除本地自定义出身 ${m.label}`}
+                      onSelect={selectOrigin}
+                      onEdit={() => setEditor({ mode: "edit", module: m })}
+                      onDelete={() => {
                         removeLocalCustomModule(m.id);
-                        if (active) {
-                          commit({ ...board, origin: null }, "");
-                        }
+                        if (editor?.mode === "edit" && editor.module.id === m.id) setEditor(null);
+                        if (active) commit({ ...board, origin: null }, "");
                       }}
                     >
-                      ×
+                      {body}
+                    </EditableModuleCard>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.pick}
+                      aria-pressed={active}
+                      onClick={selectOrigin}
+                    >
+                      <CellFrame />
+                      {body}
                     </button>
                   )}
                 </li>
@@ -265,7 +350,7 @@ function ModuleTags({ tags }: { readonly tags: readonly string[] }) {
 export function PastPicker({ board, data, commit }: PastPickerProps) {
   const [theme, setTheme] = useState<PastTheme>("all");
   const [query, setQuery] = useState("");
-  const [writing, setWriting] = useState(false);
+  const [editor, setEditor] = useState<ModuleEditorState>(null);
 
   const onIds = new Set(board.pasts.map((m) => m.id));
   const library = data.modules.filter((m) => m.slot === "past");
@@ -304,12 +389,12 @@ export function PastPicker({ board, data, commit }: PastPickerProps) {
         >
           ✦ 随机抽履历
         </Button>
-        {!writing && (
+        {!editor && (
           <Button
             small
             disabled={full}
             reason={`过往履历最多选 ${PAST_MAX} 项`}
-            onClick={() => setWriting(true)}
+            onClick={() => setEditor({ mode: "create" })}
           >
             ＋ 自创履历
           </Button>
@@ -332,14 +417,20 @@ export function PastPicker({ board, data, commit }: PastPickerProps) {
           已选 {board.pasts.length} / {PAST_MAX} 项
         </span>
       </div>
-      {writing && (
+      {editor && (
         <CustomModuleForm
+          key={editor.mode === "edit" ? editor.module.id : "new"}
           slot="past"
           board={board}
-          onCancel={() => setWriting(false)}
+          {...(editor.mode === "edit" ? { initial: editor.module } : {})}
+          onCancel={() => setEditor(null)}
           onAccept={(m) => {
-            commit({ ...board, pasts: [...board.pasts, m] });
-            setWriting(false);
+            if (editor.mode === "create") {
+              commit({ ...board, pasts: [...board.pasts, m] });
+            } else if (onIds.has(m.id)) {
+              commit({ ...board, pasts: board.pasts.map((x) => (x.id === m.id ? m : x)) });
+            }
+            setEditor(null);
           }}
         />
       )}
@@ -348,48 +439,58 @@ export function PastPicker({ board, data, commit }: PastPickerProps) {
         {shown.map((m) => {
           const pressed = onIds.has(m.id);
           const themeLabel = PAST_THEME_LABELS[pastTheme(m)];
-          const deletable = isLocalModule(m);
-          return (
-            <li key={m.id} className={styles.pickItem}>
-              <button
-                type="button"
-                className={styles.pick}
-                aria-pressed={pressed}
-                disabled={!pressed && full}
-                title={!pressed && full ? `过往履历最多选 ${PAST_MAX} 项` : undefined}
-                onClick={() => toggle(m)}
-              >
-                <CellFrame />
-                <span className={styles.pickHead}>
-                  <strong className={styles.pickName}>{m.label}</strong>
-                  <span className={styles.moduleBadges}>
-                    {isWorkshopEntry(m.packId) && (
-                      <span className={styles.moduleBadge} data-tone="workshop">
-                        工坊
-                      </span>
-                    )}
-                    <span className={styles.moduleBadge} data-tone={pressed ? "active" : undefined}>
-                      {pressed ? "已选" : themeLabel}
+          const editable = isEditableLocalModule(m);
+          const body = (
+            <>
+              <span className={styles.pickHead}>
+                <strong className={styles.pickName}>{m.label}</strong>
+                <span className={styles.moduleBadges}>
+                  {isWorkshopEntry(m.packId) && (
+                    <span className={styles.moduleBadge} data-tone="workshop">
+                      工坊
                     </span>
+                  )}
+                  <span className={styles.moduleBadge} data-tone={pressed ? "active" : undefined}>
+                    {pressed ? "已选" : themeLabel}
                   </span>
                 </span>
-                {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
-                <ModuleTags tags={m.tags} />
-              </button>
-              {deletable && (
-                <button
-                  type="button"
-                  className={styles.localDelBtn}
-                  title="删除这条本地自定义履历"
-                  aria-label={`删除本地自定义履历 ${m.label}`}
-                  onClick={() => {
+              </span>
+              {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
+              <ModuleTags tags={m.tags} />
+            </>
+          );
+          return (
+            <li key={m.id} className={styles.pickItem}>
+              {editable ? (
+                <EditableModuleCard
+                  pressed={pressed}
+                  disabled={!pressed && full}
+                  title={!pressed && full ? `过往履历最多选 ${PAST_MAX} 项` : undefined}
+                  editLabel={`编辑本地自定义履历 ${m.label}`}
+                  deleteLabel={`删除本地自定义履历 ${m.label}`}
+                  onSelect={() => toggle(m)}
+                  onEdit={() => setEditor({ mode: "edit", module: m })}
+                  onDelete={() => {
                     removeLocalCustomModule(m.id);
+                    if (editor?.mode === "edit" && editor.module.id === m.id) setEditor(null);
                     if (pressed) {
                       commit({ ...board, pasts: board.pasts.filter((x) => x.id !== m.id) });
                     }
                   }}
                 >
-                  ×
+                  {body}
+                </EditableModuleCard>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.pick}
+                  aria-pressed={pressed}
+                  disabled={!pressed && full}
+                  title={!pressed && full ? `过往履历最多选 ${PAST_MAX} 项` : undefined}
+                  onClick={() => toggle(m)}
+                >
+                  <CellFrame />
+                  {body}
                 </button>
               )}
             </li>
@@ -414,7 +515,7 @@ const SKILL_DOMAINS: readonly SkillDomain[] = [
 export function TraitPicker({ board, data, commit, initialFilter = "all" }: TraitPickerProps) {
   const [filter, setFilter] = useState<SkillDomain>(initialFilter);
   const [query, setQuery] = useState("");
-  const [writing, setWriting] = useState(false);
+  const [editor, setEditor] = useState<ModuleEditorState>(null);
 
   useEffect(() => {
     setFilter(initialFilter);
@@ -457,12 +558,12 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
         >
           ✦ 随机抽特质
         </Button>
-        {!writing && (
+        {!editor && (
           <Button
             small
             disabled={full}
             reason={`核心特质最多选 ${SKILL_MAX} 项`}
-            onClick={() => setWriting(true)}
+            onClick={() => setEditor({ mode: "create" })}
           >
             ＋ 自创特质
           </Button>
@@ -485,14 +586,20 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
           已选 {board.skills.length} / {SKILL_MAX} 项
         </span>
       </div>
-      {writing && (
+      {editor && (
         <CustomModuleForm
+          key={editor.mode === "edit" ? editor.module.id : "new"}
           slot="skill"
           board={board}
-          onCancel={() => setWriting(false)}
+          {...(editor.mode === "edit" ? { initial: editor.module } : {})}
+          onCancel={() => setEditor(null)}
           onAccept={(m) => {
-            commit({ ...board, skills: [...board.skills, m] });
-            setWriting(false);
+            if (editor.mode === "create") {
+              commit({ ...board, skills: [...board.skills, m] });
+            } else if (onIds.has(m.id)) {
+              commit({ ...board, skills: board.skills.map((x) => (x.id === m.id ? m : x)) });
+            }
+            setEditor(null);
           }}
         />
       )}
@@ -501,48 +608,58 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
         {shown.map((m) => {
           const pressed = onIds.has(m.id);
           const catLabel = SKILL_DOMAIN_LABELS[skillDomain(m)];
-          const deletable = isLocalModule(m);
-          return (
-            <li key={m.id} className={styles.pickItem}>
-              <button
-                type="button"
-                className={styles.pick}
-                aria-pressed={pressed}
-                disabled={!pressed && full}
-                title={!pressed && full ? `核心特质最多选 ${SKILL_MAX} 项` : undefined}
-                onClick={() => toggle(m)}
-              >
-                <CellFrame />
-                <span className={styles.pickHead}>
-                  <strong className={styles.pickName}>{m.label}</strong>
-                  <span className={styles.moduleBadges}>
-                    {isWorkshopEntry(m.packId) && (
-                      <span className={styles.moduleBadge} data-tone="workshop">
-                        工坊
-                      </span>
-                    )}
-                    <span className={styles.moduleBadge} data-tone={pressed ? "active" : undefined}>
-                      {pressed ? "已选" : catLabel}
+          const editable = isEditableLocalModule(m);
+          const body = (
+            <>
+              <span className={styles.pickHead}>
+                <strong className={styles.pickName}>{m.label}</strong>
+                <span className={styles.moduleBadges}>
+                  {isWorkshopEntry(m.packId) && (
+                    <span className={styles.moduleBadge} data-tone="workshop">
+                      工坊
                     </span>
+                  )}
+                  <span className={styles.moduleBadge} data-tone={pressed ? "active" : undefined}>
+                    {pressed ? "已选" : catLabel}
                   </span>
                 </span>
-                {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
-                <ModuleTags tags={m.tags} />
-              </button>
-              {deletable && (
-                <button
-                  type="button"
-                  className={styles.localDelBtn}
-                  title="删除这条本地自定义特质"
-                  aria-label={`删除本地自定义特质 ${m.label}`}
-                  onClick={() => {
+              </span>
+              {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
+              <ModuleTags tags={m.tags} />
+            </>
+          );
+          return (
+            <li key={m.id} className={styles.pickItem}>
+              {editable ? (
+                <EditableModuleCard
+                  pressed={pressed}
+                  disabled={!pressed && full}
+                  title={!pressed && full ? `核心特质最多选 ${SKILL_MAX} 项` : undefined}
+                  editLabel={`编辑本地自定义特质 ${m.label}`}
+                  deleteLabel={`删除本地自定义特质 ${m.label}`}
+                  onSelect={() => toggle(m)}
+                  onEdit={() => setEditor({ mode: "edit", module: m })}
+                  onDelete={() => {
                     removeLocalCustomModule(m.id);
+                    if (editor?.mode === "edit" && editor.module.id === m.id) setEditor(null);
                     if (pressed) {
                       commit({ ...board, skills: board.skills.filter((x) => x.id !== m.id) });
                     }
                   }}
                 >
-                  ×
+                  {body}
+                </EditableModuleCard>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.pick}
+                  aria-pressed={pressed}
+                  disabled={!pressed && full}
+                  title={!pressed && full ? `核心特质最多选 ${SKILL_MAX} 项` : undefined}
+                  onClick={() => toggle(m)}
+                >
+                  <CellFrame />
+                  {body}
                 </button>
               )}
             </li>
@@ -557,7 +674,7 @@ export function TraitPicker({ board, data, commit, initialFilter = "all" }: Trai
 
 export function FlawPicker({ board, data, commit }: FlawPickerProps) {
   const [query, setQuery] = useState("");
-  const [writing, setWriting] = useState(false);
+  const [editor, setEditor] = useState<ModuleEditorState>(null);
   const on = new Set(board.flaws.map((m) => m.id));
   const library = data.modules.filter((m) => m.slot === "flaw");
   const own = board.flaws.filter((m) => !library.some((l) => l.id === m.id));
@@ -576,12 +693,12 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </FrameBox>
-        {!writing && (
+        {!editor && (
           <Button
             small
             disabled={full}
             reason={`负面缺陷最多选 ${FLAW_MAX} 项`}
-            onClick={() => setWriting(true)}
+            onClick={() => setEditor({ mode: "create" })}
           >
             ＋ 自创缺陷
           </Button>
@@ -590,14 +707,20 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
       <p className={styles.note}>
         已选 {board.flaws.length} / {FLAW_MAX} 项 · 纯可选的处境压力、暗伤与个人底线，不扣点数。
       </p>
-      {writing && (
+      {editor && (
         <CustomModuleForm
+          key={editor.mode === "edit" ? editor.module.id : "new"}
           slot="flaw"
           board={board}
-          onCancel={() => setWriting(false)}
+          {...(editor.mode === "edit" ? { initial: editor.module } : {})}
+          onCancel={() => setEditor(null)}
           onAccept={(m) => {
-            commit({ ...board, flaws: [...board.flaws, m] });
-            setWriting(false);
+            if (editor.mode === "create") {
+              commit({ ...board, flaws: [...board.flaws, m] });
+            } else if (on.has(m.id)) {
+              commit({ ...board, flaws: board.flaws.map((x) => (x.id === m.id ? m : x)) });
+            }
+            setEditor(null);
           }}
         />
       )}
@@ -605,55 +728,65 @@ export function FlawPicker({ board, data, commit }: FlawPickerProps) {
       <ul className={styles.skillWall}>
         {shown.map((m) => {
           const pressed = on.has(m.id);
-          const deletable = isLocalModule(m);
+          const editable = isEditableLocalModule(m);
+          const toggleFlaw = () =>
+            commit({
+              ...board,
+              flaws: pressed ? board.flaws.filter((x) => x.id !== m.id) : [...board.flaws, m],
+            });
+          const body = (
+            <>
+              <span className={styles.pickHead}>
+                <strong className={styles.pickName}>{m.label}</strong>
+                <span className={styles.moduleBadges}>
+                  {isWorkshopEntry(m.packId) && (
+                    <span className={styles.moduleBadge} data-tone="workshop">
+                      工坊
+                    </span>
+                  )}
+                  {pressed && (
+                    <span className={styles.moduleBadge} data-tone="flaw">
+                      已选
+                    </span>
+                  )}
+                </span>
+              </span>
+              {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
+              <ModuleTags tags={m.tags} />
+            </>
+          );
           return (
             <li key={m.id} className={styles.pickItem}>
-              <button
-                type="button"
-                className={styles.pick}
-                data-tone="flaw"
-                aria-pressed={pressed}
-                disabled={!pressed && full}
-                onClick={() =>
-                  commit({
-                    ...board,
-                    flaws: pressed ? board.flaws.filter((x) => x.id !== m.id) : [...board.flaws, m],
-                  })
-                }
-              >
-                <CellFrame />
-                <span className={styles.pickHead}>
-                  <strong className={styles.pickName}>{m.label}</strong>
-                  <span className={styles.moduleBadges}>
-                    {isWorkshopEntry(m.packId) && (
-                      <span className={styles.moduleBadge} data-tone="workshop">
-                        工坊
-                      </span>
-                    )}
-                    {pressed && (
-                      <span className={styles.moduleBadge} data-tone="flaw">
-                        已选
-                      </span>
-                    )}
-                  </span>
-                </span>
-                {m.ability && <span className={styles.pickDesc}>{m.ability}</span>}
-                <ModuleTags tags={m.tags} />
-              </button>
-              {deletable && (
-                <button
-                  type="button"
-                  className={styles.localDelBtn}
-                  title="删除这条本地自定义缺陷"
-                  aria-label={`删除本地自定义缺陷 ${m.label}`}
-                  onClick={() => {
+              {editable ? (
+                <EditableModuleCard
+                  pressed={pressed}
+                  disabled={!pressed && full}
+                  tone="flaw"
+                  editLabel={`编辑本地自定义缺陷 ${m.label}`}
+                  deleteLabel={`删除本地自定义缺陷 ${m.label}`}
+                  onSelect={toggleFlaw}
+                  onEdit={() => setEditor({ mode: "edit", module: m })}
+                  onDelete={() => {
                     removeLocalCustomModule(m.id);
+                    if (editor?.mode === "edit" && editor.module.id === m.id) setEditor(null);
                     if (pressed) {
                       commit({ ...board, flaws: board.flaws.filter((x) => x.id !== m.id) });
                     }
                   }}
                 >
-                  ×
+                  {body}
+                </EditableModuleCard>
+              ) : (
+                <button
+                  type="button"
+                  className={styles.pick}
+                  data-tone="flaw"
+                  aria-pressed={pressed}
+                  disabled={!pressed && full}
+                  onClick={toggleFlaw}
+                >
+                  <CellFrame />
+                  {body}
                 </button>
               )}
             </li>
@@ -1028,26 +1161,57 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
   );
 }
 
-// ———— 义体货架：信息直出卡片，单击直接装卸/替换 ————
+// ———— 义体货架：无固定部位上限，按物理互斥组自由装配 + 支持本地自创义体 ————
 
 const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"] as const;
+
+type CyberEditorState =
+  | null
+  | { readonly mode: "create" }
+  | { readonly mode: "edit"; readonly item: StartCyberware };
+
+function chromeLoadTag(cost: number): { readonly label: string; readonly tone?: "ok" | "warn" } {
+  if (cost <= 0) return { label: "零负荷", tone: "ok" };
+  if (cost >= 10) return { label: "高压核心", tone: "warn" };
+  if (cost >= 5) return { label: "中负荷" };
+  return { label: "轻负荷" };
+}
+
+type KindFilter = "all" | "zero" | "combat" | "custom";
 
 export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShelfProps) {
   type Offer = BoardData["cyberware"][number];
   const [shelfState, setShelfState] = useState<{
     readonly slot: CyberSlot;
     readonly rarity: string | null;
+    readonly kind: KindFilter;
     readonly query: string;
-  }>({ slot, rarity: null, query: "" });
+  }>({ slot, rarity: null, kind: "all", query: "" });
+  const [editor, setEditor] = useState<{
+    readonly slot: CyberSlot;
+    readonly state: CyberEditorState;
+  }>({
+    slot,
+    state: null,
+  });
   const rarity = shelfState.slot === slot ? shelfState.rarity : null;
+  const kind = shelfState.slot === slot ? shelfState.kind : "all";
   const query = shelfState.slot === slot ? shelfState.query : "";
-  const setRarity = (next: string | null) => setShelfState({ slot, rarity: next, query });
-  const setQuery = (next: string) => setShelfState({ slot, rarity, query: next });
+  const activeEditor = editor.slot === slot ? editor.state : null;
+  const setRarity = (next: string | null) => setShelfState({ slot, rarity: next, kind, query });
+  const setKind = (next: KindFilter) => setShelfState({ slot, rarity, kind: next, query });
+  const setQuery = (next: string) => setShelfState({ slot, rarity, kind, query: next });
+  const setActiveEditor = (next: CyberEditorState) => setEditor({ slot, state: next });
 
   const options = data.cyberware.filter((o) => o.slot === slot);
+  const zeroCount = options.filter((o) => o.humanityCost <= 0).length;
+  const customCount = options.filter((o) => o.custom || isWorkshopEntry(o.packId)).length;
   const rarities = RARITY_ORDER.filter((r) => options.some((o) => o.rarity === r));
   const normalizedQuery = query.trim().toLowerCase();
   const shown = options.filter((o) => {
+    if (kind === "zero" && o.humanityCost > 0) return false;
+    if (kind === "combat" && o.humanityCost <= 0) return false;
+    if (kind === "custom" && !o.custom && !isWorkshopEntry(o.packId)) return false;
     if (rarity && o.rarity !== rarity) return false;
     if (!normalizedQuery) return true;
     const hay = [o.name, o.ability, o.deckProfile ?? "", ...(o.deckTraits ?? [])]
@@ -1055,26 +1219,60 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
       .toLowerCase();
     return hay.includes(normalizedQuery);
   });
-  const slotOf = new Map(data.cyberware.map((o) => [o.id, o.slot]));
-  const mounted = board.cyberware.filter((c) => (slotOf.get(c.id) ?? c.slot) === slot);
-  const inherentInSlot = inherentCyberware(card, data).filter((i) => i.slot === slot);
-  const activeInherentCount = inherentInSlot.filter((i) => !i.replaced).length;
-  const cap = cyberwareRules.SLOT_CAPACITY[slot];
-  const occupiedCount = Math.min(cap, mounted.length + activeInherentCount);
-  const slotFull = mounted.length >= cap;
-  const isOn = (o: Offer) => mounted.some((p) => p.id === o.id);
-  const canSwap = cap === 1 && slotFull;
-  const blocked = (o: Offer) => !isOn(o) && slotFull && !canSwap;
 
-  const actionLabel = (o: Offer) =>
-    isOn(o) ? "已装 · 点击卸下" : canSwap ? "点击替换" : blocked(o) ? "槽位已满" : "点击装上";
+  const offerMap = new Map(data.cyberware.map((o) => [o.id, o]));
+  const slotOf = (c: Board["cyberware"][number]) =>
+    (offerMap.get(c.id)?.slot ?? c.slot) as CyberSlot | undefined;
+  const probeOfOffer = (o: Offer): cyberwareRules.ExclusiveProbe => ({
+    id: o.id,
+    name: o.name,
+    slot: o.slot as CyberSlot,
+    ...(o.armor ? { armor: true } : {}),
+    ...(o.accelerator ? { accelerator: true } : {}),
+    ...(o.deckProfile ? { deckProfile: o.deckProfile } : {}),
+    ...(o.deckTraits ? { deckTraits: o.deckTraits } : {}),
+    ...(o.exclusiveGroup ? { exclusiveGroup: o.exclusiveGroup } : {}),
+  });
+  const chosenProbes: cyberwareRules.ExclusiveProbe[] = board.cyberware.flatMap((c) => {
+    const def = offerMap.get(c.id);
+    const resolvedSlot = slotOf(c);
+    if (!resolvedSlot) return [];
+    return [
+      {
+        id: c.id,
+        name: c.name,
+        slot: resolvedSlot,
+        ...(def?.armor || c.armor ? { armor: true } : {}),
+        ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
+        ...(def?.deckProfile || c.deckProfile
+          ? { deckProfile: def?.deckProfile ?? c.deckProfile }
+          : {}),
+        ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+        ...(def?.exclusiveGroup || c.exclusiveGroup
+          ? { exclusiveGroup: def?.exclusiveGroup ?? c.exclusiveGroup }
+          : {}),
+      },
+    ];
+  });
+
+  const mountedInSlot = board.cyberware.filter((c) => slotOf(c) === slot);
+  const inherentInSlot = inherentCyberware(card, data).filter((i) => i.slot === slot);
+  const isOn = (o: Offer) => board.cyberware.some((p) => p.id === o.id);
+
+  const conflictFor = (o: Offer) =>
+    isOn(o)
+      ? { ok: true as const }
+      : cyberwareRules.cyberwareConflicts(probeOfOffer(o), chosenProbes);
 
   const nextCyberware = (o: Offer): Board["cyberware"] => {
     if (isOn(o)) return board.cyberware.filter((c) => c.id !== o.id);
-    if (blocked(o)) return board.cyberware;
-    const base = canSwap
-      ? board.cyberware.filter((c) => (slotOf.get(c.id) ?? c.slot) !== slot)
-      : board.cyberware;
+    const conflict = conflictFor(o);
+    if (!conflict.ok && conflict.limit > 1) return board.cyberware;
+    const base =
+      !conflict.ok && conflict.limit === 1
+        ? board.cyberware.filter((c) => !conflict.blockers.some((b) => b.id === c.id))
+        : board.cyberware;
+    const group = cyberwareRules.cyberwareExclusiveGroup(probeOfOffer(o));
     return [
       ...base,
       {
@@ -1088,13 +1286,30 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
         ...(o.custom && o.armor ? { armor: true } : {}),
         ...(o.custom && o.accelerator ? { accelerator: true } : {}),
         ...(o.custom && o.deckProfile ? { deckProfile: o.deckProfile } : {}),
+        ...(group ? { exclusiveGroup: group } : {}),
       },
     ];
   };
 
   const toggle = (o: Offer) => {
-    if (!blocked(o)) commit({ ...board, cyberware: nextCyberware(o) });
+    const conflict = conflictFor(o);
+    if (!conflict.ok && conflict.limit > 1) return;
+    commit({ ...board, cyberware: nextCyberware(o) });
   };
+
+  const toEditableStartChrome = (o: Offer): StartCyberware => ({
+    id: o.id,
+    name: o.name,
+    slot: o.slot as CyberSlot,
+    humanityCost: o.humanityCost,
+    ability: o.ability,
+    ...(o.armor ? { armor: true } : {}),
+    ...(o.accelerator ? { accelerator: true } : {}),
+    ...(o.deckProfile ? { deckProfile: o.deckProfile } : {}),
+    ...(o.exclusiveGroup ? { exclusiveGroup: o.exclusiveGroup } : {}),
+    custom: true,
+    packId: o.packId ?? "local",
+  });
 
   return (
     <div className={`${styles.pickerBody} ${styles.cyberShelfBody}`}>
@@ -1108,16 +1323,107 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
             onChange={(e) => setQuery(e.target.value)}
           />
         </FrameBox>
+        {!activeEditor && (
+          <Button small onClick={() => setActiveEditor({ mode: "create" })}>
+            ＋ 自创义体
+          </Button>
+        )}
       </div>
+      {activeEditor && (
+        <CustomCyberwareForm
+          key={activeEditor.mode === "edit" ? activeEditor.item.id : `new-${slot}`}
+          slot={slot}
+          {...(activeEditor.mode === "edit" ? { initial: activeEditor.item } : {})}
+          onCancel={() => setActiveEditor(null)}
+          onAccept={(saved) => {
+            const exists = board.cyberware.some((c) => c.id === saved.id);
+            if (activeEditor.mode === "edit") {
+              if (exists) {
+                commit({
+                  ...board,
+                  cyberware: board.cyberware.map((c) => (c.id === saved.id ? saved : c)),
+                });
+              }
+            } else {
+              const conflict = cyberwareRules.cyberwareConflicts(
+                {
+                  id: saved.id,
+                  name: saved.name,
+                  slot,
+                  ...(saved.armor ? { armor: true } : {}),
+                  ...(saved.accelerator ? { accelerator: true } : {}),
+                  ...(saved.deckProfile ? { deckProfile: saved.deckProfile } : {}),
+                  ...(saved.exclusiveGroup ? { exclusiveGroup: saved.exclusiveGroup } : {}),
+                },
+                chosenProbes,
+              );
+              if (conflict.ok) {
+                commit({ ...board, cyberware: [...board.cyberware, saved] });
+              } else if (conflict.limit === 1) {
+                commit({
+                  ...board,
+                  cyberware: [
+                    ...board.cyberware.filter((c) => !conflict.blockers.some((b) => b.id === c.id)),
+                    saved,
+                  ],
+                });
+              }
+            }
+            setActiveEditor(null);
+          }}
+        />
+      )}
+      {mountedInSlot.length > 0 && (
+        <section className={styles.equippedStrip} aria-label="该部位已装自选义体">
+          <span className={styles.equippedLabel}>已装 ({mountedInSlot.length})</span>
+          <div className={styles.equippedChips}>
+            {mountedInSlot.map((item) => (
+              <span key={item.id} className={styles.equippedChip}>
+                <span>{item.name}</span>
+                <button
+                  type="button"
+                  className={styles.equippedChipDel}
+                  title={`卸下 ${item.name}`}
+                  aria-label={`卸下 ${item.name}`}
+                  onClick={() =>
+                    commit({
+                      ...board,
+                      cyberware: board.cyberware.filter((c) => c.id !== item.id),
+                    })
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
       <div className={styles.shelfHead}>
-        <span className={styles.shelfMeta}>
-          可选 {shown.length} 款 · 已占用 {occupiedCount}/{cap}
-          {activeInherentCount > 0 ? `（含标配 ${activeInherentCount} 件）` : ""}
-        </span>
+        <fieldset className={styles.shelfFilter} aria-label="按义体类别快筛">
+          <Button small pressed={kind === "all"} onClick={() => setKind("all")}>
+            全部 ({options.length})
+          </Button>
+          {zeroCount > 0 && (
+            <Button small pressed={kind === "zero"} onClick={() => setKind("zero")}>
+              零负荷生活/感官 ({zeroCount})
+            </Button>
+          )}
+          {zeroCount > 0 && zeroCount < options.length && (
+            <Button small pressed={kind === "combat"} onClick={() => setKind("combat")}>
+              实战与重装 ({options.length - zeroCount})
+            </Button>
+          )}
+          {customCount > 0 && (
+            <Button small pressed={kind === "custom"} onClick={() => setKind("custom")}>
+              自创/工坊 ({customCount})
+            </Button>
+          )}
+        </fieldset>
         {rarities.length > 1 && (
           <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
             <Button small pressed={rarity === null} onClick={() => setRarity(null)}>
-              全部
+              全稀有度
             </Button>
             {rarities.map((r) => (
               <Button key={r} small pressed={rarity === r} onClick={() => setRarity(r)}>
@@ -1127,11 +1433,65 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
           </fieldset>
         )}
       </div>
+      {slot === "arms" && (
+        <p className={styles.note}>
+          {mountedInSlot.length >= 2
+            ? `当前「左右臂混搭」（2/2）：${mountedInSlot.map((c) => c.name).join(" + ")}。如需更换，先点上方胶囊卸下一件。`
+            : mountedInSlot.length === 1 && mountedInSlot[0]
+              ? cyberwareRules.isSingleArmCyberware(mountedInSlot[0].id)
+                ? `当前「单臂装配」：${mountedInSlot[0].name}（另一只手臂空闲，可再点 1 件臂部义体混搭）。`
+                : `当前「双臂成对」生效：${mountedInSlot[0].name}（双手同步可用；若再选第 2 件臂部义体，自动改为左右臂混搭）。`
+              : "双臂挂载规则：单装成对件（猩猩手臂 / 螳螂刀 / 单分子线等）默认双臂成对生效；选 2 件不同臂部义体即可左右臂混搭。"}
+        </p>
+      )}
+      {slot === "eyes" && (
+        <p className={styles.note}>
+          {(() => {
+            const mainOptic = [
+              ...mountedInSlot.map((c) => ({ id: c.id, name: c.name })),
+              ...inherentInSlot.filter((i) => !i.replaced).map((i) => ({ id: i.id, name: i.name })),
+            ].find(
+              (item) =>
+                cyberwareRules.cyberwareExclusiveGroup({
+                  id: item.id,
+                  name: item.name,
+                  slot: "eyes",
+                }) === "optics",
+            );
+            return mainOptic
+              ? `当前主义眼「${mainOptic.name}」为双眼成对生效（选另一款主义眼将直接替换）；音频、嗅觉、虹膜、声带、行为面甲与颌骨暗格可自由叠加。`
+              : "主义眼（岐路司 / 荒坂 / 军用科技等）为双眼成对生效，限 1 套；音频、嗅觉、变色虹膜、声带、面甲与暗格类可自由叠加。";
+          })()}
+        </p>
+      )}
+      {slot === "legs" && (
+        <p className={styles.note}>
+          {(() => {
+            const mainLeg = [
+              ...mountedInSlot.map((c) => ({ id: c.id, name: c.name })),
+              ...inherentInSlot.filter((i) => !i.replaced).map((i) => ({ id: i.id, name: i.name })),
+            ].find(
+              (item) =>
+                cyberwareRules.cyberwareExclusiveGroup({
+                  id: item.id,
+                  name: item.name,
+                  slot: "legs",
+                }) === "legDrive",
+            );
+            return mainLeg
+              ? `当前腿部主驱「${mainLeg.name}」为双腿成对生效（选另一套腿部主驱将直接替换）；猫爪静音、磁吸脚底、小腿暗格等附挂件可自由叠加。`
+              : "腿部肌腱/骨架主驱为双腿成对生效，限 1 套；猫爪静音、磁吸脚底、小腿暗格等附挂件可自由叠加。";
+          })()}
+        </p>
+      )}
       {inherentInSlot.length > 0 && (
         <p className={styles.note}>
           自带标配：
           {inherentInSlot
-            .map((i) => `${i.name}（${i.source}${i.replaced ? "，已被自选件顶替" : "，免费预装"}）`)
+            .map(
+              (i) =>
+                `${i.name}（${i.source}${i.replaced ? "，已被互斥自选件顶替" : "，免费预装"}）`,
+            )
             .join("、")}
         </p>
       )}
@@ -1142,68 +1502,161 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
           <ul className={styles.cyberGrid}>
             {shown.map((o) => {
               const on = isOn(o);
-              const isBlocked = blocked(o);
+              const conflict = conflictFor(o);
+              const isBlocked = !conflict.ok && conflict.limit > 1;
+              const isSwap = !conflict.ok && conflict.limit === 1;
+              const group = cyberwareRules.cyberwareExclusiveGroup(probeOfOffer(o));
+              const groupLabel = group ? cyberwareRules.EXCLUSIVE_GROUP_LABELS[group] : null;
+              const armEquippedCount =
+                slot === "arms"
+                  ? mountedInSlot.length + inherentInSlot.filter((i) => !i.replaced).length
+                  : 0;
+              const mountHint = cyberwareRules.cyberwareMountHint(
+                probeOfOffer(o),
+                on ? armEquippedCount : 0,
+              );
+              const loadTag = chromeLoadTag(o.humanityCost);
+              const editable = Boolean(o.custom && (!o.packId || o.packId === "local"));
               const hwSpecs = [
-                o.deckProfile ? `接入仓档位：${o.deckProfile}` : "",
+                mountHint
+                  ? mountHint.badge
+                  : groupLabel
+                    ? `${groupLabel}${group && cyberwareRules.EXCLUSIVE_GROUP_LIMIT[group] > 1 ? ` · 限${cyberwareRules.EXCLUSIVE_GROUP_LIMIT[group]}` : ""}`
+                    : "可自由叠加",
+                o.deckProfile ? `接入仓：${o.deckProfile}` : "",
                 ...(o.deckTraits ?? []),
                 o.armor ? "护甲增强" : "",
                 o.accelerator ? "神经反应加速" : "",
               ].filter(Boolean);
-              return (
-                <li key={o.id}>
-                  <button
-                    type="button"
-                    className={styles.cyberTile}
-                    data-rarity={o.rarity}
-                    aria-pressed={on}
-                    disabled={isBlocked}
-                    title={isBlocked ? `这个部位最多装 ${cap} 件，先卸一件` : actionLabel(o)}
-                    onClick={() => toggle(o)}
-                  >
-                    <CellFrame />
-                    <div className={styles.cyberTileTop}>
-                      <CyberItemCell
-                        id={o.id}
-                        name={o.name}
-                        slot={o.slot as CyberSlot}
-                        on={on}
-                        rarity={o.rarity}
-                        size={42}
-                      />
-                      <div className={styles.cyberTileBody}>
-                        <div className={styles.cyberTileHead}>
-                          <span className={styles.cyberTileName} data-rarity={o.rarity}>
-                            {o.name}
-                          </span>
-                          <span className={styles.moduleBadges}>
-                            {isWorkshopEntry(o.packId) && (
-                              <span className={styles.moduleBadge} data-tone="workshop">
-                                工坊
-                              </span>
-                            )}
-                            <span
-                              className={styles.moduleBadge}
-                              data-tone={on ? "active" : undefined}
-                            >
-                              {on ? "已装" : canSwap ? "点击替换" : "点击装上"}
-                            </span>
-                          </span>
-                        </div>
-                        <div className={styles.cyberTileMeta}>
-                          {o.rarity && (
-                            <span className={styles.shelfRarity} data-rarity={o.rarity}>
-                              {RARITY_LABELS[o.rarity]}
+              const tooltip = isBlocked
+                ? `${conflict.label}最多装 ${conflict.limit} 件（已装 ${conflict.blockers.map((b) => b.name).join("、")}），先点卸下一件`
+                : isSwap
+                  ? `点击替换同互斥组：${conflict.blockers.map((b) => b.name).join("、")}`
+                  : on
+                    ? "已装 · 点击卸下"
+                    : "点击装上";
+              const tileContent = (
+                <>
+                  <div className={styles.cyberTileTop}>
+                    <CyberItemCell
+                      id={o.id}
+                      name={o.name}
+                      slot={o.slot as CyberSlot}
+                      on={on}
+                      rarity={o.rarity}
+                      size={42}
+                    />
+                    <div className={styles.cyberTileBody}>
+                      <div className={styles.cyberTileHead}>
+                        <span className={styles.cyberTileName} data-rarity={o.rarity}>
+                          {o.name}
+                        </span>
+                        <span className={styles.moduleBadges}>
+                          {isWorkshopEntry(o.packId) && (
+                            <span className={styles.moduleBadge} data-tone="workshop">
+                              工坊
                             </span>
                           )}
-                          <span className={styles.shelfTileCost}>−{o.humanityCost} 人性</span>
-                        </div>
+                          {editable && <span className={styles.moduleBadge}>自创</span>}
+                          <span
+                            className={styles.moduleBadge}
+                            data-tone={on ? "active" : undefined}
+                          >
+                            {on
+                              ? "已装"
+                              : isSwap
+                                ? "替换互斥件"
+                                : isBlocked
+                                  ? "互斥已满"
+                                  : "点击装上"}
+                          </span>
+                        </span>
+                      </div>
+                      <div className={styles.cyberTileMeta}>
+                        {o.rarity && (
+                          <span className={styles.shelfRarity} data-rarity={o.rarity}>
+                            {RARITY_LABELS[o.rarity]}
+                          </span>
+                        )}
+                        <span className={styles.shelfTileCost} data-tone={loadTag.tone}>
+                          {loadTag.label}
+                        </span>
                       </div>
                     </div>
-                    <p className={styles.cyberTileAbility}>{o.ability}</p>
-                    {hwSpecs.length > 0 && (
-                      <p className={styles.cyberTileSpecs}>{hwSpecs.join(" · ")}</p>
-                    )}
-                  </button>
+                  </div>
+                  <p className={styles.cyberTileAbility}>{o.ability}</p>
+                  {hwSpecs.length > 0 && (
+                    <p className={styles.cyberTileSpecs}>{hwSpecs.join(" · ")}</p>
+                  )}
+                </>
+              );
+              return (
+                <li key={o.id}>
+                  {editable ? (
+                    <div
+                      className={styles.cyberCard}
+                      data-rarity={o.rarity}
+                      data-on={on || undefined}
+                      data-disabled={isBlocked || undefined}
+                    >
+                      <CellFrame />
+                      <button
+                        type="button"
+                        className={styles.cyberCardMain}
+                        aria-pressed={on}
+                        disabled={isBlocked}
+                        title={tooltip}
+                        onClick={() => toggle(o)}
+                      >
+                        {tileContent}
+                      </button>
+                      <div className={styles.pickCardFoot}>
+                        <button
+                          type="button"
+                          className={styles.pickCardAct}
+                          aria-label={`编辑自创义体 ${o.name}`}
+                          onClick={() =>
+                            setActiveEditor({ mode: "edit", item: toEditableStartChrome(o) })
+                          }
+                        >
+                          编辑
+                        </button>
+                        <span className={styles.pickCardSep} aria-hidden />
+                        <button
+                          type="button"
+                          className={`${styles.pickCardAct} ${styles.pickCardDanger}`}
+                          aria-label={`删除自创义体 ${o.name}`}
+                          onClick={() => {
+                            removeLocalCustomCyberware(o.id);
+                            if (activeEditor?.mode === "edit" && activeEditor.item.id === o.id) {
+                              setActiveEditor(null);
+                            }
+                            if (on) {
+                              commit({
+                                ...board,
+                                cyberware: board.cyberware.filter((c) => c.id !== o.id),
+                              });
+                            }
+                          }}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.cyberTile}
+                      data-rarity={o.rarity}
+                      aria-pressed={on}
+                      disabled={isBlocked}
+                      title={tooltip}
+                      onClick={() => toggle(o)}
+                    >
+                      <CellFrame />
+                      {tileContent}
+                    </button>
+                  )}
                 </li>
               );
             })}

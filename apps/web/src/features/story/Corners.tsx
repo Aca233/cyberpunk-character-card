@@ -17,11 +17,9 @@ import { shopPoiIconOf, weaponHudIconOf } from "./art";
 import styles from "./corners.module.css";
 import neural from "./neural.module.css";
 import {
-  AffinityMeter,
-  affinityTone,
   type CombatFoe,
-  formatAffinity,
   NpcPortrait,
+  npcRelationTag,
   Profile,
   profileTone,
   threatOfHumanity,
@@ -666,45 +664,19 @@ export function BioMonitor({
               >
                 <NineSlice
                   id="map.filterCellBg"
-                  tint="rgb(18 10 14 / 92%)"
+                  tint="var(--cp-surface-strong)"
                   slice={CELL_SLICE}
                   className={styles.bioEmblemBg}
                 />
-                {!portraitId && (
-                  <NineSlice
-                    id="cyber.cellTexture"
-                    tint="rgb(255 97 88 / 26%)"
-                    slice={0}
-                    className={styles.bioEmblemTex}
-                  />
-                )}
                 {portraitId ? (
                   <GeneratedImage
                     imageId={portraitId}
                     alt={character.name ?? "主角头像"}
                     className={styles.bioEmblemArt}
-                    fallback={
-                      <span className={styles.bioCrest}>
-                        <Asset id="hud.levelFrame" tint="var(--cp-red)" height={40} />
-                        <Asset
-                          id="notify.streetCred"
-                          tint="var(--cp-red)"
-                          height={18}
-                          className={styles.bioCrestIcon}
-                        />
-                      </span>
-                    }
+                    fallback={<Asset id="portrait.unknown" className={styles.bioEmblemArt} />}
                   />
                 ) : (
-                  <span className={styles.bioCrest}>
-                    <Asset id="hud.levelFrame" tint="var(--cp-red)" height={40} />
-                    <Asset
-                      id="notify.streetCred"
-                      tint="var(--cp-red)"
-                      height={18}
-                      className={styles.bioCrestIcon}
-                    />
-                  </span>
+                  <Asset id="portrait.unknown" className={styles.bioEmblemArt} />
                 )}
                 <NineSlice
                   id="map.filterCellFg"
@@ -933,7 +905,7 @@ function PresentPerson({
   const injuries = person.body?.injuries ?? [];
   const wound = npcWoundSummary(person.body);
   const p = usePeek(`person:${person.id}`, peek.expand, peek.setExpand);
-  // 按住 Tab 扫描时让给扫描卡
+  // 义眼扫描模式开启时让给扫描卡
   const open = p.open && !scan;
   // 名字格展开时加宽：收起时等档案收完再缩回原宽，不在收到一半时把档案挤成窄条；同组已展开时候选槽位直接就位
   const lingeredOpen = useLinger(open);
@@ -1094,17 +1066,17 @@ function PresentPerson({
             )}
           </span>
           <span className={styles.personSide}>
-            {person.met && person.affinity !== 0 && (
-              <span
-                className={styles.personAffinityWrap}
-                title={`好感 ${formatAffinity(person.affinity)}`}
-              >
-                <span className={styles.personAffinity} data-tone={affinityTone(person.affinity)}>
-                  {formatAffinity(person.affinity)}
+            {(() => {
+              const relTag = npcRelationTag(person);
+              if (!relTag) return null;
+              return (
+                <span className={styles.personAffinityWrap} title={relTag.title}>
+                  <span className={styles.personAffinity} data-tone={relTag.tone}>
+                    {relTag.label}
+                  </span>
                 </span>
-                <AffinityMeter affinity={person.affinity} className={styles.personMeter} />
-              </span>
-            )}
+              );
+            })()}
             <span className={styles.personActions}>
               {hasOptics && onScan && !s && (
                 <button
@@ -1603,7 +1575,7 @@ export function Present({
             className={styles.labelScanBtn}
             data-active={scan || undefined}
             aria-pressed={scan}
-            title="点击或按住 Tab 切换 Kiroshi 义眼扫描"
+            title="按 Tab 或点击切换 Kiroshi 义眼扫描（开启时自动扫描在场目标）"
             onClick={onToggleScan}
           >
             {scan ? "SCAN ●" : "TAB"}
@@ -1914,7 +1886,10 @@ export function Zone({
 }) {
   const { heat, stealth } = view;
   const bounty = heat.bounties.reduce((sum, b) => sum + b.reward, 0);
-  const threats = [...view.threats].sort((a, b) => b.level - a.level);
+  // NCPD 警星与基础悬赏金额已在地点卡内部显示，外部威胁条不再重复列 NCPD 星级，避免右上角满屏星星
+  const threats = [...view.threats]
+    .filter((t) => t.id !== "heat:ncpd" && !(t.id.startsWith("heat:bounty:") && t.who === "悬赏"))
+    .sort((a, b) => b.level - a.level);
   const shownThreats = threats.slice(0, ZONE_THREAT_MAX);
   const homesForSaleHere = view.safehouse.forSale.filter((h) => !h.locked);
   const homesNeedingRent = view.safehouse.homes.filter(
@@ -1986,13 +1961,15 @@ export function Zone({
           {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
           <Asset id={districtIcon(view.names.district ?? view.location)} height={44} />
         </div>
-        {/* 威胁常态就列（用户定的）：不单开一块、不套侧板框（用户嫌丑），贴在地点框下面几行小字，每条一行，原因放进悬停提示；没人盯上就不出 */}
+        {/* 非 NCPD 外部威胁（敌对势力/仇家/赏金猎人）收进紧贴地点卡下沿的轻量战术条，不再用星号与警星混淆 */}
         {shownThreats.length > 0 && (
           <div className={styles.zoneThreats}>
             <ul className={styles.zoneThreatList} aria-label="威胁">
               {shownThreats.map((t) => (
                 <li key={t.id} data-level={t.level} title={t.reason}>
-                  <span className={styles.zoneThreatStars}>{"★".repeat(t.level)}</span>
+                  <span className={styles.zoneThreatStars}>
+                    {t.level >= 5 ? "极危" : t.level >= 4 ? "高危" : t.level >= 3 ? "警戒" : "敌意"}
+                  </span>
                   <b>{t.who}</b>
                   <small>{t.sourceLabel}</small>
                 </li>

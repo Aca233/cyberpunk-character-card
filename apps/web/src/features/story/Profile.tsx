@@ -1,5 +1,5 @@
 import { worldRules } from "@cp/core";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { AssetId } from "../../assets";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
@@ -12,7 +12,7 @@ import styles from "./profile.module.css";
 import { npcWoundSummary, type View } from "./view";
 
 type Npc = View["npcs"][number];
-/** 中间人的派单信息（委托系统按好感和势力算）；人物档案里同 id 的中间人才有 */
+/** 中间人的派单信息（委托系统按真实关系与势力算）；人物档案里同 id 的中间人才有 */
 type Fixer = View["jobs"]["fixers"][number];
 export type CombatFoe = NonNullable<View["combat"]["active"]>["foes"][number];
 
@@ -29,8 +29,6 @@ type NpcChromeItem = NonNullable<NonNullable<Npc["body"]>["scan"]>["chrome"][num
 const CELL_SLICE = [20, 30, 30, 20] as const;
 const HEAD_SLICE = [4, 20, 20, 4] as const;
 const QH_SLICE = [18, 22, 22, 18] as const;
-/** 好感的范围，同 core 的 AFFINITY_MAX */
-const AFFINITY_MAX = 100;
 
 /** 2077 原生切角插槽底框（qh.cellBg / qh.cellFg，无左侧竖色条） */
 function TacticalCellFrame({
@@ -115,59 +113,67 @@ export function threatOfHumanity(stage: string): "high" | "even" | "low" {
   return "low";
 }
 
-/** 好感度语气档位 */
-export function affinityTone(affinity: number): "pos" | "neg" | "neutral" {
-  if (affinity >= 20) return "pos";
-  if (affinity <= -10) return "neg";
-  return "neutral";
-}
-
-/** 带符号的好感度文本 */
-export function formatAffinity(affinity: number): string {
-  return affinity > 0 ? `+${affinity}` : `${affinity}`;
+/** 纯事实驱动的关系短标与语气（按未解仇怨、人情账、关系定性与共同经历判定，不含任何好感数值） */
+export function npcRelationTag(
+  npc: Pick<Npc, "met" | "relation" | "ledger" | "memories" | "nemesis">,
+): {
+  readonly label: string;
+  readonly tone: "pos" | "neg" | "neutral";
+  readonly title: string;
+} | null {
+  if (!npc.met) return null;
+  const open = npc.ledger.filter((e) => !e.settled);
+  const grudges = open.filter((e) => e.kind === "grudge");
+  if (grudges.length > 0) {
+    return {
+      label: grudges.length > 1 ? `记仇 ×${grudges.length}` : "记仇",
+      tone: "neg",
+      title: `未解仇怨：${grudges.map((g) => g.text).join("；")}`,
+    };
+  }
+  if (npc.nemesis && !npc.nemesis.ended) {
+    return { label: "宿敌", tone: "neg", title: `宿敌：${npc.nemesis.how}` };
+  }
+  const owesYou = open.filter((e) => e.kind === "owesYou");
+  if (owesYou.length > 0) {
+    return {
+      label: owesYou.length > 1 ? `欠你人情 ×${owesYou.length}` : "欠你人情",
+      tone: "pos",
+      title: `对方欠你人情：${owesYou.map((g) => g.text).join("；")}`,
+    };
+  }
+  const youOwe = open.filter((e) => e.kind === "youOwe");
+  if (youOwe.length > 0) {
+    return {
+      label: youOwe.length > 1 ? `你欠人情 ×${youOwe.length}` : "你欠人情",
+      tone: "neutral",
+      title: `你欠对方人情：${youOwe.map((g) => g.text).join("；")}`,
+    };
+  }
+  if (npc.relation) {
+    const short = npc.relation.length > 8 ? `${npc.relation.slice(0, 7)}…` : npc.relation;
+    return { label: short, tone: "pos", title: `关系：${npc.relation}` };
+  }
+  if (npc.memories.length > 0) {
+    return {
+      label: `共历 ${npc.memories.length} 事`,
+      tone: "neutral",
+      title: `已有 ${npc.memories.length} 条共同经历`,
+    };
+  }
+  return null;
 }
 
 /** 人物关系/战斗态势的统一边框语气 */
 export function profileTone(
-  npc: Pick<Npc, "met" | "affinity" | "nemesis" | "following">,
+  npc: Pick<Npc, "met" | "nemesis" | "following" | "ledger" | "relation">,
   foe?: CombatFoe,
 ): "hostile" | "nemesis" | "ally" | undefined {
   if (foe) return "hostile";
   if (npc.nemesis && !npc.nemesis.ended) return "nemesis";
-  if (npc.following || (npc.met && npc.affinity >= 50)) return "ally";
+  if (npc.ledger.some((e) => !e.settled && e.kind === "grudge")) return "hostile";
+  if (npc.following || npc.ledger.some((e) => !e.settled && e.kind === "owesYou")) return "ally";
   return undefined;
-}
-
-/** 共用双向好感刻度条（原作 cyber.gaugeBar，0 为中线，正黄负红） */
-export function AffinityMeter({
-  affinity,
-  className,
-}: {
-  readonly affinity: number;
-  readonly className?: string | undefined;
-}) {
-  const fill = Math.min(1, Math.abs(affinity) / AFFINITY_MAX);
-  return (
-    <span
-      className={className ? `${styles.affinity} ${className}` : styles.affinity}
-      data-neg={affinity < 0 || undefined}
-      style={{ "--fill": fill } as CSSProperties}
-      aria-hidden
-    >
-      <NineSlice
-        id="cyber.gaugeBar"
-        tint={affinity < 0 ? "rgb(255 97 88 / 32%)" : "rgb(94 246 255 / 32%)"}
-        slice={0}
-      />
-      <span className={styles.affinityFill}>
-        <NineSlice
-          id="cyber.gaugeBar"
-          tint={affinity < 0 ? "var(--cp-red)" : "var(--cp-yellow)"}
-          slice={0}
-        />
-      </span>
-    </span>
-  );
 }
 
 /**
@@ -298,6 +304,7 @@ export function ProfileHead({
   readonly embedded?: boolean | undefined;
 }) {
   const tone = profileTone(npc, foe);
+  const relTag = npcRelationTag(npc);
   const wound = npcWoundSummary(npc.body);
   const hasFaction = Boolean(npc.faction && npc.faction !== "无");
   const showLastPlace = !npc.here && Boolean(npc.lastPlace);
@@ -424,15 +431,16 @@ export function ProfileHead({
               ))}
             </dl>
           )}
-          <div className={styles.affinityBlock} data-tone={affinityTone(npc.affinity)}>
-            <div className={styles.affinityTop}>
-              <span>关系好感</span>
-              <b className={styles.affinityVal} data-tone={affinityTone(npc.affinity)}>
-                {formatAffinity(npc.affinity)}
-              </b>
+          {relTag && (
+            <div className={styles.affinityBlock} data-tone={relTag.tone} title={relTag.title}>
+              <div className={styles.affinityTop}>
+                <span>关系脉络</span>
+                <b className={styles.affinityVal} data-tone={relTag.tone}>
+                  {relTag.label}
+                </b>
+              </div>
             </div>
-            <AffinityMeter affinity={npc.affinity} className={styles.affinity} />
-          </div>
+          )}
         </div>
       ) : (
         <p className={styles.note}>
@@ -497,7 +505,7 @@ export function ProfileHead({
   );
 }
 
-/** 档案顶部通栏身份横幅：紧凑肖像 + 名称与关键状态 + 好感与克制细边指令组 */
+/** 档案顶部通栏身份横幅：紧凑肖像 + 名称与关键状态 + 事实关系与克制细边指令组 */
 function ProfileBanner({
   npc,
   fixer,
@@ -518,6 +526,7 @@ function ProfileBanner({
   readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
   const tone = profileTone(npc, foe);
+  const relTag = npcRelationTag(npc);
   const wound = npcWoundSummary(npc.body);
   const scan = npc.body?.scan ?? null;
   const saveImages = useSaveImages();
@@ -532,15 +541,24 @@ function ProfileBanner({
       ].filter(Boolean)
     : [npc.nemesis ? "只在交手时照过面，底细尚未建档" : "尚未照面的目标"];
 
+  const hasGrudge = npc.ledger.some((e) => !e.settled && e.kind === "grudge");
+  const hasBond = Boolean(npc.relation) || npc.memories.length > 0;
   const canCompanionDirect =
-    !npc.following && npc.alive && npc.met && npc.here && !foe && npc.affinity >= 15 && onCompanion;
+    !npc.following &&
+    npc.alive &&
+    npc.met &&
+    npc.here &&
+    !foe &&
+    !hasGrudge &&
+    hasBond &&
+    onCompanion;
   const canCompanionAsk =
     !npc.following &&
     npc.alive &&
     npc.met &&
     npc.here &&
     !foe &&
-    npc.affinity < 15 &&
+    (hasGrudge || !hasBond) &&
     onDraftAction;
 
   const draftPrompt = foe
@@ -713,15 +731,10 @@ function ProfileBanner({
                 </Tag>
               )}
             </ul>
-            {npc.met && (
-              <div
-                className={styles.bannerAffinity}
-                title={`关系好感 ${formatAffinity(npc.affinity)}`}
-              >
-                <span className={styles.bannerAffinityLabel}>好感</span>
-                <AffinityMeter affinity={npc.affinity} className={styles.bannerMeter} />
-                <b className={styles.affinityVal} data-tone={affinityTone(npc.affinity)}>
-                  {formatAffinity(npc.affinity)}
+            {relTag && (
+              <div className={styles.bannerAffinity} title={relTag.title}>
+                <b className={styles.affinityVal} data-tone={relTag.tone}>
+                  {relTag.label}
                 </b>
               </div>
             )}
@@ -810,7 +823,11 @@ function ProfileBanner({
                       type="button"
                       className={styles.cmdBtn}
                       data-tone="dim"
-                      title="好感尚浅，需在剧情中谈妥条件后同行"
+                      title={
+                        hasGrudge
+                          ? "对方还记着未解的仇，需先在剧情中化解"
+                          : "交情尚浅，需在剧情中谈妥条件后同行"
+                      }
                       onClick={() => onDraftAction(`开口约 ${npc.name} 一起同行：`)}
                     >
                       <span>邀其同行</span>
@@ -1222,12 +1239,21 @@ function DossierSection({
   const hasTies = npc.ties.length > 0;
 
   const tone = profileTone(npc, foe);
+  const openLedgerCount = npc.ledger.filter((e) => !e.settled).length;
   const relationTone =
     tone === "hostile" || tone === "nemesis"
       ? "bad"
-      : tone === "ally" || npc.affinity >= 20
+      : tone === "ally" || npc.relation
         ? "warn"
         : "cyan";
+  const relationSummaryTag = !npc.met
+    ? "未正式照面"
+    : [
+        npc.memories.length > 0 ? `共历 ${npc.memories.length} 事` : null,
+        openLedgerCount > 0 ? `未结账 ${openLedgerCount} 笔` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "已结识";
 
   const showBlocked = Boolean(fixer?.blocked && fixer.blockReason);
   const hasStructuredClothes = Boolean(npc.body?.gear.some((item) => item.kind === "clothing"));
@@ -1263,7 +1289,7 @@ function DossierSection({
         <div className={styles.cardHead}>
           <span className={styles.cardLabel}>RELATION {"//"} 关系与背景档案</span>
           <span className={styles.cardValue} data-tone={relationTone}>
-            {npc.met ? `好感 ${formatAffinity(npc.affinity)}` : "未正式照面"}
+            {relationSummaryTag}
           </span>
         </div>
         <p className={styles.relationCopy} data-tone={relationTone}>

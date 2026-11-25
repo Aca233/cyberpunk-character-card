@@ -118,7 +118,7 @@ export function phoneMessagesView({ world }: ViewContext) {
             from,
             name: npc?.name ?? fixer?.name ?? msg?.name ?? call?.name ?? from,
             npc: met && npc ? npc.id : null,
-            affinity: met && npc ? npc.affinity : null,
+            relation: met && npc ? (npc.relation?.text ?? null) : null,
             alive,
             met,
             isFixer,

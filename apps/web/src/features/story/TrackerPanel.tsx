@@ -510,10 +510,6 @@ function ClosedJobCard({ job }: { readonly job: JobView }) {
   const tone = outcomeTone(job.status);
   const cardTone = tone === "good" ? "good" : tone === "bad" ? "overdue" : "muted";
   const settlement = job.settlement;
-  const affinityDelta =
-    settlement?.affinity !== null && settlement?.affinity !== undefined
-      ? settlement.affinity.to - settlement.affinity.from
-      : null;
 
   return (
     <li className={styles.card} data-tone={cardTone}>
@@ -538,22 +534,13 @@ function ClosedJobCard({ job }: { readonly job: JobView }) {
 
       {job.summary && <p className={styles.progressText}>{job.summary}</p>}
 
-      {settlement &&
-        ((affinityDelta !== null && affinityDelta !== 0) ||
-          (settlement.humanity !== null && settlement.humanity !== 0)) && (
-          <div className={styles.settlementRow}>
-            {affinityDelta !== null && affinityDelta !== 0 && (
-              <span className={styles.pill} data-tone={affinityDelta > 0 ? "good" : "bad"}>
-                好感 {affinityDelta > 0 ? `+${affinityDelta}` : affinityDelta}
-              </span>
-            )}
-            {settlement.humanity !== null && settlement.humanity !== 0 && (
-              <span className={styles.pill} data-tone={settlement.humanity > 0 ? "cyan" : "bad"}>
-                人性 {settlement.humanity > 0 ? `+${settlement.humanity}` : settlement.humanity}
-              </span>
-            )}
-          </div>
-        )}
+      {settlement && settlement.humanity !== null && settlement.humanity !== 0 && (
+        <div className={styles.settlementRow}>
+          <span className={styles.pill} data-tone={settlement.humanity > 0 ? "cyan" : "bad"}>
+            人性 {settlement.humanity > 0 ? `+${settlement.humanity}` : settlement.humanity}
+          </span>
+        </div>
+      )}
     </li>
   );
 }

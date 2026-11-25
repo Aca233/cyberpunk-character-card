@@ -795,8 +795,8 @@
 .mainSplit {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(352px, 26vw, 408px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) clamp(328px, 24.5vw, 396px);
+  gap: 14px;
   min-height: 0;
 }
 
@@ -1471,8 +1471,8 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(520px, 1.16fr) minmax(320px, 0.94fr);
-  gap: 14px;
+  grid-template-columns: minmax(390px, 0.96fr) minmax(350px, 1.04fr);
+  gap: 12px;
   align-items: stretch;
   animation: wbSubPaneIn 220ms var(--ease-snap) both;
 }
@@ -1540,19 +1540,18 @@
   border-bottom: 1px solid rgb(255 97 88 / 18%);
 }
 
-/* 保持 container: pin / inline-size >= 480px，按剩余可用高度撑满并居中人体拓扑图，无底空 */
+/* 保持 container: pin / inline-size >= 370px，居中对称展开人体拓扑图，绝不坍缩裁切 */
 .dollStage {
-  --doll-stage: clamp(236px, min(calc(82cqw - 60px), 100cqh), 520px);
-  --doll-center: 58%;
-  container: pin / size;
+  --doll-stage: clamp(290px, min(74cqw, calc(100dvh - 380px)), 440px);
+  --doll-center: 50%;
+  container: pin / inline-size;
   flex: 1;
-  min-height: 0;
+  min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-width: 0;
-  overflow: hidden;
   padding: 2px 0;
 }
 
@@ -1575,7 +1574,8 @@
   background: rgb(252 238 10 / 16%);
 }
 
-.stageBadge[data-tone="danger"] {
+.stageBadge[data-tone="danger"],
+.stageBadge[data-tone="bad"] {
   color: var(--cp-red);
   background: rgb(255 60 60 / 20%);
 }
@@ -1601,7 +1601,8 @@
   background: var(--cp-yellow);
 }
 
-.humanityFill[data-tone="danger"] {
+.humanityFill[data-tone="danger"],
+.humanityFill[data-tone="bad"] {
   background: var(--cp-red);
 }
 
@@ -1616,7 +1617,8 @@
   color: var(--cp-yellow);
 }
 
-.humanityNote[data-tone="danger"] {
+.humanityNote[data-tone="danger"],
+.humanityNote[data-tone="bad"] {
   color: var(--cp-red);
 }
 
@@ -2237,7 +2239,7 @@
   }
 }
 
-@media (max-width: 1420px) {
+@media (max-width: 1200px) {
   .stageScroll[data-locked-scroll] {
     overflow-y: auto;
     padding-bottom: 22px;
@@ -2258,11 +2260,10 @@
   }
 
   .dollStage {
-    --doll-stage: clamp(280px, min(calc(82cqw - 60px), calc(100dvh - 420px)), 480px);
+    --doll-stage: clamp(300px, min(74cqw, calc(100dvh - 420px)), 440px);
     container: pin / inline-size;
     flex: none;
-    overflow: visible;
-    max-width: 620px;
+    max-width: 580px;
     margin: 0 auto;
   }
 }

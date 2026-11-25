@@ -153,6 +153,8 @@ function parseBindings(text: string | undefined): SaveImageBindings {
   }
 }
 
+export type StoredImageMetadataSummary = Omit<StoredImage, "dataUrl">;
+
 /**
  * 浏览器本地图片存储（基于 DocStore / IndexedDB）：
  * - 单张图片保存在 `images/items/<id>.json`，避免污染角色卡、回合日志或快照体积
@@ -220,6 +222,28 @@ export class ImageStore {
   async remove(id: string): Promise<boolean> {
     if (!IMAGE_ID.test(id)) return false;
     return this.docs.remove(this.itemPath(id));
+  }
+
+  /** 删档时清理该存档的图片绑定记录（保留图片库本体，不影响其他存档或角色卡） */
+  async removeSaveBindings(saveId: string): Promise<boolean> {
+    if (!isSaveId(saveId)) return false;
+    return this.docs.remove(this.bindingPath(saveId));
+  }
+
+  /** 列出最近保存的图片元数据（自动剥离 base64 图片本体，供诊断日志排查生图提示词、协议与尺寸告警） */
+  async listRecentMetadata(limit = 15): Promise<StoredImageMetadataSummary[]> {
+    const names = await this.docs.list(ITEMS_FOLDER);
+    const items: StoredImageMetadataSummary[] = [];
+    for (const name of names) {
+      if (!name.endsWith(".json")) continue;
+      const id = name.slice(0, -5);
+      const item = await this.get(id);
+      if (!item) continue;
+      const { dataUrl: _omitted, ...summary } = item;
+      items.push(summary);
+    }
+    items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return items.slice(0, Math.max(0, Math.min(50, limit)));
   }
 
   async getBindings(saveId: string): Promise<SaveImageBindings> {

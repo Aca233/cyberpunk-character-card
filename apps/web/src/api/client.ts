@@ -5,6 +5,7 @@ import type {
   BoardModule,
   BoardSlot,
   CharacterCard,
+  cyberwareRules,
   ImagePromptRequest,
   ImagePromptResult,
   ImageStyleConfig,
@@ -22,7 +23,7 @@ import type {
 
 import { offscreenPace, spoilersOn } from "../features/settings/prefs";
 import type { Gloss } from "../features/story/view";
-import { recordClientDiagnosticError } from "./diagnostics";
+import { recordClientApiTrace, recordClientDiagnosticError } from "./diagnostics";
 import { apiFetch } from "./transport";
 
 /**
@@ -58,6 +59,7 @@ async function request<T>(
   headers: Readonly<Record<string, string>> = {},
   signal?: AbortSignal,
 ): Promise<T> {
+  const started = performance.now();
   let response: Response;
   try {
     response = await apiFetch(path, {
@@ -71,27 +73,58 @@ async function request<T>(
     });
   } catch (error) {
     if (signal?.aborted) throw error;
-    throw new ApiError(unreachable(error), 0);
+    const msg = unreachable(error);
+    recordClientApiTrace({
+      method,
+      path,
+      status: 0,
+      ok: false,
+      ms: performance.now() - started,
+      error: msg,
+    });
+    throw new ApiError(msg, 0);
   }
   let data: Record<string, unknown> = {};
   try {
     data = (await response.json()) as Record<string, unknown>;
   } catch {
     if (!response.ok) {
-      throw new ApiError(`后端返回了 ${response.status}，内容不是 JSON`, response.status);
+      const msg = `后端返回了 ${response.status}，内容不是 JSON`;
+      recordClientApiTrace({
+        method,
+        path,
+        status: response.status,
+        ok: false,
+        ms: performance.now() - started,
+        error: msg,
+      });
+      throw new ApiError(msg, response.status);
     }
   }
   if (!response.ok) {
     const details = Array.isArray(data.details) ? `：${data.details.join("；")}` : "";
     const message = typeof data.error === "string" ? data.error : `请求失败（${response.status}）`;
+    const fullError = `${message}${details}`;
+    recordClientApiTrace({
+      method,
+      path,
+      status: response.status,
+      ok: false,
+      ms: performance.now() - started,
+      error: fullError,
+    });
     if (response.status >= 500 || (response.status >= 400 && response.status !== 404)) {
-      recordClientDiagnosticError(
-        "api",
-        `${method} ${path} -> ${response.status}: ${message}${details}`,
-      );
+      recordClientDiagnosticError("api", `${method} ${path} -> ${response.status}: ${fullError}`);
     }
-    throw new ApiError(`${message}${details}`, response.status, data);
+    throw new ApiError(fullError, response.status, data);
   }
+  recordClientApiTrace({
+    method,
+    path,
+    status: response.status,
+    ok: true,
+    ms: performance.now() - started,
+  });
   return data as T;
 }
 
@@ -138,6 +171,7 @@ async function streamEvents(
   onText: (text: string) => void,
   signal: AbortSignal,
 ): Promise<{ truncated: boolean }> {
+  const started = performance.now();
   let response: Response;
   try {
     response = await apiFetch(path, {
@@ -148,11 +182,28 @@ async function streamEvents(
     });
   } catch (error) {
     if (signal.aborted) throw error;
-    throw new ApiError(unreachable(error), 0);
+    const msg = unreachable(error);
+    recordClientApiTrace({
+      method: "POST",
+      path,
+      status: 0,
+      ok: false,
+      ms: performance.now() - started,
+      error: msg,
+    });
+    throw new ApiError(msg, 0);
   }
   if (!response.ok || !response.body) {
     const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     const message = typeof data.error === "string" ? data.error : `请求失败（${response.status}）`;
+    recordClientApiTrace({
+      method: "POST",
+      path,
+      status: response.status,
+      ok: false,
+      ms: performance.now() - started,
+      error: message,
+    });
     throw new ApiError(message, response.status, data);
   }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -170,11 +221,38 @@ async function streamEvents(
         | { type: "error"; message: string }
         | { type: "done"; truncated: boolean };
       if (event.type === "text") onText(event.text);
-      else if (event.type === "error") throw new ApiError(event.message, 502);
-      else return { truncated: event.truncated };
+      else if (event.type === "error") {
+        recordClientApiTrace({
+          method: "POST",
+          path,
+          status: 502,
+          ok: false,
+          ms: performance.now() - started,
+          error: event.message,
+        });
+        throw new ApiError(event.message, 502);
+      } else {
+        recordClientApiTrace({
+          method: "POST",
+          path,
+          status: response.status,
+          ok: true,
+          ms: performance.now() - started,
+        });
+        return { truncated: event.truncated };
+      }
     }
   }
-  throw new ApiError("连接中途断开了，可以重试", 0);
+  const disconnectMsg = "连接中途断开了，可以重试";
+  recordClientApiTrace({
+    method: "POST",
+    path,
+    status: 0,
+    ok: false,
+    ms: performance.now() - started,
+    error: disconnectMsg,
+  });
+  throw new ApiError(disconnectMsg, 0);
 }
 
 export interface ImageCapabilities {
@@ -261,6 +339,7 @@ export interface BoardData {
     readonly ram?: number;
     readonly armor?: boolean;
     readonly accelerator?: boolean;
+    readonly exclusiveGroup?: cyberwareRules.ExclusiveGroup;
     readonly custom?: boolean;
     readonly packId?: string;
     readonly checks?: readonly string[];
@@ -662,6 +741,7 @@ export interface RuntimeDiagnosticsReport {
     readonly image: {
       readonly ready: boolean;
       readonly model: string | null;
+      readonly protocol?: string | null;
       readonly error: string | null;
     };
     readonly embedding: {
@@ -683,32 +763,109 @@ export interface RuntimeDiagnosticsReport {
     readonly entryCount: number;
     readonly enabledEntries: number;
     readonly sampling: Record<string, unknown> | null;
+    readonly enabledEntryList?: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly role: string;
+      readonly depth: number | null;
+      readonly chars: number;
+    }[];
+    readonly enabledRegex?: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly flags: string;
+      readonly promptOnly: boolean;
+    }[];
+  } | null;
+  readonly presets?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly importedAt: string;
+    readonly entryCount: number;
+    readonly enabledEntries: number;
+    readonly regexCount: number;
+    readonly enabledRegexCount: number;
+    readonly warnings: readonly string[];
+  }[];
+  readonly workshop?: {
+    readonly packs?: readonly {
+      readonly id: string;
+      readonly title: string;
+      readonly author: string;
+      readonly version: number;
+      readonly enabled: boolean;
+      readonly installedAt: string;
+      readonly counts: Readonly<Record<string, number>>;
+    }[];
+    readonly error?: string;
+  };
+  readonly characters?: {
+    readonly total?: number;
+    readonly custom?: number;
+    readonly list?: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly sample: boolean;
+      readonly updatedAt: string;
+      readonly origin: string | null;
+      readonly cyberwareCount: number;
+      readonly moduleCount: number;
+      readonly hasPortrait: boolean;
+    }[];
+    readonly error?: string;
+  };
+  readonly savesSummary?: readonly SaveSummary[] | { readonly error: string };
+  readonly images?: {
+    readonly recent?: readonly Omit<StoredImage, "dataUrl">[];
+    readonly saveBindings?: SaveImageBindings | null;
+    readonly error?: string;
   } | null;
   readonly runtimeLogs: readonly { readonly at: string; readonly message: string }[];
   readonly save: {
     readonly meta: {
       readonly id: string;
       readonly title: string;
+      readonly characterId?: string;
       readonly createdAt: string;
+      readonly startTime?: number;
+      readonly opening?: string | null;
       readonly startLocation: string | null;
       readonly characterName: string | null;
+      readonly loadouts?: readonly string[];
+      readonly workshopPacks?: readonly {
+        readonly id: string;
+        readonly title: string;
+        readonly version: number;
+      }[];
     };
     readonly snapshot: {
       readonly version: number;
       readonly totalTurns: number;
+      readonly totalRecords?: number;
+      readonly actionCount?: number;
+      readonly voidedCount?: number;
       readonly locationId: string | null;
       readonly locationName: string | null;
       readonly gameTime: string;
+      readonly worldTimeMinutes?: number;
       readonly eddies: number;
       readonly death: boolean;
       readonly ended: boolean;
+      readonly sliceKeys?: readonly string[];
     };
+    readonly edgeLedger?: unknown;
     readonly checkpoint: TurnCheckpointSummary | null;
     readonly commerce: {
       readonly activeQuotes: readonly Record<string, unknown>[];
       readonly activeSessions: readonly Record<string, unknown>[];
       readonly registeredParties: readonly Record<string, unknown>[];
     };
+    readonly worldState?: {
+      readonly time: number;
+      readonly slices: Readonly<Record<string, unknown>>;
+    };
+    readonly characterMeta?: unknown;
+    readonly boardStart?: unknown;
     readonly recentActions: readonly {
       readonly seq: number;
       readonly at: string;
@@ -720,23 +877,41 @@ export interface RuntimeDiagnosticsReport {
       readonly seq: number;
       readonly at: string;
       readonly ooc: boolean;
+      readonly draft?: boolean;
+      readonly scene?: number | null;
+      readonly title?: string | null;
       readonly input: unknown;
       readonly read: string | null;
       readonly ruling: string | null;
       readonly decided: readonly string[];
+      readonly dice?: readonly unknown[];
+      readonly check: unknown;
+      readonly resolves?: string | null;
       readonly commands: readonly unknown[];
       readonly dropped: readonly { readonly where: string; readonly reason: string }[];
+      readonly considered?: readonly string[];
+      readonly flags?: readonly string[];
       readonly notes: readonly string[];
       readonly unsettled: string | null;
-      readonly check: unknown;
+      readonly recalled?: readonly { readonly title: string; readonly text: string }[];
+      readonly expanded?: readonly { readonly title: string; readonly text: string }[];
+      readonly retrieval?: unknown;
+      readonly lore?: unknown;
       readonly offscreenSkip: string | null;
+      readonly offscreen?: { readonly prompt: string; readonly reply: string } | null;
+      readonly summary?: { readonly prompt: string; readonly reply: string } | null;
+      readonly closeup?: unknown;
+      readonly clutch?: boolean;
+      readonly choices?: readonly unknown[];
       readonly modules: readonly string[];
       readonly usage: TurnUsage | null;
       readonly budget: unknown;
       readonly text: string;
       readonly thought?: string;
     }[];
+    readonly lastTurnStages?: readonly StagePrompt[];
     readonly lastTurnMessages?: readonly { readonly role: string; readonly content: string }[];
+    readonly promptRebuildError?: string;
   } | null;
   readonly saveError: string | null;
 }
@@ -749,6 +924,8 @@ export const api = {
       readonly turns?: number;
       readonly includeThought?: boolean;
       readonly includePrompt?: boolean;
+      readonly includeWorldState?: boolean;
+      readonly includeImages?: boolean;
     } = {},
   ) => {
     const params = new URLSearchParams();
@@ -756,6 +933,8 @@ export const api = {
     if (options.turns !== undefined) params.set("turns", String(options.turns));
     if (options.includeThought === false) params.set("includeThought", "0");
     if (options.includePrompt === true) params.set("includePrompt", "1");
+    if (options.includeWorldState === false) params.set("includeWorldState", "0");
+    if (options.includeImages === false) params.set("includeImages", "0");
     const qs = params.toString();
     return request<RuntimeDiagnosticsReport>("GET", qs ? `/diagnostics?${qs}` : "/diagnostics");
   },
@@ -822,18 +1001,31 @@ export const api = {
     request<{ character: CharacterEntry }>("PUT", `/characters/${id}`, card).then(
       (r) => r.character,
     ),
-  deleteCharacter: (id: string) => request<{ ok: true }>("DELETE", `/characters/${id}`),
+  deleteCharacter: (id: string) =>
+    request<{ ok: true }>("DELETE", `/characters/${encodeURIComponent(id)}`),
   characterBoard: () => request<BoardData>("GET", "/characters/board"),
   workshopPackages: () =>
     request<{ packages: InstalledWorkshopPack[] }>("GET", "/workshop").then((r) => r.packages),
-  validateWorkshopPack: (pack: unknown) =>
+  validateWorkshopPack: (pack: unknown, replaceId?: string) =>
     request<{
       valid: boolean;
       issues: readonly string[];
       summary?: Readonly<Record<string, number>>;
-    }>("POST", "/workshop/validate", pack),
-  installWorkshopPack: (pack: WorkshopPack) =>
-    request<{ package: InstalledWorkshopPack }>("POST", "/workshop", pack),
+    }>(
+      "POST",
+      replaceId
+        ? `/workshop/validate?replaceId=${encodeURIComponent(replaceId)}`
+        : "/workshop/validate",
+      pack,
+    ),
+  installWorkshopPack: (pack: WorkshopPack, overwrite = false) =>
+    request<{ package: InstalledWorkshopPack }>(
+      "POST",
+      overwrite ? "/workshop?overwrite=1" : "/workshop",
+      pack,
+    ),
+  updateWorkshopPack: (id: string, pack: WorkshopPack) =>
+    request<{ package: InstalledWorkshopPack }>("PUT", `/workshop/${encodeURIComponent(id)}`, pack),
   setWorkshopEnabled: (id: string, enabled: boolean) =>
     request<{ package: InstalledWorkshopPack }>("PATCH", `/workshop/${encodeURIComponent(id)}`, {
       enabled,
@@ -860,6 +1052,8 @@ export const api = {
     /** 地图上选中的开局地点 id（用户定的，2026-10-30：“在地图上选择”）；不传沿用默认开局 */
     startLocation?: string;
   }) => request<SaveSummary>("POST", "/saves", input),
+  deleteSave: (saveId: string) =>
+    request<{ ok: true }>("DELETE", `/saves/${encodeURIComponent(saveId)}`),
   glossary: () => request<{ glossary: Gloss[] }>("GET", "/glossary").then((r) => r.glossary),
   state: (saveId: string) =>
     request<PlayerView & { readonly checkpoint?: TurnCheckpointSummary }>(

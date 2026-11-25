@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { SetCharacterSchema } from "../systems/character/schema";
-import { ToleranceSchema } from "../systems/humanity/schema";
 import { SeedNpcSchema } from "../systems/npc/schema";
 import { START_CYBERWARE_MAX, StartCyberwareSchema, StartKitSchema } from "./board";
 import { WorkshopPackSchema } from "./workshop";
@@ -9,12 +8,11 @@ import { WorkshopPackSchema } from "./workshop";
 export const SaveCharacterSchema = SetCharacterSchema.omit({ type: true });
 export type SaveCharacter = z.infer<typeof SaveCharacterSchema>;
 
-/** 建档时从角色主板带进来的：开局义体 id、义体耐受、开局行装定制和模块/自定义带出的人物卡 */
+/** 建档时从角色主板带进来的：开局义体 id、开局行装定制和模块/自定义带出的人物卡 */
 export const BoardStartSchema = z.object({
   cyberware: z.array(z.string().min(1)).default([]),
   /** 自定义/本地义体的自包含快照：不依赖官方义体目录也能正常装入新档与投影显示 */
   customCyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
-  tolerance: ToleranceSchema.default("normal"),
   /** 出身模块 id：按它给开局住所；旧存档没有 */
   origin: z.string().min(1).optional(),
   /** 开局行装定制（资金档位、额外随身武器与专属载具） */
@@ -27,7 +25,7 @@ export const BoardStartSchema = z.object({
    * 捏人给原作人物选的旧识：建档时盖过原作人物卡的开局好感、记成见过，带上关系笔记和人情。
    */
   acquaintances: z
-    .array(SeedNpcSchema.pick({ id: true, affinity: true, relation: true, ledger: true }))
+    .array(SeedNpcSchema.pick({ id: true, relation: true, ledger: true }))
     .max(100)
     .default([]),
 });

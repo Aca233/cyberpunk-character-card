@@ -1,10 +1,11 @@
 import { z } from "zod";
 import type { WorldState } from "../../kernel/world";
+import { locationCatalog } from "../world";
 import type { Shop } from "./schema";
 
 /**
  * 势力的入口经 phone → jobs → npc 又引回 inventory，这里不引用势力系统；
- * 和 shops.ts 读店主一样，只读算店价要用的几项：势力表的 id、名字、种类、地盘，和记下的态度
+ * 和 shops.ts 读店主一样，只读算店价要用的几项：势力表的 id、名字、初始态度，和记下的态度、成员与火拼区
  */
 const ATTITUDE_IDS = ["kos", "hostile", "neutral", "friendly", "family"] as const;
 type AttitudeId = (typeof ATTITUDE_IDS)[number];
@@ -20,8 +21,10 @@ const FactionRowsSchema = z
 const StancesSchema = z
   .object({
     stances: z.record(z.string(), z.object({ attitude: z.enum(ATTITUDE_IDS) })).default({}),
+    membership: z.object({ faction: z.string() }).nullable().default(null),
+    contested: z.record(z.string(), z.object({ district: z.string() })).default({}),
   })
-  .catch({ stances: {} });
+  .catch({ stances: {}, membership: null, contested: {} });
 
 /**
  * 势力态度对店价的影响（用户 2026-10-31 选的「势力进机制」："态度影响店价"；本作改编，暂定，试玩时调）：
@@ -35,12 +38,22 @@ export const ATTITUDE_PRICE: Readonly<Record<AttitudeId, number | null>> = {
   family: 0.8,
 };
 
-/** 这家店已知的经营者势力立场。 */
+/** 正式成员在所属势力门店的内部价系数 */
+export const MEMBER_PRICE_FACTOR = 0.75;
+
+/** 城区处于地盘火拼争夺中时货路受阻的微涨系数 */
+export const CONTESTED_PRICE_FACTOR = 1.15;
+
+/** 这家店已知的经营者势力立场或争夺区波动。 */
 export interface ShopMood {
   readonly faction: string;
   readonly name: string;
   /** 乘在货架价上的系数；null 是不卖 */
   readonly factor: number | null;
+  /** 玩家是否是该势力的正式成员（享内部价） */
+  readonly member?: boolean;
+  /** 所在城区是否处于火拼争夺中 */
+  readonly contested?: boolean;
 }
 
 /** 只读人物卡上的所属势力，不引用 npc 的入口（npc 引用了 inventory） */
@@ -61,15 +74,41 @@ export function shopMood(
   data: Readonly<Record<string, unknown>>,
   shop: Shop,
 ): ShopMood | undefined {
+  const state = StancesSchema.parse(world.slices.factions ?? {});
+  const district = locationCatalog(data).get(shop.location)?.district;
+  const contested = district !== undefined && state.contested[district] !== undefined;
+
   const rows = FactionRowsSchema.parse(data.factions);
-  if (rows.length === 0) return undefined;
-  const ownId = keeperFaction(world, shop.keeperNpc);
+  const ownId = rows.length > 0 ? keeperFaction(world, shop.keeperNpc) : undefined;
   const def = ownId === undefined ? undefined : rows.find((f) => f.id === ownId);
-  if (!def) return undefined;
-  const attitude =
-    StancesSchema.parse(world.slices.factions ?? {}).stances[def.id]?.attitude ?? def.initial;
-  if (attitude === "neutral") return undefined;
-  return { faction: def.id, name: def.name, factor: ATTITUDE_PRICE[attitude] };
+
+  let base: ShopMood | undefined;
+  if (def) {
+    const attitude = state.stances[def.id]?.attitude ?? def.initial;
+    const member =
+      state.membership?.faction === def.id && attitude !== "kos" && attitude !== "hostile";
+    if (member) {
+      base = { faction: def.id, name: def.name, factor: MEMBER_PRICE_FACTOR, member: true };
+    } else if (attitude !== "neutral") {
+      base = { faction: def.id, name: def.name, factor: ATTITUDE_PRICE[attitude] };
+    }
+  }
+
+  if (!contested) return base;
+  if (!base) {
+    return {
+      faction: "contested",
+      name: `${district}地盘火拼`,
+      factor: CONTESTED_PRICE_FACTOR,
+      contested: true,
+    };
+  }
+  if (base.factor === null) return base;
+  return {
+    ...base,
+    factor: Number((base.factor * CONTESTED_PRICE_FACTOR).toFixed(2)),
+    contested: true,
+  };
 }
 
 /** 按势力态度折算一件货的价钱，舍到十位，最少 10 */

@@ -358,6 +358,19 @@ export class IdbSaveStore implements SaveStorage {
       for (const old of keys.slice(0, Math.max(0, keys.length - SNAPSHOT_KEEP))) store.delete(old);
     });
   }
+
+  /** 彻底删除存档的 meta、全部回合日志与快照 */
+  async remove(id: string): Promise<boolean> {
+    checkSaveId(id);
+    return inTx(this.db, [METAS, LOG, SNAPSHOTS], "readwrite", async (tx) => {
+      const metas = tx.objectStore(METAS);
+      if ((await req(metas.count(id))) === 0) return false;
+      metas.delete(id);
+      tx.objectStore(LOG).delete(saveRange(id));
+      tx.objectStore(SNAPSHOTS).delete(saveRange(id));
+      return true;
+    });
+  }
 }
 
 function checkSaveId(id: string): void {

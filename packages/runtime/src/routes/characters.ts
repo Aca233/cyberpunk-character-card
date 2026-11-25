@@ -134,6 +134,9 @@ export function characterRoutes(
                   : {}),
                 ...(def.armor ? { armor: true } : {}),
                 ...(def.accelerator ? { accelerator: true } : {}),
+                ...(cyberwareRules.cyberwareExclusiveGroup(def)
+                  ? { exclusiveGroup: cyberwareRules.cyberwareExclusiveGroup(def) }
+                  : {}),
                 ability: def.ability,
                 ...(customPackId(def.id) ? { custom: true, packId: customPackId(def.id) } : {}),
               },

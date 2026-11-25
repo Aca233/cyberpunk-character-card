@@ -24,18 +24,18 @@ import type { combatView } from "./systems/combat";
 import {
   type CyberwareDef,
   CyberwareStateSchema,
+  cyberwareConflicts,
   type cyberwarePartsView,
   type cyberwareView,
   type Ripperdoc,
   type ripperdocDebtsView,
   ripperdocList,
   type ripperdocView,
-  SLOT_CAPACITY,
   sandevistanOf,
   type sandevistanView,
 } from "./systems/cyberware";
 import type { moneyView } from "./systems/economy";
-import type { factionsView } from "./systems/factions";
+import type { FactionDef, factionsView } from "./systems/factions";
 import type { hackingView, QuickhackDef } from "./systems/hacking";
 import { HealthStateSchema, type healthView } from "./systems/health";
 import type { heatView } from "./systems/heat";
@@ -96,7 +96,7 @@ export const VIEW_TURNS = 50;
 
 /** 新存档要放进世界的静态内容（content 包），例如原作人物卡 */
 export interface GameContent {
-  readonly npcs?: readonly (NpcCard & { readonly affinity?: number | undefined })[];
+  readonly npcs?: readonly NpcCard[];
   /** 预制人物之间的初始双向关系网（建档时写入双方 ties） */
   readonly npcTies?: readonly InitialNpcTie[];
   /** 物品表；开局装备要用它结算 */
@@ -110,6 +110,8 @@ export interface GameContent {
   readonly quickhacks?: readonly QuickhackDef[];
   /** 车型表；开局送车时要用 */
   readonly vehicles?: readonly VehicleDef[];
+  /** 势力表；按出身给开局初始势力态度时要用 */
+  readonly factions?: readonly FactionDef[];
   /** 中间人；好感记在同 id 的人物卡上 */
   readonly fixers?: readonly {
     readonly id: string;
@@ -301,12 +303,10 @@ function resolveStartKit(
 ): Kit {
   if (!cyberwareCatalog || cyberwareCatalog.length === 0) return kit;
   const byId = new Map(cyberwareCatalog.map((c) => [c.id, c]));
-  const usedSlots = new Map<string, number>();
-  for (const id of boardCyberware) {
+  const placed = boardCyberware.flatMap((id) => {
     const def = byId.get(id);
-    if (!def) continue;
-    usedSlots.set(def.slot, (usedSlots.get(def.slot) ?? 0) + 1);
-  }
+    return def ? [def] : [];
+  });
   const cyberware: string[] = [];
   for (const id of kit.cyberware ?? []) {
     const def = byId.get(id);
@@ -314,10 +314,9 @@ function resolveStartKit(
       cyberware.push(id);
       continue;
     }
-    const used = usedSlots.get(def.slot) ?? 0;
-    const cap = (SLOT_CAPACITY as Readonly<Record<string, number>>)[def.slot] ?? 1;
-    if (used >= cap) continue;
-    usedSlots.set(def.slot, used + 1);
+    if (placed.some((p) => p.id === def.id)) continue;
+    if (!cyberwareConflicts(def, placed).ok) continue;
+    placed.push(def);
     cyberware.push(id);
   }
   return { ...kit, cyberware };
@@ -418,7 +417,6 @@ export function newGameWorld(
     return a
       ? {
           ...card,
-          affinity: a.affinity,
           met: true,
           ...(a.relation ? { relation: a.relation } : {}),
           ledger: a.ledger,
@@ -469,8 +467,6 @@ export function newGameWorld(
   );
   const commands: unknown[] = [
     ...(meta.character ? [{ type: "character.set", ...meta.character }] : []),
-    // 定性神经耐受要在装任何义体之前写进去
-    ...(meta.board ? [{ type: "humanity.setTolerance", tolerance: meta.board.tolerance }] : []),
     ...cast.map((card) => ({ type: "npc.seed", ...castSeed(card) })),
     ...boardPeople.map((p) => ({ type: "npc.seed", ...p })),
     ...initialTies.map((t) => ({ type: "tie", ...t })),
@@ -485,6 +481,7 @@ export function newGameWorld(
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
     ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
     ...homeSeed(content, meta.board?.origin),
+    ...factionSeed(content, meta.board?.origin),
     // 开局地点“在地图上选择”（用户定的，2026-10-30）：沿用 world 的解析登记原作地点，不写 time，不推进时间
     ...(meta.startLocation !== undefined
       ? [{ type: "world", activity: "travel", location: meta.startLocation }]
@@ -513,6 +510,7 @@ export function newGameWorld(
       ...(content.ripperdocs ? { ripperdocs: content.ripperdocs } : {}),
       ...(content.quickhacks ? { quickhacks: content.quickhacks } : {}),
       ...(content.vehicles ? { vehicles: content.vehicles } : {}),
+      ...(content.factions ? { factions: content.factions } : {}),
     },
   };
   const applied = registry.applyCommands(world, parsed, setupContext);
@@ -520,6 +518,48 @@ export function newGameWorld(
     if (!result.ok) throw new Error(`开局的 ${command.type} 没有生效：${result.reason}`);
   }
   return registry.signal(applied.world, "world.arrived", setupContext).world;
+}
+
+/** 按出身给开局初始势力态度；只给原作/设定里有清晰渊源的出身，其余保持默认中立 */
+const ORIGIN_FACTION_SEEDS: Readonly<
+  Record<
+    string,
+    { readonly faction: string; readonly attitude: "friendly" | "hostile"; readonly reason: string }
+  >
+> = {
+  nomad: { faction: "aldecaldos", attitude: "friendly", reason: "恶土同族情面" },
+  "origin-badlands-scout": { faction: "aldecaldos", attitude: "friendly", reason: "恶土同族情面" },
+  "origin-badlands-tech": { faction: "aldecaldos", attitude: "friendly", reason: "恶土同族情面" },
+  corpo: { faction: "arasaka", attitude: "friendly", reason: "旧公司人脉" },
+  "origin-corpo-pr": { faction: "arasaka", attitude: "friendly", reason: "旧公司人脉" },
+  "origin-corpo-counterintel": { faction: "arasaka", attitude: "friendly", reason: "旧公司人脉" },
+  "origin-arasaka-netrunner": {
+    faction: "arasaka",
+    attitude: "hostile",
+    reason: "离开旧东家后被列入盯防名单",
+  },
+  "origin-ex-ncpd": { faction: "ncpd", attitude: "friendly", reason: "旧警队人脉" },
+  "origin-trauma-medic": {
+    faction: "trauma-team",
+    attitude: "friendly",
+    reason: "前创伤小组同事人脉",
+  },
+  "origin-war-vet": {
+    faction: "sixth-street",
+    attitude: "friendly",
+    reason: "同为公司战争退伍兵圈子",
+  },
+  "origin-nightclub-rocker": { faction: "mox", attitude: "friendly", reason: "夜场圈熟人" },
+  "origin-bd-editor": { faction: "mox", attitude: "friendly", reason: "丽姿超梦圈熟人" },
+};
+
+function factionSeed(content: GameContent, origin: string | undefined): unknown[] {
+  if (origin === undefined) return [];
+  const seed = ORIGIN_FACTION_SEEDS[origin];
+  if (!seed) return [];
+  const known = content.factions?.some((f) => f.id === seed.faction) ?? false;
+  if (!known) return [];
+  return [{ type: "faction.seed", id: seed.faction, attitude: seed.attitude, reason: seed.reason }];
 }
 
 /** 按出身给开局住所；先精确匹配 origin 或 origins 列表，对不上时回退 default */

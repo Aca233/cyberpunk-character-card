@@ -42,7 +42,7 @@ export interface AppDeps {
   readonly workshop?: WorkshopStore | undefined;
 }
 
-const MAX_RUNTIME_LOGS = 120;
+const MAX_RUNTIME_LOGS = 250;
 
 function sanitizeBaseUrl(url: string | undefined): string | null {
   if (!url) return null;
@@ -79,6 +79,7 @@ export function createApp(deps: AppDeps): Hono {
     presets: deps.presets,
     checkpoints,
     embeddingCache,
+    images: deps.images,
     workshop: deps.workshop,
   });
   const app = new Hono();
@@ -127,20 +128,57 @@ export function createApp(deps: AppDeps): Hono {
   });
   app.get("/api/diagnostics", async (c) => {
     const state = await deps.config.load();
-    const [narrator, aux, image, embedding, reranker, activePreset] = await Promise.all([
+    const [
+      narrator,
+      aux,
+      image,
+      embedding,
+      reranker,
+      activePreset,
+      allPresets,
+      workshopResult,
+      charactersResult,
+      savesResult,
+    ] = await Promise.all([
       llm.resolve("narrator"),
       llm.resolve("aux"),
       imageRouter.resolve(),
       llm.resolveEmbeddingTarget(),
       llm.resolveRerankerTarget(),
       deps.presets ? deps.presets.active().catch(() => undefined) : Promise.resolve(undefined),
+      deps.presets ? deps.presets.list().catch(() => []) : Promise.resolve([]),
+      deps.workshop
+        ? deps.workshop
+            .list()
+            .then((packs) => ({ ok: true as const, packs }))
+            .catch((error) => ({
+              ok: false as const,
+              error: error instanceof Error ? error.message : String(error),
+            }))
+        : Promise.resolve({ ok: true as const, packs: [] }),
+      deps.characters
+        .list()
+        .then((list) => ({ ok: true as const, list }))
+        .catch((error) => ({
+          ok: false as const,
+          error: error instanceof Error ? error.message : String(error),
+        })),
+      game
+        .list()
+        .then((list) => ({ ok: true as const, list }))
+        .catch((error) => ({
+          ok: false as const,
+          error: error instanceof Error ? error.message : String(error),
+        })),
     ]);
     const redact = await deps.config.redactor();
     const saveIdRaw = c.req.query("saveId")?.trim();
-    const turnsRaw = Number.parseInt(c.req.query("turns") ?? "8", 10);
-    const turns = Number.isInteger(turnsRaw) ? Math.max(1, Math.min(30, turnsRaw)) : 8;
+    const turnsRaw = Number.parseInt(c.req.query("turns") ?? "10", 10);
+    const turns = Number.isInteger(turnsRaw) ? Math.max(1, Math.min(30, turnsRaw)) : 10;
     const includeThought = c.req.query("includeThought") !== "0";
     const includePrompt = c.req.query("includePrompt") === "1";
+    const includeWorldState = c.req.query("includeWorldState") !== "0";
+    const includeImages = c.req.query("includeImages") !== "0";
 
     let save: Record<string, unknown> | null = null;
     let saveError: string | null = null;
@@ -149,13 +187,35 @@ export function createApp(deps: AppDeps): Hono {
         saveError = "存档 id 不合法";
       } else {
         try {
-          save = await game.diagnostics(saveIdRaw, { turns, includeThought, includePrompt });
+          save = await game.diagnostics(saveIdRaw, {
+            turns,
+            includeThought,
+            includePrompt,
+            includeWorldState,
+          });
         } catch (error) {
           saveError =
             error instanceof SaveNotFoundError
               ? "没有找到该存档"
               : redact(error instanceof Error ? error.message : String(error));
         }
+      }
+    }
+
+    let images: Record<string, unknown> | null = null;
+    if (includeImages && deps.images) {
+      try {
+        const [recent, saveBindings] = await Promise.all([
+          deps.images.listRecentMetadata(15),
+          saveIdRaw && isSaveId(saveIdRaw)
+            ? deps.images.getBindings(saveIdRaw).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        images = { recent, saveBindings };
+      } catch (error) {
+        images = {
+          error: redact(error instanceof Error ? error.message : String(error)),
+        };
       }
     }
 
@@ -181,6 +241,7 @@ export function createApp(deps: AppDeps): Hono {
                 temperature: pub.temperature ?? null,
                 maxOutputTokens: pub.maxOutputTokens ?? null,
                 contextWindow: pub.contextWindow ?? null,
+                embeddingModel: pub.embeddingModel ?? null,
                 imageProtocol: pub.imageProtocol ?? null,
               };
             }),
@@ -188,7 +249,7 @@ export function createApp(deps: AppDeps): Hono {
         : { status: state.status, errors: state.errors };
 
     return c.json({
-      schemaVersion: "cp-diagnostic-v1",
+      schemaVersion: "cp-diagnostic-v2",
       generatedAt: clock.now().toISOString(),
       health: {
         config: state.status,
@@ -206,6 +267,7 @@ export function createApp(deps: AppDeps): Hono {
         image: {
           ready: image.ok,
           model: image.ok ? image.profile.model : null,
+          protocol: image.ok ? image.protocol : null,
           error: image.ok ? null : redact(image.error),
         },
         embedding: {
@@ -228,8 +290,81 @@ export function createApp(deps: AppDeps): Hono {
             entryCount: activePreset.entries.length,
             enabledEntries: activePreset.entries.filter((e) => e.enabled).length,
             sampling: activePreset.sampling ?? null,
+            enabledEntryList: activePreset.entries
+              .filter((e) => e.enabled)
+              .map((e) => ({
+                id: e.id,
+                name: e.name,
+                role: e.role,
+                depth: e.depth,
+                chars: e.content.length,
+              })),
+            enabledRegex: activePreset.regex
+              .filter((r) => r.enabled)
+              .map((r) => ({
+                id: r.id,
+                name: r.name,
+                flags: r.flags,
+                promptOnly: r.promptOnly,
+              })),
           }
         : null,
+      presets: allPresets.map((p) => ({
+        id: p.id,
+        name: p.preset.name,
+        importedAt: p.importedAt,
+        entryCount: p.preset.entries.length,
+        enabledEntries: p.preset.entries.filter((e) => e.enabled).length,
+        regexCount: p.preset.regex.length,
+        enabledRegexCount: p.preset.regex.filter((r) => r.enabled).length,
+        warnings: p.warnings,
+      })),
+      workshop: workshopResult.ok
+        ? {
+            packs: workshopResult.packs.map((entry) => ({
+              id: entry.pack.id,
+              title: entry.pack.title,
+              author: entry.pack.author,
+              version: entry.pack.version,
+              enabled: entry.enabled,
+              installedAt: entry.installedAt,
+              counts: {
+                modules: entry.pack.modules.length,
+                acquaintances: entry.pack.acquaintances.length,
+                npcs: entry.pack.npcs.length,
+                items: entry.pack.items.length,
+                cyberware: entry.pack.cyberware.length,
+                braindances: entry.pack.braindances.length,
+                chipContents: entry.pack.chipContents.length,
+                shopListings: entry.pack.shopListings.length,
+                ripperdocListings: entry.pack.ripperdocListings.length,
+              },
+            })),
+          }
+        : { error: redact(workshopResult.error) },
+      characters: charactersResult.ok
+        ? {
+            total: charactersResult.list.length,
+            custom: charactersResult.list.filter((entry) => !entry.sample).length,
+            list: charactersResult.list.map((entry) => ({
+              id: entry.id,
+              name: entry.card.name,
+              sample: entry.sample,
+              updatedAt: entry.updatedAt,
+              origin: entry.card.origin || null,
+              cyberwareCount: entry.card.board?.cyberware.length ?? 0,
+              moduleCount: entry.card.board
+                ? (entry.card.board.origin ? 1 : 0) +
+                  entry.card.board.pasts.length +
+                  entry.card.board.skills.length +
+                  entry.card.board.flaws.length
+                : 0,
+              hasPortrait: Boolean(entry.card.portrait),
+            })),
+          }
+        : { error: redact(charactersResult.error) },
+      savesSummary: savesResult.ok ? savesResult.list : { error: redact(savesResult.error) },
+      images,
       runtimeLogs: runtimeLogs.map((entry) => ({
         at: entry.at,
         message: redact(entry.message),

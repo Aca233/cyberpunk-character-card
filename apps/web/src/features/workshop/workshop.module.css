@@ -623,6 +623,75 @@
   gap: 8px;
 }
 
+.editCard {
+  --box-line: var(--cp-cyan);
+  --box-fill: rgb(10 17 26 / 90%);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.editMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.editField {
+  display: grid;
+  gap: 4px;
+  color: var(--cp-text-dim);
+  font-size: var(--fs-label);
+}
+
+.editField > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.editField input {
+  min-height: 32px;
+  padding: 4px 10px 5px;
+  font-size: var(--fs-label);
+}
+
+.editField input:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.editJsonFrame textarea {
+  min-height: 260px;
+  padding: 9px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.entryRemoveBtn {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid rgb(255 97 88 / 38%);
+  background: transparent;
+  color: var(--cp-red);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: var(--cp-cursor-hand);
+}
+
+.entryRemoveBtn:hover,
+.entryRemoveBtn:focus-visible {
+  border-color: var(--cp-red);
+  background: rgb(255 97 88 / 16%);
+  color: var(--cp-text);
+}
+
 /* ———— 条目浏览器 ———— */
 
 .browser {

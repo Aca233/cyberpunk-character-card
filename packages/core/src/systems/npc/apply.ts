@@ -5,9 +5,6 @@ import { memberDeathBlocked } from "../dice";
 import { locationCatalog } from "../world";
 import { applyNpcBody, bodyProblems, EMPTY_NPC_BODY, sanitizeNpcBody } from "./body";
 import {
-  AFFINITY_MAX,
-  AFFINITY_MIN,
-  AFFINITY_STEP_CAP,
   type Doing,
   KNOWN_KEPT,
   KNOWN_SOURCE_LABELS,
@@ -116,7 +113,7 @@ export function seedNpc(
   /** 开局关系笔记和人情记在这个游戏时间；旧调用方不传时按 0 */
   now = 0,
 ): ApplyOutcome {
-  const { type: _type, affinity, met, relation, ledger, ...card } = command;
+  const { type: _type, met, relation, ledger, ...card } = command;
   if (draft.npcs[card.id]) return { ok: false, reason: `人物 ${card.id} 已经有卡了` };
   const problems = bodyProblems(card.body, data, card.id);
   if (problems.length) return { ok: false, reason: `${card.name} 的身体：${problems.join("；")}` };
@@ -124,7 +121,6 @@ export function seedNpc(
   if (wrongFaction) return { ok: false, reason: `${card.name} 的所属势力：${wrongFaction}` };
   draft.npcs[card.id] = {
     ...card,
-    affinity,
     goalProgress: 0,
     crisis: null,
     alive: true,
@@ -301,7 +297,6 @@ export function applyNpc(
       ...(resolvedHome === undefined ? {} : { home: resolvedHome }),
       body: resolvedBody,
       canon: false,
-      affinity: 0,
       goalProgress: 0,
       crisis: null,
       alive: true,
@@ -480,23 +475,6 @@ export function applyNpc(
         npc.location = currentLocation;
       }
       npc.lastKnownLocation = npc.location;
-      return { ok: true, notes };
-    }
-    case "affinity": {
-      if (!npc.met && command.channel !== "phone") {
-        return { ok: false, reason: `还没见过 ${npc.name}，先用 meet 让这个人出场` };
-      }
-      const notes: string[] = [];
-      let delta = command.delta;
-      if (Math.abs(delta) > AFFINITY_STEP_CAP) {
-        const capped = Math.sign(delta) * AFFINITY_STEP_CAP;
-        notes.push(`单次好感变化最多 ±${AFFINITY_STEP_CAP}，${delta} 已截断为 ${capped}`);
-        delta = capped;
-      }
-      const before = npc.affinity;
-      npc.affinity = Math.min(AFFINITY_MAX, Math.max(AFFINITY_MIN, before + delta));
-      const applied = npc.affinity - before;
-      if (applied !== 0) notes.push(`${npc.name} 好感 ${applied > 0 ? "+" : ""}${applied}`);
       return { ok: true, notes };
     }
     case "memory": {

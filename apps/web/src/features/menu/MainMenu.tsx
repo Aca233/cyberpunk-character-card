@@ -1,6 +1,6 @@
 import { TAROT_INFO } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { api, type CharacterEntry, type SaveSummary } from "../../api/client";
@@ -609,14 +609,22 @@ export function MainMenu() {
                   ) : (
                     <ul className={styles.saveList}>
                       {filteredSaves.map((save) => (
-                        <li key={save.id} className={styles.saveRow}>
+                        <li key={save.id}>
                           <SaveCard
                             save={save}
                             character={charById.get(save.characterId)}
                             onOpen={() => navigate(`/play/${save.id}`)}
                             compact
+                            footer={
+                              <>
+                                <ExportSave save={save} />
+                                <span className={styles.saveFootSep} aria-hidden>
+                                  ·
+                                </span>
+                                <DeleteSave save={save} />
+                              </>
+                            }
                           />
-                          <ExportSave save={save} />
                         </li>
                       ))}
                     </ul>
@@ -673,6 +681,7 @@ export function MainMenu() {
                             onOpen={() =>
                               navigate(`/characters?id=${encodeURIComponent(entry.id)}`)
                             }
+                            footer={!entry.sample ? <DeleteCharacter entry={entry} /> : undefined}
                           />
                         </li>
                       ))}
@@ -740,11 +749,13 @@ export function MainMenu() {
 function CharPreviewCard({
   entry,
   onOpen,
+  footer,
 }: {
   readonly entry: CharacterEntry;
   readonly onOpen: () => void;
+  readonly footer?: ReactNode;
 }) {
-  const tilt = useCardTilt<HTMLButtonElement>({
+  const tilt = useCardTilt<HTMLDivElement>({
     maxRotate: 5.5,
     shadowShift: 4.5,
   });
@@ -763,34 +774,37 @@ function CharPreviewCard({
   );
 
   return (
-    <button type="button" className={styles.charPreviewCard} onClick={onOpen} {...tilt}>
+    <div className={styles.charPreviewCard} {...tilt}>
       <CellFrame />
-      <div className={styles.charPreviewBody}>
-        <span className={styles.charPreviewBadge}>{entry.sample ? "官方预设" : "自建角色"}</span>
-        <strong className={styles.charPreviewName}>
-          {entry.card.name}
-          {entry.card.alias ? `「${entry.card.alias}」` : ""}
-        </strong>
-        <span className={styles.charPreviewMeta}>
-          {entry.card.origin || entry.card.board?.origin?.label || "未知出身"}
+      <button type="button" className={styles.charPreviewMain} onClick={onOpen}>
+        <div className={styles.charPreviewBody}>
+          <span className={styles.charPreviewBadge}>{entry.sample ? "官方预设" : "自建角色"}</span>
+          <strong className={styles.charPreviewName}>
+            {entry.card.name}
+            {entry.card.alias ? `「${entry.card.alias}」` : ""}
+          </strong>
+          <span className={styles.charPreviewMeta}>
+            {entry.card.origin || entry.card.board?.origin?.label || "未知出身"}
+          </span>
+        </div>
+        <span
+          className={styles.charPreviewMedia}
+          data-kind={entry.card.portrait ? "portrait" : tarot ? "tarot" : "monogram"}
+        >
+          {entry.card.portrait ? (
+            <GeneratedImage
+              imageId={entry.card.portrait}
+              alt={entry.card.name}
+              className={styles.charPreviewImg}
+              fallback={fallbackArt}
+            />
+          ) : (
+            fallbackArt
+          )}
         </span>
-      </div>
-      <span
-        className={styles.charPreviewMedia}
-        data-kind={entry.card.portrait ? "portrait" : tarot ? "tarot" : "monogram"}
-      >
-        {entry.card.portrait ? (
-          <GeneratedImage
-            imageId={entry.card.portrait}
-            alt={entry.card.name}
-            className={styles.charPreviewImg}
-            fallback={fallbackArt}
-          />
-        ) : (
-          fallbackArt
-        )}
-      </span>
-    </button>
+      </button>
+      {footer && <div className={styles.charPreviewFoot}>{footer}</div>}
+    </div>
   );
 }
 
@@ -921,8 +935,15 @@ function ExportSave({ save }: { save: SaveSummary }) {
   };
 
   return (
-    <div className={styles.saveTools}>
-      <Button onClick={() => setConfirmOpen(true)}>导出</Button>
+    <>
+      <button
+        type="button"
+        className={styles.saveFootLink}
+        title={`导出存档「${save.title}」`}
+        onClick={() => setConfirmOpen(true)}
+      >
+        导出备份
+      </button>
       {error && <span className={styles.error}>{error}</span>}
       {confirmOpen && (
         <Dialog
@@ -944,7 +965,128 @@ function ExportSave({ save }: { save: SaveSummary }) {
           {error && <p className={styles.error}>{error}</p>}
         </Dialog>
       )}
-    </div>
+    </>
+  );
+}
+
+/** 彻底删除存档：弹出危险确认框，确认后从浏览器存储移除 */
+function DeleteSave({ save }: { save: SaveSummary }) {
+  const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await api.deleteSave(save.id);
+      queryClient.removeQueries({ queryKey: ["state", save.id] });
+      await queryClient.invalidateQueries({ queryKey: ["saves"] });
+      setConfirmOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.saveFootLink}
+        data-tone="danger"
+        disabled={save.running || busy}
+        title={save.running ? "这个存档正在生成回合，请先停止再删除" : `删除存档「${save.title}」`}
+        onClick={() => {
+          setError(null);
+          setConfirmOpen(true);
+        }}
+      >
+        删除存档
+      </button>
+      {confirmOpen && (
+        <Dialog
+          title={`删除存档「${save.title}」？`}
+          tone="danger"
+          onClose={() => !busy && setConfirmOpen(false)}
+          actions={
+            <>
+              <Button disabled={busy} onClick={() => setConfirmOpen(false)}>
+                取消
+              </Button>
+              <Button disabled={busy} onClick={() => void run()}>
+                {busy ? "删除中……" : "确认删除"}
+              </Button>
+            </>
+          }
+        >
+          <p>
+            该存档的全部回合记录与进度会从本浏览器永久删除，无法恢复。如需保留请先点击「导出」备份。
+          </p>
+          {error && <p className={styles.error}>{error}</p>}
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+/** 主菜单「角色」页直接删除自建角色卡（内置于卡片底条，极简文字无杂框） */
+function DeleteCharacter({ entry }: { entry: CharacterEntry }) {
+  const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await api.deleteCharacter(entry.id);
+      await queryClient.invalidateQueries({ queryKey: ["characters"] });
+      setConfirmOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.charDeleteLink}
+        disabled={busy}
+        onClick={() => {
+          setError(null);
+          setConfirmOpen(true);
+        }}
+      >
+        删除档案
+      </button>
+      {confirmOpen && (
+        <Dialog
+          title={`删除角色「${entry.card.name}」？`}
+          tone="danger"
+          onClose={() => !busy && setConfirmOpen(false)}
+          actions={
+            <>
+              <Button disabled={busy} onClick={() => setConfirmOpen(false)}>
+                取消
+              </Button>
+              <Button disabled={busy} onClick={() => void run()}>
+                {busy ? "删除中……" : "确认删除"}
+              </Button>
+            </>
+          }
+        >
+          <p>角色卡会从本地角色库永久删除，已使用该角色开局的现有存档不受影响。</p>
+          {error && <p className={styles.error}>{error}</p>}
+        </Dialog>
+      )}
+    </>
   );
 }
 
@@ -1031,31 +1173,31 @@ function ImportSave({ onImported }: { onImported: (id: string) => void }) {
   );
 }
 
-/** 存档卡：原作 map.filterCell 格框，悬停变青，附带主角信息与难度标记 */
+/** 存档卡：原作 map.filterCell 格框，悬停变青，附带主角信息与可选底条操作 */
 function SaveCard({
   save,
   character,
   onOpen,
   compact,
   featured,
+  footer,
 }: {
   save: SaveSummary;
   character?: CharacterEntry | undefined;
   onOpen: () => void;
   compact?: boolean;
   featured?: boolean;
+  footer?: ReactNode;
 }) {
-  const tilt = useCardTilt<HTMLButtonElement>({
+  const tilt = useCardTilt<HTMLDivElement>({
     maxRotate: featured ? 5.5 : 4.8,
     shadowShift: 4.5,
   });
   return (
-    <button
-      type="button"
+    <div
       className={styles.saveCard}
       data-compact={compact || undefined}
       data-featured={featured || undefined}
-      onClick={onOpen}
       {...tilt}
     >
       <CellFrame
@@ -1068,30 +1210,33 @@ function SaveCard({
           />
         }
       />
-      <Asset
-        id="menu.saveSlot"
-        height={compact ? 24 : 40}
-        tint="currentColor"
-        className={styles.saveIcon}
-      />
-      <div className={styles.saveInfo}>
-        {featured && <span className={styles.featuredTag}>最近存档</span>}
-        <span className={styles.saveTitle}>{save.title}</span>
-        <span className={styles.saveMeta}>
-          {character && (
-            <span className={styles.saveChar}>
-              {character.card.name}
-              {character.card.origin ? ` · ${character.card.origin}` : ""}
+      <button type="button" className={styles.saveCardMain} onClick={onOpen}>
+        <Asset
+          id="menu.saveSlot"
+          height={compact ? 24 : 40}
+          tint="currentColor"
+          className={styles.saveIcon}
+        />
+        <div className={styles.saveInfo}>
+          {featured && <span className={styles.featuredTag}>最近存档</span>}
+          <span className={styles.saveTitle}>{save.title}</span>
+          <span className={styles.saveMeta}>
+            {character && (
+              <span className={styles.saveChar}>
+                {character.card.name}
+                {character.card.origin ? ` · ${character.card.origin}` : ""}
+              </span>
+            )}
+            <span className={styles.saveDate}>
+              建于 <span className="num">{formatDate(save.createdAt)}</span>
             </span>
-          )}
-          <span className={styles.saveDate}>
-            建于 <span className="num">{formatDate(save.createdAt)}</span>
+            {save.running && <span className={styles.runningBadge}>正在生成</span>}
           </span>
-          {save.running && <span className={styles.runningBadge}>正在生成</span>}
-        </span>
-      </div>
-      {featured && <span className={styles.saveCta}>继续 →</span>}
-    </button>
+        </div>
+        {featured && <span className={styles.saveCta}>继续 →</span>}
+      </button>
+      {footer && <div className={styles.saveCardFoot}>{footer}</div>}
+    </div>
   );
 }
 

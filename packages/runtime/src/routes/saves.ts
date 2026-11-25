@@ -78,6 +78,12 @@ export function saveRoutes(game: GameService, hub: TurnHub): Hono {
 
   app.get("/:id/export", async (c) => reply(c, await game.exportSave(c.req.param("id"))));
 
+  app.delete("/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!isSaveId(id)) return c.json({ error: "存档 id 不合法" }, 400);
+    return reply(c, await game.deleteSave(id));
+  });
+
   app.get("/:id/state", async (c) => c.json(await game.state(c.req.param("id"))));
 
   app.delete("/:id/checkpoint", async (c) =>

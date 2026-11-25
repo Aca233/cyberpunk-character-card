@@ -14,13 +14,10 @@ import { applyNpcCondition } from "./body";
 import { perceivedView } from "./perceived";
 import { adultServicesRules, npcRules } from "./prompt";
 import {
-  AffinityProposalSchema,
-  AffinitySchema,
   DoingSchema,
   LearnSchema,
   LedgerSchema,
   LedgerSettleSchema,
-  legacyAffinity,
   MeetSchema,
   MemorySchema,
   NewNpcSchema,
@@ -54,7 +51,7 @@ import { npcSections } from "./sections";
 import { npcStatus } from "./status";
 import { npcsView } from "./view";
 
-/** 有卡的人：名片、诉求底线秘密、好感、关系笔记、人情和仇、共同记忆、同行状态、生死和位置、装备义体人性；路人不建卡 */
+/** 有卡的人：名片、诉求底线秘密、关系笔记、人情和仇、共同记忆、同行状态、生死和位置、装备义体人性；路人不建卡 */
 export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
   id: "npc",
   dependsOn: ["world"],
@@ -64,7 +61,6 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npc: NewNpcSchema,
     npcUpdate: NpcUpdateSchema,
     meet: MeetSchema,
-    affinity: AffinitySchema,
     memory: MemorySchema,
     npcDeath: NpcDeathSchema,
     doing: DoingSchema,
@@ -84,7 +80,6 @@ export const npc = defineSystem<NpcState, NpcCommand, NpcInternal>({
     npcCompanion: NpcCompanionSchema,
   },
   proposals: {
-    affinity: { schema: AffinityProposalSchema, legacy: legacyAffinity },
     npc: { schema: NewNpcSchema, legacy: normalizeNpcProposal },
     npcUpdate: { schema: NpcUpdateSchema, legacy: normalizeNpcProposal },
     tie: { schema: TieSchema, legacy: normalizeNpcTextProposal },

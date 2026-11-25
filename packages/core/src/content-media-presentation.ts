@@ -64,7 +64,10 @@ export function collectPresentedContentMedia(
       if (settled.has(event.event)) continue;
       settled.add(event.event);
       if (event.action === "play") activeWork = event.work;
-      else if (event.action === "stop" && (event.outcome === "exited" || event.outcome === "finished"))
+      else if (
+        event.action === "stop" &&
+        (event.outcome === "exited" || event.outcome === "finished")
+      )
         activeWork = undefined;
       else if (event.action === "progress") {
         const work = activeWork ? braindance.works[activeWork] : undefined;

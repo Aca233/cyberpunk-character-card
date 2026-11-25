@@ -15,14 +15,6 @@ export const JOB_RISK_LABELS: Readonly<Record<number, string>> = {
   5: "玩命死活",
 };
 
-function trustNote(affinity: number): string {
-  if (affinity >= 40) return "过命交情、极信得过";
-  if (affinity >= 15) return "关系熟络、比较信任";
-  if (affinity >= 0) return "一般交道";
-  if (affinity >= -25) return "心存防备";
-  return "积怨已深";
-}
-
 export const jobsRules: RuleModule<JobsState> = {
   id: "jobs",
   title: "委托",
@@ -88,10 +80,10 @@ function temperamentOf(
   return list.find((t) => t.id === id || t.id === canonical);
 }
 
-/** 给模型看的【委托】：中间人（含办事风格与忌讳）、挂着和接下的单子，加最近结束的几单 */
+/** 给模型看的【委托】：中间人（含真实关系与办事风格/忌讳）、挂着和接下的单子，加最近结束的几单 */
 export function jobsSection(
   state: JobsState,
-  affinityOf: (id: string) => number,
+  relationOf: (id: string) => string = () => "一般交道",
   /** 派单人所属势力的态度；不传时不算 */
   sideOf: (id: string) => FixerCard["faction"] = () => undefined,
   /** 中间人脾气与偏好表（data.fixerTemperaments） */
@@ -100,15 +92,21 @@ export function jobsSection(
   const fixers = Object.values(state.fixers);
   if (fixers.length === 0 && state.jobs.length === 0) return undefined;
   const lines = fixers.map((f) => {
-    const affinity = affinityOf(f.id);
+    const relation = relationOf(f.id);
     const side = sideOf(f.id);
     const temp = temperamentOf(f.id, temperaments);
     const tempNote = temp ? `；风格：${temp.preferredStyle}；忌讳：${temp.taboo}` : "";
     if (side !== undefined && fixerBlocked(side.attitude)) {
-      return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单${tempNote}`;
+      return `- 中间人 ${f.name}［${f.id}］：${relation}，是${side.name}的人，${side.name}和玩家结了仇，现在不派单${tempNote}`;
     }
-    const friendly = side && (side.attitude === "friendly" || side.attitude === "family");
-    return `- 中间人 ${f.name}［${f.id}］：${trustNote(affinity)}${friendly ? `（所属${side.name}待玩家友善）` : ""}${tempNote}`;
+    const sideNote = side?.member
+      ? `（玩家是${side.name}正式成员，可给内部活与内部消息）`
+      : side && side.attitude === "family"
+        ? `（所属${side.name}视玩家为自己人）`
+        : side && side.attitude === "friendly"
+          ? `（所属${side.name}待玩家友善）`
+          : "";
+    return `- 中间人 ${f.name}［${f.id}］：${relation}${sideNote}${tempNote}`;
   });
   const activeJobs = state.jobs.filter((j) => j.status === "active");
   const offeredJobs = state.jobs.filter((j) => j.status === "offered");

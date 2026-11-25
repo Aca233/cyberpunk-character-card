@@ -2,15 +2,15 @@ import { z } from "zod";
 import {
   type CyberwareDef,
   CyberwareSlotSchema,
-  SLOT_CAPACITY,
-  SLOT_LABELS,
+  cyberwareConflicts,
+  cyberwareExclusiveGroup,
+  ExclusiveGroupSchema,
 } from "../systems/cyberware/schema";
-import { TOLERANCE_EFFECTS, type Tolerance, ToleranceSchema } from "../systems/humanity/schema";
 import type { LedgerKind } from "../systems/npc/schema";
 
 /**
- * 角色主板：出身、过往、本事三类插槽各插几块模块，再加负面经历、开局义体、开局行装和义体耐受。
- * 模块自由组合，只保留各类插槽数量与义体部位容量约束。
+ * 角色主板：出身、过往、本事三类插槽各插几块模块，再加负面经历、开局义体与开局行装。
+ * 义体取消死板部位格数上限，仅按物理互斥组（ExclusiveGroup）约束。
  */
 
 export const PAST_MIN = 0;
@@ -18,11 +18,8 @@ export const PAST_MAX = 5;
 export const SKILL_MIN = 0;
 export const SKILL_MAX = 10;
 export const FLAW_MAX = 6;
-/**
- * 开局义体不再限总数（用户 2026-10-31："怎么装的义体数量有限制的"，选了「去掉总数上限」）：
- * 只受每个部位的原作格数限制；这里是全部格数加起来，只防异常数据
- */
-export const START_CYBERWARE_MAX = Object.values(SLOT_CAPACITY).reduce((sum, n) => sum + n, 0);
+/** 防极端畸形 JSON 的安全上限，不再以死板格数限制正常自由搭配 */
+export const START_CYBERWARE_MAX = 64;
 
 export const BOARD_SLOTS = ["origin", "past", "skill", "flaw"] as const;
 export const BoardSlotSchema = z.enum(BOARD_SLOTS);
@@ -294,6 +291,7 @@ export const StartCyberwareSchema = z.object({
   armor: z.boolean().optional(),
   accelerator: z.boolean().optional(),
   deckProfile: line(60).optional(),
+  exclusiveGroup: ExclusiveGroupSchema.optional(),
   custom: z.boolean().optional(),
   packId: z.string().trim().max(60).optional(),
 });
@@ -371,8 +369,6 @@ export type RelationKind = z.infer<typeof RelationKindSchema>;
 
 export interface RelationInfo {
   readonly label: string;
-  /** 开局好感 */
-  readonly affinity: number;
   /** 开局记一条人情或仇 */
   readonly ledger?: LedgerKind;
   /** 开局写一句关系笔记 */
@@ -380,12 +376,12 @@ export interface RelationInfo {
 }
 
 export const RELATION_INFO: Readonly<Record<RelationKind, RelationInfo>> = {
-  nod: { label: "点头之交", affinity: 5, note: false },
-  friend: { label: "老朋友", affinity: 30, note: true },
-  owesYou: { label: "他欠你人情", affinity: 15, ledger: "owesYou", note: false },
-  youOwe: { label: "你欠他人情", affinity: 10, ledger: "youOwe", note: false },
-  ex: { label: "前任", affinity: 10, note: true },
-  grudge: { label: "旧仇", affinity: -30, ledger: "grudge", note: false },
+  nod: { label: "点头之交", note: true },
+  friend: { label: "老朋友", note: true },
+  owesYou: { label: "他欠你人情", ledger: "owesYou", note: true },
+  youOwe: { label: "你欠他人情", ledger: "youOwe", note: true },
+  ex: { label: "前任", note: true },
+  grudge: { label: "旧仇", ledger: "grudge", note: true },
 };
 
 export const ACQUAINTANCE_MAX = 100;
@@ -416,7 +412,6 @@ export const BoardSchema = z.object({
   skills: z.array(BoardModuleSchema).max(SKILL_MAX).default([]),
   flaws: z.array(BoardModuleSchema).max(FLAW_MAX).default([]),
   cyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
-  tolerance: ToleranceSchema.default("normal"),
   acquaintances: z.array(AcquaintanceSchema).max(ACQUAINTANCE_MAX).default([]),
   /** 开局行装定制：资金档位、自定义启动资金、额外随身武器与专属载具 */
   kit: StartKitSchema.default({
@@ -429,21 +424,6 @@ export const BoardSchema = z.object({
   startLocation: z.string().trim().min(1).max(80).optional(),
 });
 export type Board = z.infer<typeof BoardSchema>;
-
-/** 义体耐受档位：定性神经耐受程度与剧情钩子（不折算数字倍率） */
-export const TOLERANCE_LEVELS: Readonly<
-  Record<Tolerance, { readonly label: string; readonly hook: string }>
-> = {
-  low: {
-    label: "低耐受",
-    hook: "身体容易排异或出现神经感知失真：高烈度刺激或连续过载下更易浮现症状",
-  },
-  normal: { label: "普通", hook: "" },
-  high: {
-    label: "高耐受",
-    hook: "身体对义体排异抗性极强，常规过载不易失控，有公司研究员很想知道为什么",
-  },
-};
 
 /** 创建时允许选取的官方义体稀有度；标志性的仍要进剧情后找义体医生 */
 export const START_CYBERWARE_RARITIES: ReadonlySet<string> = new Set([
@@ -506,21 +486,35 @@ export function normalizeBoard(
   tables: BoardTables,
 ): { readonly ok: true; readonly board: Board } | { readonly ok: false; readonly error: string } {
   const catalog = tables.cyberware;
-  const slots = new Map<string, number>();
+  const placed: CyberwareDef[] = [];
   const cyberware: StartCyberware[] = [];
   for (const item of board.cyberware) {
     const def = catalog.find((c) => c.id === item.id);
     if (!def) {
-      // 创意工坊/自定义义体自包含快照兜底：不报错拦截
+      // 创意工坊/自定义义体自包含快照兜底：按物理互斥校验
       if (item.custom && item.slot) {
-        const taken = (slots.get(item.slot) ?? 0) + 1;
-        if (taken > SLOT_CAPACITY[item.slot]) {
+        const probe: CyberwareDef = {
+          id: item.id,
+          name: item.name,
+          slot: item.slot,
+          rarity: "rare",
+          price: 0,
+          humanityCost: item.humanityCost,
+          ability: item.ability || item.summary || "自定义义体模块",
+          armor: Boolean(item.armor),
+          accelerator: Boolean(item.accelerator),
+          iconic: false,
+          ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+          ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
+        };
+        const conflict = cyberwareConflicts(probe, placed);
+        if (!conflict.ok) {
           return {
             ok: false,
-            error: `${SLOT_LABELS[item.slot]}最多装 ${SLOT_CAPACITY[item.slot]} 件`,
+            error: `「${conflict.label}」最多装 ${conflict.limit} 件（与 ${conflict.blockers.map((b) => b.name).join("、")} 冲突）`,
           };
         }
-        slots.set(item.slot, taken);
+        placed.push(probe);
         cyberware.push(item);
         continue;
       }
@@ -529,14 +523,15 @@ export function normalizeBoard(
     if (def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity)) {
       return { ok: false, error: `${def.name}不能在创建时装，进剧情后找义体医生` };
     }
-    const taken = (slots.get(def.slot) ?? 0) + 1;
-    if (taken > SLOT_CAPACITY[def.slot]) {
+    const conflict = cyberwareConflicts(def, placed);
+    if (!conflict.ok) {
       return {
         ok: false,
-        error: `${SLOT_LABELS[def.slot]}最多装 ${SLOT_CAPACITY[def.slot]} 件`,
+        error: `「${conflict.label}」最多装 ${conflict.limit} 件（与 ${conflict.blockers.map((b) => b.name).join("、")} 冲突）`,
       };
     }
-    slots.set(def.slot, taken);
+    const group = cyberwareExclusiveGroup(def);
+    placed.push(def);
     cyberware.push({
       id: def.id,
       name: def.name,
@@ -546,6 +541,7 @@ export function normalizeBoard(
       ...(def.armor ? { armor: true } : {}),
       ...(def.accelerator ? { accelerator: true } : {}),
       ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
+      ...(group ? { exclusiveGroup: group } : {}),
       ...(item.custom ? { custom: true, ...(item.packId ? { packId: item.packId } : {}) } : {}),
     });
   }
@@ -576,6 +572,7 @@ export function customCyberwareDefs(
       accelerator: Boolean(item.accelerator),
       iconic: false,
       ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+      ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
     });
   }
   return out;
@@ -598,12 +595,6 @@ export function boardBrief(board: Board): string {
     ...(board.tarot ? [`- 命牌气质：${TAROT_INFO[board.tarot].prompt}`] : []),
     ...boardModules(board).map(moduleLine),
   ];
-  const tolerance = TOLERANCE_LEVELS[board.tolerance];
-  if (board.tolerance !== "normal") {
-    lines.push(
-      `- 义体耐受：${tolerance.label}（${TOLERANCE_EFFECTS[board.tolerance]}）；钩子：${tolerance.hook}`,
-    );
-  }
   if (board.cyberware.length > 0) {
     lines.push(`- 开局义体：${board.cyberware.map((c) => c.name).join("、")}`);
   }

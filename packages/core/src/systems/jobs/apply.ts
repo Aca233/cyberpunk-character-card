@@ -49,9 +49,10 @@ export function seedFixer(draft: Draft<JobsState>, command: SeedFixer): ApplyOut
 export interface FixerCard {
   readonly name: string;
   readonly alive: boolean;
-  readonly affinity: number;
   /** 派单人所属势力对玩家的态度；不属于势力表里的势力时没有 */
-  readonly faction?: { readonly name: string; readonly attitude: string } | undefined;
+  readonly faction?:
+    | { readonly name: string; readonly attitude: string; readonly member?: boolean }
+    | undefined;
 }
 
 /**
@@ -174,7 +175,6 @@ export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): A
       ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
       : [];
   job.settlement = {
-    affinity: null,
     humanity: null,
   };
   return { ok: true, notes, emit };

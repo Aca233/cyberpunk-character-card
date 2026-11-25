@@ -7,7 +7,6 @@ import {
   type CharacterCard,
   CharacterCardSchema,
   cyberwareRules,
-  humanityRules,
   type Loadout,
   loadoutText,
   PAST_MAX,
@@ -16,16 +15,16 @@ import {
   pickStartLocation,
   resolveStartEddies,
   SKILL_MAX,
+  type StartCyberware,
+  StartCyberwareSchema,
   type WorkshopPack,
   WorkshopPackSchema,
 } from "@cp/core";
 import type { BoardData } from "../../api/client";
 
-const { TOLERANCE_EFFECTS, TOLERANCE_LABELS } = humanityRules;
-
 /**
  * 2077 赛博档案工作台核心纯逻辑 + 创意工坊底座（Workshop-Ready Foundation）
- * 无点数上限束缚，仅受槽位容量与义体神经负荷（人性值 × 耐受档位）约束。
+ * 取消死板部位格数上限与抽象耐受分，仅按物理互斥组约束。
  */
 
 /** 创建空白角色主板 */
@@ -280,7 +279,7 @@ export interface InherentCyberwareItem {
 
 /**
  * 出身与黑客履历自带的免费义体（来自开局行装表，如岐路司义眼 Mk.1、军用科技平行线接入仓）：
- * 自动显示在中央 CyberDoll 上，未被同部位自选义体顶替时计入建卡人性条
+ * 自动显示在中央 CyberDoll 上，仅当与玩家自选义体发生物理互斥冲突时被顶替
  */
 export function inherentCyberware(
   card: CharacterCard,
@@ -290,54 +289,166 @@ export function inherentCyberware(
   if (!board?.origin) return [];
   const chosenIds = new Set(board.cyberware.map((c) => c.id));
   const defOf = (id: string) => data?.cyberware.find((c) => c.id === id);
-  const slotOf = (id: string, fallback?: string) => defOf(id)?.slot ?? fallback;
-  const chosenInSlot = (slot: string) =>
-    board.cyberware.filter((c) => slotOf(c.id, c.slot) === slot).length;
+  const chosenProbes: cyberwareRules.ExclusiveProbe[] = board.cyberware.flatMap((c) => {
+    const def = defOf(c.id);
+    const slot = (def?.slot ?? c.slot) as cyberwareRules.CyberwareSlot | undefined;
+    if (!slot) return [];
+    return [
+      {
+        id: c.id,
+        name: c.name,
+        slot,
+        ...(def?.armor || c.armor ? { armor: true } : {}),
+        ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
+        ...(def?.deckProfile || c.deckProfile
+          ? { deckProfile: def?.deckProfile ?? c.deckProfile }
+          : {}),
+        ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+        ...(def?.exclusiveGroup || c.exclusiveGroup
+          ? { exclusiveGroup: def?.exclusiveGroup ?? c.exclusiveGroup }
+          : {}),
+      },
+    ];
+  });
   const out: InherentCyberwareItem[] = [];
   for (const loadout of pickedLoadouts(card, data)) {
     for (const id of loadout.cyberware ?? []) {
       const def = defOf(id);
       if (!def || chosenIds.has(id) || out.some((o) => o.id === id)) continue;
-      const cap = (cyberwareRules.SLOT_CAPACITY as Readonly<Record<string, number>>)[def.slot] ?? 1;
+      const probe: cyberwareRules.ExclusiveProbe = {
+        id: def.id,
+        name: def.name,
+        slot: def.slot as cyberwareRules.CyberwareSlot,
+        ...(def.armor ? { armor: true } : {}),
+        ...(def.accelerator ? { accelerator: true } : {}),
+        ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
+        ...(def.deckTraits ? { deckTraits: def.deckTraits } : {}),
+        ...(def.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),
+      };
+      const replaced = !cyberwareRules.cyberwareConflicts(probe, chosenProbes).ok;
       out.push({
         id,
         name: data?.names?.[id] ?? def.name,
         slot: def.slot,
         humanityCost: def.humanityCost,
         source: `${loadout.label}标配`,
-        replaced: chosenInSlot(def.slot) >= cap,
+        replaced,
       });
     }
   }
   return out;
 }
 
-export interface ToleranceSummary {
-  readonly tolerance: Board["tolerance"];
-  readonly label: string;
-  readonly tone: "ok" | "warn";
-  readonly note: string;
+/** 汇总角色当前已装配义体（含未被顶替的出身标配）的纯事实神经负荷 */
+export function boardLoadProfile(
+  card: CharacterCard,
+  data?: Pick<BoardData, "cyberware" | "loadouts" | "names">,
+): cyberwareRules.CyberwareLoadProfile {
+  const board = card.board;
+  const defOf = (id: string) => data?.cyberware.find((c) => c.id === id);
+  const probes: cyberwareRules.LoadProbe[] = [];
+  for (const c of board?.cyberware ?? []) {
+    const def = defOf(c.id);
+    const slot = (def?.slot ?? c.slot) as cyberwareRules.CyberwareSlot | undefined;
+    if (!slot) continue;
+    probes.push({
+      id: c.id,
+      name: c.name,
+      slot,
+      humanityCost: def?.humanityCost ?? c.humanityCost,
+      ...(def?.armor || c.armor ? { armor: true } : {}),
+      ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
+      ...(def?.deckProfile || c.deckProfile
+        ? { deckProfile: def?.deckProfile ?? c.deckProfile }
+        : {}),
+      ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+      ...(def?.exclusiveGroup || c.exclusiveGroup
+        ? { exclusiveGroup: def?.exclusiveGroup ?? c.exclusiveGroup }
+        : {}),
+    });
+  }
+  for (const item of inherentCyberware(card, data)) {
+    if (item.replaced) continue;
+    const def = defOf(item.id);
+    probes.push({
+      id: item.id,
+      name: item.name,
+      slot: item.slot as cyberwareRules.CyberwareSlot,
+      humanityCost: item.humanityCost,
+      ...(def?.armor ? { armor: true } : {}),
+      ...(def?.accelerator ? { accelerator: true } : {}),
+      ...(def?.deckProfile ? { deckProfile: def.deckProfile } : {}),
+      ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+      ...(def?.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),
+    });
+  }
+  return cyberwareRules.cyberwareLoadProfile(probes);
 }
 
-/** 根据所选义体神经耐受档位返回定性标签、色彩倾向与神经说明（不折算数字人性值） */
-export function toleranceSummary(tolerance: Board["tolerance"]): ToleranceSummary {
-  return {
-    tolerance,
-    label: TOLERANCE_LABELS[tolerance],
-    tone: tolerance === "low" ? "warn" : "ok",
-    note: TOLERANCE_EFFECTS[tolerance],
-  };
-}
-
-// ———— 创意工坊底座：本地自定义模块池 & 目录合并管线 ————
+// ———— 创意工坊底座：本地自定义模块池 & 本地自创义体池 & 目录合并管线 ————
 
 const LOCAL_CUSTOM_MODULES_KEY = "cp.workshop.localModules";
 export const LOCAL_MODULES_EVENT = "cp.workshop.localModules";
+const LOCAL_CUSTOM_CYBERWARE_KEY = "cp.workshop.localCyberware";
+export const LOCAL_CYBERWARE_EVENT = "cp.workshop.localCyberware";
 
 function emitLocalModulesEvent(): void {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(LOCAL_MODULES_EVENT));
   }
+}
+
+function emitLocalCyberwareEvent(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(LOCAL_CYBERWARE_EVENT));
+  }
+}
+
+export function loadLocalCustomCyberware(): StartCyberware[] {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(LOCAL_CUSTOM_CYBERWARE_KEY) ?? "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((item) => {
+      const parsed = StartCyberwareSchema.safeParse(item);
+      return parsed.success && parsed.data.slot
+        ? [{ ...parsed.data, custom: true, packId: parsed.data.packId ?? "local" }]
+        : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalCustomCyberware(item: StartCyberware): StartCyberware[] {
+  const existing = loadLocalCustomCyberware();
+  const normalized: StartCyberware = {
+    ...item,
+    custom: true,
+    packId: item.packId ?? "local",
+  };
+  const index = existing.findIndex((c) => c.id === normalized.id);
+  const next =
+    index >= 0
+      ? existing.map((c, i) => (i === index ? normalized : c))
+      : [normalized, ...existing].slice(0, 100);
+  try {
+    localStorage.setItem(LOCAL_CUSTOM_CYBERWARE_KEY, JSON.stringify(next));
+    emitLocalCyberwareEvent();
+  } catch {
+    // 隐私模式或空间已满时忽略
+  }
+  return next;
+}
+
+export function removeLocalCustomCyberware(id: string): StartCyberware[] {
+  const next = loadLocalCustomCyberware().filter((c) => c.id !== id);
+  try {
+    localStorage.setItem(LOCAL_CUSTOM_CYBERWARE_KEY, JSON.stringify(next));
+    emitLocalCyberwareEvent();
+  } catch {
+    // ignore
+  }
+  return next;
 }
 
 export function loadLocalCustomModules(): BoardModule[] {
@@ -354,11 +465,17 @@ export function loadLocalCustomModules(): BoardModule[] {
 }
 
 export function saveLocalCustomModule(module: BoardModule): BoardModule[] {
-  const current = loadLocalCustomModules().filter((m) => m.id !== module.id);
-  const next = [{ ...module, custom: true, packId: module.packId ?? "local" }, ...current].slice(
-    0,
-    100,
-  );
+  const existing = loadLocalCustomModules();
+  const normalized: BoardModule = {
+    ...module,
+    custom: true,
+    packId: module.packId ?? "local",
+  };
+  const index = existing.findIndex((m) => m.id === normalized.id);
+  const next =
+    index >= 0
+      ? existing.map((m, i) => (i === index ? normalized : m))
+      : [normalized, ...existing].slice(0, 100);
   try {
     localStorage.setItem(LOCAL_CUSTOM_MODULES_KEY, JSON.stringify(next));
     emitLocalModulesEvent();
@@ -384,6 +501,7 @@ export function mergeCreatorCatalog(
   base: BoardData,
   extraModules: readonly BoardModule[],
   packs: readonly WorkshopPack[] = [],
+  extraCyberware: readonly StartCyberware[] = [],
 ): BoardData {
   const seen = new Set(base.modules.map((m) => m.id));
   const mergedModules: BoardModule[] = [...base.modules];
@@ -394,9 +512,31 @@ export function mergeCreatorCatalog(
       mergedModules.push({ ...m, custom: true });
     }
   }
+  const seenChrome = new Set(base.cyberware.map((c) => c.id));
+  const mergedCyberware: BoardData["cyberware"][number][] = [...base.cyberware];
+  for (const item of extraCyberware) {
+    if (!item.slot || seenChrome.has(item.id)) continue;
+    seenChrome.add(item.id);
+    mergedCyberware.unshift({
+      id: item.id,
+      name: item.name,
+      slot: item.slot,
+      slotLabel: cyberwareRules.SLOT_LABELS[item.slot],
+      rarity: "rare",
+      humanityCost: item.humanityCost,
+      ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+      ...(item.armor ? { armor: true } : {}),
+      ...(item.accelerator ? { accelerator: true } : {}),
+      ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
+      custom: true,
+      packId: item.packId ?? "local",
+      ability: item.ability || item.summary || "自定义义体模块",
+    });
+  }
   return {
     ...base,
     modules: mergedModules,
+    cyberware: mergedCyberware,
   };
 }
 
@@ -404,12 +544,33 @@ export function exportLocalWorkshopPack(
   title = "我的夜之城自定义扩展包",
   author = "本地玩家",
 ): WorkshopPack {
+  const customChrome = loadLocalCustomCyberware().flatMap((c) =>
+    c.slot && /^[a-z0-9-]+$/.test(c.id)
+      ? [
+          {
+            id: c.id,
+            name: c.name,
+            slot: c.slot,
+            rarity: "rare" as const,
+            price: 18000,
+            humanityCost: c.humanityCost,
+            ability: c.ability || c.summary || "自定义义体模块",
+            armor: Boolean(c.armor),
+            accelerator: Boolean(c.accelerator),
+            iconic: false,
+            ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
+            ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
+          },
+        ]
+      : [],
+  );
   return WorkshopPackSchema.parse({
     id: `wk-local-${Date.now().toString(36)}`,
     title,
     author,
-    description: "包含自定义出身背景、角色特质与负面缺陷的创意工坊扩展包",
+    description: "包含自定义出身背景、角色特质、负面缺陷与自创义体的创意工坊扩展包",
     modules: loadLocalCustomModules(),
+    cyberware: customChrome,
   });
 }
 
@@ -672,7 +833,7 @@ export function stepProgress(
 
   const inherentCount = inherentCyberware(card, data).filter((c) => !c.replaced).length;
   const chromeCount = board.cyberware.length + inherentCount;
-  const tol = toleranceSummary(board.tolerance);
+  const load = boardLoadProfile(card, data);
   const kitTouched =
     board.kit.cashTier !== "standard" ||
     board.kit.customEddies !== null ||
@@ -701,8 +862,8 @@ export function stepProgress(
     cyberware: {
       id: "cyberware",
       ready: issueCounts.cyberware === 0,
-      filled: board.cyberware.length > 0 || board.tolerance !== "normal" || kitTouched,
-      badge: `${tol.label}${chromeCount > 0 ? ` · ${chromeCount}件` : ""}`,
+      filled: board.cyberware.length > 0 || kitTouched,
+      badge: chromeCount > 0 ? `${load.label} · ${chromeCount}件` : "可选",
       issueCount: issueCounts.cyberware,
     },
     connections: {

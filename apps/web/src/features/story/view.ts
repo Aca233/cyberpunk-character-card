@@ -721,15 +721,13 @@ export function neuroTelemetry(
   psychosis: View["psychosis"],
 ): NeuroTelemetry {
   const loadNote =
-    humanity.cap === 0
-      ? "义体负荷已逼近承载尽头"
-      : humanity.cap < 40
-        ? "重度义体改装大幅压榨了神经余量"
-        : humanity.tolerance === "low"
-          ? "体质对义体排异较为敏感"
-          : humanity.tolerance === "high"
-            ? "义体神经兼容性较高"
-            : "常规神经承载余量";
+    humanity.stage === "crisis" || humanity.stage === "edge"
+      ? "神经系统已处于高危边缘，急需调校、休养或压制剂"
+      : humanity.stage === "unstable"
+        ? "已有活跃神经症状，持续高压刺激极易加重"
+        : humanity.stage === "detached"
+          ? "已出现轻度情感疏离或感官噪点"
+          : "当前无活跃神经症状";
 
   if (psychosis.blackoutOpen) {
     return {
@@ -1380,7 +1378,9 @@ function summarizeNpcContact(
       ? destinations.find((d) => d.id === primaryPlaceId && !d.here)
       : undefined;
 
-  const affinityStr = npc?.met ? `好感 ${npc.affinity > 0 ? "+" : ""}${npc.affinity}` : null;
+  const relationStr = npc?.met
+    ? (npc.relation ?? (npc.memories.length > 0 ? `共同经历 ${npc.memories.length} 件事` : null))
+    : null;
   const placeText = npc?.met
     ? npc.here
       ? "当前在场"
@@ -1438,7 +1438,7 @@ function summarizeNpcContact(
       }
     }
     if (placeText) descParts.push(placeText);
-    if (affinityStr) descParts.push(affinityStr);
+    if (relationStr) descParts.push(relationStr);
     utilityParts = descParts;
   }
 

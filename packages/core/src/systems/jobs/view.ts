@@ -14,13 +14,13 @@ export function jobsView({ world, data }: ViewContext) {
   const npcs = NpcStateSchema.parse(world.slices.npc);
   return {
     fixers: Object.values(jobs.fixers).map((f) => {
-      const affinity = npcs.npcs[f.id]?.affinity ?? 0;
-      const side = factionSide(npcs.npcs[f.id]?.faction, data, world.slices.factions);
+      const card = npcs.npcs[f.id];
+      const side = factionSide(card?.faction, data, world.slices.factions);
       const blocked = side !== undefined && fixerBlocked(side.attitude);
       return {
         id: f.id,
         name: f.name,
-        affinity,
+        relation: card?.relation?.text ?? null,
         blocked,
         blockReason: blocked && side ? `${side.name}和你结了仇，当前暂停派单` : null,
       };
@@ -48,12 +48,11 @@ export function jobsView({ world, data }: ViewContext) {
       notes: j.notes,
       paid: j.paid,
       summary: j.summary,
-      /** 结算卡：中间人好感变化、接单以来的人性变化 */
+      /** 结算卡：接单以来的人性变化 */
       settlement:
         j.settlement === null
           ? null
           : {
-              affinity: j.settlement.affinity,
               humanity: j.settlement.humanity,
             },
     })),

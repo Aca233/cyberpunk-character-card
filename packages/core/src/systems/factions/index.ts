@@ -1,9 +1,10 @@
 import { defineSystem } from "../../kernel/system";
-import { applyFaction } from "./apply";
+import { applyFaction, applyFactionSeed, onNpcDied } from "./apply";
 import { factionsEvents } from "./events";
 import { factionRules } from "./prompt";
 import {
   FactionCommandSchema,
+  FactionSeedSchema,
   type FactionsCommand,
   type FactionsInternal,
   type FactionsState,
@@ -17,26 +18,30 @@ import { applyTurf, applyTurfTold } from "./turf";
 import { factionsView } from "./view";
 
 /**
- * 势力：每个帮派、公司对玩家的态度标签和一句理由，叙事模型按发生的事调整；
- * 势力的打算并进了【城里在发酵的事】（用户 2026-11-01 定的「全改」第 4 步：模型当主持人，代码只管记账），
- * 这里只记那边核对过的地盘变化
+ * 势力：态度、自由单归属成员身份（可选靠山与帮规污点）、大势力内部派系掌权与站队、以及主动地盘争夺；
+ * 与 npc 系统实打实联动，关键人物死亡自动触发靠山失势与掌权派权力真空。
  */
 export const factions = defineSystem<FactionsState, FactionsCommand, FactionsInternal>({
   id: "factions",
-  dependsOn: [],
+  dependsOn: ["npc"],
   state: FactionsStateSchema,
-  initial: () => ({ stances: {}, turf: [] }),
+  initial: () => ({ stances: {}, turf: [], membership: null, wings: {}, contested: {} }),
   commands: {
     faction: FactionCommandSchema,
   },
   internal: {
+    "faction.seed": FactionSeedSchema,
     "faction.turf": FactionTurfSchema,
     "faction.turfTold": FactionTurfToldSchema,
   },
   apply(draft, command, ctx) {
+    if (command.type === "faction.seed") return applyFactionSeed(draft, command, ctx);
     if (command.type === "faction.turf") return applyTurf(draft, command, ctx);
     if (command.type === "faction.turfTold") return applyTurfTold(draft, command);
     return applyFaction(draft, command, ctx);
+  },
+  on: {
+    "npc.died": onNpcDied,
   },
   rules: [factionRules],
   sections: [

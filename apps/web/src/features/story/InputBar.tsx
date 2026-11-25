@@ -1,5 +1,6 @@
 import type { TurnInput } from "@cp/core";
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { playSfx } from "../../audio/engine";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
@@ -53,6 +54,9 @@ export function InputBar({
   sandevistan,
   hacking,
   hackTargets,
+  hasOptics,
+  onScanTarget,
+  onScanAllTargets,
   onOpenDeckTab,
   lastSentText,
   inputRef,
@@ -75,6 +79,12 @@ export function InputBar({
   readonly hacking?: HackingView | null | undefined;
   /** 当前在场可点选的破解目标 */
   readonly hackTargets?: readonly HackTarget[] | undefined;
+  /** 是否装有完好义眼（用于在接入仓内就地扫描未扫目标） */
+  readonly hasOptics?: boolean | undefined;
+  /** 在接入仓快捷栏内即时扫描单个目标（不消耗回合） */
+  readonly onScanTarget?: ((npcId: string) => void) | undefined;
+  /** 在接入仓快捷栏内即时全扫在场目标（不消耗回合） */
+  readonly onScanAllTargets?: (() => void) | undefined;
   /** 打开左上角「接入仓」独立页签 */
   readonly onOpenDeckTab?: (() => void) | undefined;
   /** 本存档最近一条玩家发出的自由行动（空框按 ↑ 调回） */
@@ -168,6 +178,19 @@ export function InputBar({
     lastReplyTo.current = draft.replyTo;
   }, [draft.text, draft.replyTo]);
 
+  const pickDefaultTargetKey = useCallback(() => {
+    const list = hackTargets ?? [];
+    const hostile = list.find((t) => t.tone === "hostile");
+    return hostile?.key ?? list[0]?.key ?? null;
+  }, [hackTargets]);
+
+  const toggleDeckOpen = () => {
+    setDeckOpen((open) => {
+      const next = !open;
+      setSelectedTargetKey(next ? pickDefaultTargetKey() : null);
+      return next;
+    });
+  };
   const toggleSendMode = () => {
     setSendMode((prev) => {
       const next: SendMode = prev === "enter" ? "ctrlEnter" : "enter";
@@ -261,6 +284,24 @@ export function InputBar({
         send();
       }}
     >
+      {activeDeckOpen && hacking && (
+        <DeckQuickbar
+          hacking={hacking}
+          targets={hackTargets ?? []}
+          selectedKey={selectedTargetKey}
+          hasOptics={hasOptics}
+          onSelectTarget={setSelectedTargetKey}
+          onPickDraft={applyHackDraft}
+          onScanTarget={onScanTarget}
+          onScanAllTargets={onScanAllTargets}
+          onOpenDeckTab={onOpenDeckTab}
+          onClose={() => {
+            setDeckOpen(false);
+            setSelectedTargetKey(null);
+          }}
+        />
+      )}
+
       <div className={styles.composerShell} {...tilt}>
         <NineSlice
           id="map.shadowSmall"
@@ -299,6 +340,34 @@ export function InputBar({
         {busy && <span className={styles.composerSweep} aria-hidden="true" />}
 
         <div className={styles.composerBody}>
+          {boostOn && sandevistan && (
+            <div className={styles.boostBanner} role="status">
+              <span className={styles.boostTag}>{"OVERCLOCK // 时间压缩"}</span>
+              <span className={styles.boostBannerText}>
+                <b>{sandevistan.name}</b> 已启动超频 · 写下这一瞬间的连贯慢动作行动
+              </span>
+              <button
+                type="button"
+                className={styles.replyClose}
+                aria-label="取消斯安威斯坦超频"
+                title="取消超频"
+                onClick={() => {
+                  onDraft({ sandevistan: false });
+                  area.current?.focus();
+                }}
+              >
+                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                  <path
+                    d="M2.2 2.2 9.8 9.8M9.8 2.2 2.2 9.8"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="square"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
+
           {reply && (
             <div className={styles.replyBanner}>
               <span className={styles.replyTag}>REPLY</span>
@@ -396,26 +465,22 @@ export function InputBar({
                   small
                   pressed={boostOn}
                   onClick={() => {
-                    onDraft({ sandevistan: !boostOn });
+                    const next = !boostOn;
+                    if (next) playSfx("sandevistan");
+                    onDraft({ sandevistan: next });
                     area.current?.focus();
                   }}
                 >
                   <span className={styles.boostBtnInner}>
                     <Asset id="cyber.os" height={12} tint="currentColor" />
                     <span>{sandevistan.name}</span>
+                    {boostOn && <span className={styles.boostLiveTag}>超频中</span>}
                   </span>
                 </Button>
               )}
 
               {deckAvailable && hacking && (
-                <Button
-                  small
-                  pressed={activeDeckOpen}
-                  onClick={() => {
-                    setDeckOpen((open) => !open);
-                    setSelectedTargetKey(null);
-                  }}
-                >
+                <Button small pressed={activeDeckOpen} onClick={toggleDeckOpen}>
                   <span
                     className={styles.boostBtnInner}
                     title={[
@@ -550,21 +615,6 @@ export function InputBar({
           </div>
         </div>
       </div>
-
-      {activeDeckOpen && hacking && (
-        <DeckQuickbar
-          hacking={hacking}
-          targets={hackTargets ?? []}
-          selectedKey={selectedTargetKey}
-          onSelectTarget={setSelectedTargetKey}
-          onPickDraft={applyHackDraft}
-          onOpenDeckTab={onOpenDeckTab}
-          onClose={() => {
-            setDeckOpen(false);
-            setSelectedTargetKey(null);
-          }}
-        />
-      )}
     </form>
   );
 }

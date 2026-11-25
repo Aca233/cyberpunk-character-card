@@ -37,9 +37,8 @@ export type ArcConcernSeed = z.infer<typeof ArcConcernSeedSchema>;
 export const ArcSeedSchema = z.object({
   /** 人物卡 id，只给原作人物 */
   npc: z.string().min(1),
-  /** 解锁：见过面、活着，好感和共同记忆都够了，他才会考虑跟玩家说 */
+  /** 解锁：见过面、活着、无未解死仇且共同记忆够了，他才会考虑跟玩家说 */
   unlock: z.object({
-    affinity: z.number().int().min(0).max(100),
     memories: z.number().int().min(0).max(12),
   }),
   concerns: z.array(ArcConcernSeedSchema).min(2).max(3),
@@ -92,7 +91,7 @@ export const ConcernNoteSchema = z.object({
 });
 
 export const ConcernProgressSchema = z.object({
-  /** 实际前因，只给主持人；好感解锁不自动填入，也不向玩家泄露场外事件 */
+  /** 实际前因，只给主持人；交情达标不自动填入，也不向玩家泄露场外事件 */
   onset: ConcernNoteSchema.nullable().default(null),
   status: ConcernStatusSchema.nullable().default(null),
   toldAt: z.number().int().nullable().default(null),
@@ -157,7 +156,7 @@ export const ArcCommandSchema = z
     }
   })
   .describe(
-    "心事（原作人物的个人线）：start 只记录本轮正文或本存档记录中已经成立的前因（text 写具体事实，不能仅凭好感、原作剧情或种子补发生）；前因成立后 tell 他自己向玩家提起，join 玩家答应插手，decline 玩家明说不管，note 写实质进展，resolve 写结果和 fate，hear 玩家听说或撞见场外结果",
+    "心事（原作人物的个人线）：start 只记录本轮正文或本存档记录中已经成立的前因（text 写具体事实，不能仅凭交情、原作剧情或种子补发生）；前因成立后 tell 他自己向玩家提起，join 玩家答应插手，decline 玩家明说不管，note 写实质进展，resolve 写结果和 fate，hear 玩家听说或撞见场外结果",
   );
 export type ArcCommand = z.infer<typeof ArcCommandSchema>;
 

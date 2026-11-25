@@ -19,7 +19,7 @@ export type CyberwareSlot = z.infer<typeof CyberwareSlotSchema>;
 
 export const SLOT_LABELS: Readonly<Record<CyberwareSlot, string>> = {
   frontalCortex: "额叶皮质",
-  eyes: "眼部",
+  eyes: "面部与感官",
   nervous: "神经系统",
   os: "操作系统",
   circulatory: "循环系统",
@@ -31,21 +31,295 @@ export const SLOT_LABELS: Readonly<Record<CyberwareSlot, string>> = {
 };
 
 /**
- * 每个部位能装几件：照原作 2.0 义体医生那一页每组的格数（apps/web 的 CyberDoll.tsx 里 CYBER_SIDES 已经照着画了）。
- * 原来一个部位只装一件，用户 2026-10-31 说"为什么每个地方的义体只能选一个""现在 ui 和能装的义体数量对不上"，改成按格数装
+ * 物理互斥组：只拦截现实人体解剖/接口层面真正无法并存的硬件，不再用固定部位总格数一刀切。
+ * - cyberdeck（主网络接入仓，限 1）与 spineDrive（脊柱加速/狂暴主驱，限 1）互不互斥，允许双中枢并行（以高压神经负荷为代价）；
+ * - armMount（重型臂部义肢/武装，限 2）支持左右双臂自由混搭；
+ * - legDrive（腿部肌腱/骨架主驱，限 1）与脚掌/暗格等附挂件不互斥；
+ * - optics（主义眼模组，限 1）与面部面板、音频、嗅觉、声带等感官义体不互斥；
+ * - skinArmor（全覆式表皮主甲，限 1）与光学迷彩、涂层、时尚皮肤、走私腔不互斥；
+ * - fullBorg（全身义体框架 FBC，限 1）与 intimateCore（核心亲密义体，限 1）各限 1 套。
  */
-export const SLOT_CAPACITY: Readonly<Record<CyberwareSlot, number>> = {
-  frontalCortex: 3,
-  eyes: 2,
-  nervous: 3,
-  os: 1,
-  circulatory: 3,
-  integumentary: 3,
-  skeleton: 3,
-  hands: 2,
-  arms: 1,
-  legs: 1,
+export const EXCLUSIVE_GROUPS = [
+  "cyberdeck",
+  "spineDrive",
+  "optics",
+  "armMount",
+  "legDrive",
+  "skinArmor",
+  "fullBorg",
+  "intimateCore",
+] as const;
+export const ExclusiveGroupSchema = z.enum(EXCLUSIVE_GROUPS);
+export type ExclusiveGroup = z.infer<typeof ExclusiveGroupSchema>;
+
+export const EXCLUSIVE_GROUP_LIMIT: Readonly<Record<ExclusiveGroup, number>> = {
+  cyberdeck: 1,
+  spineDrive: 1,
+  optics: 1,
+  armMount: 2,
+  legDrive: 1,
+  skinArmor: 1,
+  fullBorg: 1,
+  intimateCore: 1,
 };
+
+export const EXCLUSIVE_GROUP_LABELS: Readonly<Record<ExclusiveGroup, string>> = {
+  cyberdeck: "主网络接入仓",
+  spineDrive: "脊柱加速/狂暴主驱",
+  optics: "主义眼模组",
+  armMount: "重型臂部武装/义肢",
+  legDrive: "腿部肌腱/骨架主驱",
+  skinArmor: "全覆式表皮主甲",
+  fullBorg: "全身义体框架（FBC）",
+  intimateCore: "核心亲密义体",
+};
+
+const LEG_DRIVE_IDS = new Set([
+  "prosthetic-legs",
+  "fortified-ankles",
+  "reinforced-tendons",
+  "jenkins-tendons",
+  "leeroy-ligament-system",
+  "badlands-runner-legs",
+  "anchor-hydraulic-legs",
+]);
+
+export interface ExclusiveProbe {
+  readonly id: string;
+  readonly name: string;
+  readonly slot: CyberwareSlot;
+  readonly exclusiveGroup?: ExclusiveGroup | undefined;
+  readonly armor?: boolean | undefined;
+  readonly accelerator?: boolean | undefined;
+  readonly deckTraits?: readonly string[] | undefined;
+  readonly deckProfile?: string | undefined;
+}
+
+const MAIN_OPTICS_IDS = new Set([
+  "kiroshi-mk1",
+  "kiroshi-mk2",
+  "kiroshi-clairvoyant",
+  "kiroshi-doomsayer",
+  "kiroshi-stalker",
+  "kiroshi-oracle",
+  "kiroshi-sentry",
+  "kiroshi-cockatrice",
+  "arasaka-optics",
+  "militech-thermal-optics",
+  "zetatech-net-optics",
+  "street-mod-optics",
+]);
+
+/** 推断一件义体所属的物理互斥组；返回 null 表示不互斥、可自由叠加。 */
+export function cyberwareExclusiveGroup(def: ExclusiveProbe): ExclusiveGroup | null {
+  if (def.exclusiveGroup) return def.exclusiveGroup;
+  if (def.slot === "os") {
+    if ((def.deckTraits && def.deckTraits.length > 0) || def.deckProfile) return "cyberdeck";
+    if (def.accelerator || def.id.includes("berserk") || def.id.includes("sandevistan")) {
+      return "spineDrive";
+    }
+    return null;
+  }
+  if (def.slot === "eyes") {
+    return MAIN_OPTICS_IDS.has(def.id) || def.id.startsWith("kiroshi-") ? "optics" : null;
+  }
+  if (def.slot === "arms") return "armMount";
+  if (def.slot === "legs") return LEG_DRIVE_IDS.has(def.id) ? "legDrive" : null;
+  if (def.slot === "integumentary") return def.armor ? "skinArmor" : null;
+  return null;
+}
+
+export type CyberwareConflictResult<T extends ExclusiveProbe = ExclusiveProbe> =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly group: ExclusiveGroup;
+      readonly limit: number;
+      readonly label: string;
+      readonly blockers: readonly T[];
+    };
+
+const SINGLE_ARM_IDS = new Set([
+  "projectile-launch-system",
+  "thermal-projectile-launch",
+  "electric-projectile-launch",
+  "toxic-projectile-launch",
+  "tech-utility-arm",
+  "surgical-prosthetic-arm",
+]);
+
+/** 判断臂部义体默认是单臂装配（如射弹发射器、工程/医疗义臂）还是双臂成对（如猩猩手臂、螳螂刀、单分子线）。 */
+export function isSingleArmCyberware(id: string): boolean {
+  return SINGLE_ARM_IDS.has(id) || id.includes("projectile-launch");
+}
+
+/** 返回义体的成对/单双侧装配提示文案（用于创角、局内义体页与诊所明确告知玩家是单手还是双手生效）。 */
+export function cyberwareMountHint(
+  def: ExclusiveProbe,
+  installedArmCount = 0,
+): { readonly badge: string; readonly detail: string } | null {
+  const group = cyberwareExclusiveGroup(def);
+  if (group === "armMount") {
+    const single = isSingleArmCyberware(def.id);
+    if (installedArmCount >= 2) {
+      return {
+        badge: "左右臂混搭",
+        detail: "左右双臂各自搭载一套义臂（2/2）",
+      };
+    }
+    if (single) {
+      return {
+        badge: "单臂装配",
+        detail: "默认装于单侧手臂，另一只手臂仍可加装第 2 件混搭",
+      };
+    }
+    return {
+      badge: "双臂成对",
+      detail: "单装时默认双臂成对生效；再装第 2 件臂部义体时自动改为左右臂混搭",
+    };
+  }
+  if (group === "optics") {
+    return {
+      badge: "双眼成对",
+      detail: "主视觉义眼模组（双目成对生效，不占用耳/鼻/虹膜等感官件）",
+    };
+  }
+  if (group === "legDrive") {
+    return {
+      badge: "双腿成对",
+      detail: "双腿成套驱动改造（不占用脚掌静音/腿侧暗格等附挂件）",
+    };
+  }
+  return null;
+}
+
+/** 检查装入 candidate 是否与已装义体发生物理互斥冲突。 */
+export function cyberwareConflicts<T extends ExclusiveProbe>(
+  candidate: ExclusiveProbe,
+  installed: readonly T[],
+): CyberwareConflictResult<T> {
+  const group = cyberwareExclusiveGroup(candidate);
+  if (!group) return { ok: true };
+  const blockers = installed.filter(
+    (item) => item.id !== candidate.id && cyberwareExclusiveGroup(item) === group,
+  );
+  const limit = EXCLUSIVE_GROUP_LIMIT[group];
+  if (blockers.length >= limit) {
+    return {
+      ok: false,
+      group,
+      limit,
+      label: EXCLUSIVE_GROUP_LABELS[group],
+      blockers,
+    };
+  }
+  return { ok: true };
+}
+
+export interface LoadProbe extends ExclusiveProbe {
+  readonly humanityCost: number;
+  readonly iconic?: boolean | undefined;
+}
+
+export interface CyberwareLoadProfile {
+  readonly totalCount: number;
+  readonly zeroLoadCount: number;
+  readonly activeLoadScore: number;
+  readonly dualCore: boolean;
+  readonly fullBorg: string | null;
+  readonly heavyNames: readonly string[];
+  readonly tier: "light" | "standard" | "heavy" | "extreme";
+  readonly label: string;
+  readonly tone: "ok" | "warn" | "bad";
+  readonly summary: string;
+}
+
+/**
+ * 纯事实神经负荷分析：只基于角色实际装在身上的完好义体，不依赖抽象的“低/中/高耐受”属性。
+ * 零负荷生活/时尚/感官/亲密义体不增加神经压迫；双中枢并发、全身义体化（FBC）与高负荷军用重器会如实标出。
+ */
+export function cyberwareLoadProfile(installed: readonly LoadProbe[]): CyberwareLoadProfile {
+  let zeroLoadCount = 0;
+  let score = 0;
+  let hasDeck = false;
+  let hasSpine = false;
+  let fullBorg: string | null = null;
+  const heavyNames: string[] = [];
+
+  for (const item of installed) {
+    const group = cyberwareExclusiveGroup(item);
+    if (group === "cyberdeck") hasDeck = true;
+    if (group === "spineDrive") hasSpine = true;
+    if (group === "fullBorg") fullBorg = item.name;
+    if (item.humanityCost <= 0) {
+      zeroLoadCount += 1;
+    } else {
+      score += item.humanityCost;
+    }
+    if (item.humanityCost >= 10 || item.iconic || group === "fullBorg") {
+      heavyNames.push(item.name);
+    }
+  }
+
+  const dualCore = hasDeck && hasSpine;
+  const effectiveScore = score + (dualCore ? 14 : 0);
+
+  const tier: CyberwareLoadProfile["tier"] =
+    fullBorg !== null || effectiveScore >= 65 || (dualCore && effectiveScore >= 48)
+      ? "extreme"
+      : dualCore || effectiveScore >= 40 || heavyNames.length >= 3
+        ? "heavy"
+        : effectiveScore >= 16
+          ? "standard"
+          : "light";
+
+  const label =
+    tier === "extreme"
+      ? "极限超载"
+      : tier === "heavy"
+        ? "高压重改"
+        : tier === "standard"
+          ? "常规镀铬"
+          : "轻度负荷";
+
+  const tone: CyberwareLoadProfile["tone"] =
+    tier === "extreme" ? "bad" : tier === "heavy" ? "warn" : "ok";
+
+  const facts: string[] = [];
+  if (fullBorg) facts.push(`全身义体化「${fullBorg}」`);
+  if (dualCore) facts.push("双中枢并行（接入仓 + 脊柱加速/狂暴）");
+  if (heavyNames.length > 0) {
+    const shown = heavyNames.filter((n) => n !== fullBorg).slice(0, 4);
+    if (shown.length > 0) facts.push(`高压重器：${shown.join("、")}`);
+  }
+  if (zeroLoadCount > 0 && facts.length === 0) {
+    facts.push(`含 ${zeroLoadCount} 件零神经负荷生活/感官改造`);
+  }
+
+  const summary =
+    tier === "extreme"
+      ? `${facts.join("；")}——神经系统长期处于极限压榨状态，连开加速、双中枢并发、重伤失血、情感重创或长期断药/缺调校极易诱发真实赛博精神病症状。`
+      : tier === "heavy"
+        ? `${facts.join("；")}——重度实战改造，常态可控但高烈度连续压榨或严重刺激时易起神经排异与感官噪点，需要定期医生调校或备免疫抑制剂。`
+        : tier === "standard"
+          ? "常规佣兵级义体负荷，日常同步平稳，仅在强黑客攻脑、重伤休克或剧烈精神创伤时可能起波澜。"
+          : installed.length === 0
+            ? "未安装额外义体，纯原生肉身神经。"
+            : "轻度或零负荷生活/感官改造，日常几乎无神经排异负担。";
+
+  return {
+    totalCount: installed.length,
+    zeroLoadCount,
+    activeLoadScore: effectiveScore,
+    dualCore,
+    fullBorg,
+    heavyNames,
+    tier,
+    label,
+    tone,
+    summary,
+  };
+}
 
 /** 黑客硬件的定性特化：隐蔽、群控扩散、强攻烧毁、黑墙、网监溯源、防黑冰、散热回复 */
 export const DECK_TRAITS = [
@@ -173,6 +447,8 @@ export const CyberwareDefSchema = z.object({
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic）；稀有标签不替代真实货源与交易意愿 */
   iconic: z.boolean().default(false),
+  /** 物理互斥组（不写时由 cyberwareExclusiveGroup 按解剖特征自动推断） */
+  exclusiveGroup: ExclusiveGroupSchema.optional(),
   behaviorChip: BehaviorChipProfileSchema.optional(),
 });
 export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;

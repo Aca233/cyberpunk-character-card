@@ -6,7 +6,7 @@ import { useLayer } from "../../ui/layers";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { useSaveImages } from "../images/SaveImagesContext";
 import { portraitOf } from "./art";
-import { affinityTone, ProfileHead } from "./Profile";
+import { npcRelationTag, ProfileHead } from "./Profile";
 import styles from "./phone.module.css";
 import {
   buildChatBubbles,
@@ -109,11 +109,6 @@ export function UnreadBadge({ children }: { readonly children: string | number }
 /** 浮层照原作世界地图默认 tooltip 的三层（阴影、底、框），切线同 MapPanel 的 TOOLTIP_SLICE / SHADOW_SLICE */
 const TIP_SLICE = [10, 30, 70, 10] as const;
 const TIP_SHADOW_SLICE = 20;
-
-/** 联系人的好感数字：正数带加号 */
-function affinityLabel(n: number): string {
-  return `好感 ${n > 0 ? "+" : ""}${n}`;
-}
 
 /** 正在等待服务器返回的一条本地乐观聊天 */
 export interface PendingPhoneChat {
@@ -637,11 +632,20 @@ function ThreadHead({
                 {badge.shortLabel ?? badge.label}
               </span>
             ))}
-            {npc?.met && npc.alive && (
-              <span className={styles.affinityPill} data-tone={affinityTone(npc.affinity)}>
-                {affinityLabel(npc.affinity)}
-              </span>
-            )}
+            {npc?.met &&
+              npc.alive &&
+              (() => {
+                const relTag = npcRelationTag(npc);
+                return relTag ? (
+                  <span
+                    className={styles.affinityPill}
+                    data-tone={relTag.tone}
+                    title={relTag.title}
+                  >
+                    {relTag.label}
+                  </span>
+                ) : null;
+              })()}
           </span>
           <span className={styles.threadMetaRow}>
             {metaText && (

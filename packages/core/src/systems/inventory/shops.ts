@@ -1,7 +1,6 @@
-import { z } from "zod";
 import type { ViewContext } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { keeperOf, RARITY_LABELS } from "../economy";
+import { RARITY_LABELS } from "../economy";
 import { formatGameTime, merchantAt, merchantSites, WorldClockStateSchema } from "../world";
 import {
   defaultInstanceStateFromDef,
@@ -82,19 +81,6 @@ function itemMeta(def: ItemDef, ws: WeaponInstanceState | undefined) {
     weaponState: projectWeaponState(ws),
   };
 }
-
-/**
- * npc 的入口引用了 inventory（npc/body.ts），这里不反向引用 npc 的入口；
- * 只读取找店主要用的四项，不把人物卡的其他内容带进商店投影
- */
-const KeeperCardsSchema = z.object({
-  npcs: z
-    .record(
-      z.string(),
-      z.object({ name: z.string(), affinity: z.number(), met: z.boolean(), alive: z.boolean() }),
-    )
-    .default({}),
-});
 
 function projectGunsmithShop(
   world: WorldState,
@@ -309,12 +295,10 @@ export function shopsView({ world, data }: ViewContext) {
   if (here.length === 0) return [];
   const catalog = itemCatalog(withWorldObjects(data, inventory.objects));
   const sites = merchantSites(data);
-  const npcs = KeeperCardsSchema.parse(world.slices.npc ?? {}).npcs;
   const sellCounts = carriedItemCounts(inventory);
   const sellNames = weaponDisplayNames(sellCounts.keys(), inventory.objects, catalog);
   const now = world.time;
   return here.map((shop) => {
-    const keeper = keeperOf(shop.keeperNpc, npcs);
     const sell = [...sellCounts].flatMap(([id, count]) => {
       const obj = inventory.objects[id];
       const def = catalog.get(id) ?? obj?.definition;
@@ -348,8 +332,6 @@ export function shopsView({ world, data }: ViewContext) {
       kind: sites.get(shop.id)?.kind ?? null,
       keeper: shop.keeper,
       keeperNpc: shop.keeperNpc ?? null,
-      /** 店主对你的好感；店主没有人物卡或还没见过是 null */
-      keeperAffinity: keeper?.affinity ?? null,
       note: shop.note,
       blackMarket: shop.blackMarket,
       restockAt: delivery

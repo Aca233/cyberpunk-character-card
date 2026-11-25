@@ -55,12 +55,12 @@ export function concernOf(arc: ArcProgress, id: string): ConcernProgress {
   return arc.concerns[id] ?? EMPTY_CONCERN;
 }
 
-/** 这一刻够不够条件：见过面、活着，好感和共同记忆都够 */
+/** 这一刻够不够条件：见过面、活着、无未解旧仇且共同记忆够 */
 export function arcReady(seed: ArcSeed, card: Npc | undefined): boolean {
   return (
     card?.alive === true &&
     card.met &&
-    card.affinity >= seed.unlock.affinity &&
+    !card.ledger.some((e) => e.settledAt === null && e.kind === "grudge") &&
     card.memories.length >= seed.unlock.memories
   );
 }
@@ -139,7 +139,7 @@ export function applyArc(draft: State, command: ArcCommand, ctx: SystemContext):
   const current = concernOf(arcOf(draft, seed.npc), concern.id);
   const title = concern.title;
   if (current.onset === null) {
-    return fail(`「${title}」的前因尚未成立：${concern.trigger}；不能仅凭好感或原作剧情启动`);
+    return fail(`「${title}」的前因尚未成立：${concern.trigger}；不能仅凭交情或原作剧情启动`);
   }
 
   switch (command.action) {
@@ -147,8 +147,11 @@ export function applyArc(draft: State, command: ArcCommand, ctx: SystemContext):
       if (!card?.alive) return fail(`${name}已经死了`);
       if (!card.met) return fail(`玩家还没见过${name}`);
       if (!arcUnlocked(draft, seed, card)) {
+        const hasGrudge = card.ledger.some((e) => e.settledAt === null && e.kind === "grudge");
         return fail(
-          `${name}跟玩家还没熟到说心事（要好感 ≥${seed.unlock.affinity}、共同记忆 ≥${seed.unlock.memories} 条，现在 ${card.affinity}、${card.memories.length} 条）`,
+          hasGrudge
+            ? `${name}对玩家还记着未解的仇，现在不会向玩家交心`
+            : `${name}跟玩家还没熟到说心事（需要共同记忆 ≥${seed.unlock.memories} 条，现在 ${card.memories.length} 条）`,
         );
       }
       const arc = slot(draft, seed.npc);

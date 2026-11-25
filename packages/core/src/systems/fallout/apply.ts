@@ -36,8 +36,8 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
       case "deadline":
         if (c.action === "add") kinds.add("deadline");
         break;
-      case "affinity":
-        if (num(c.delta) < 0) kinds.add("relationship");
+      case "ledger":
+        if (c.kind === "grudge") kinds.add("relationship");
         break;
       case "item":
         if (c.action === "lose") kinds.add("item");
