@@ -175,6 +175,7 @@ export function CyberDoll({
   tipLine,
   corner,
   selected = null,
+  selectedPartId = null,
   showAddSlots = false,
   onCell,
 }: {
@@ -183,6 +184,8 @@ export function CyberDoll({
   readonly tipLine?: (slot: CyberSlot, parts: readonly DollPart[], index: number) => string;
   readonly corner?: ReactNode;
   readonly selected?: CyberSlot | null;
+  /** 精确聚焦的已装义体 id，用于高亮具体某一格 */
+  readonly selectedPartId?: string | null;
   /** 创角等可编辑场景开启：未装满的部位旁额外显示「+」开放挂载格，直觉传达可继续叠装 / 双臂混搭 */
   readonly showAddSlots?: boolean;
   readonly onCell?: (slot: CyberSlot, part: DollPart | undefined) => void;
@@ -197,6 +200,7 @@ export function CyberDoll({
   const bodyBase = bodySlot ? CYBER_BODY_ART[bodySlot].base : "cyber.bodySkin";
 
   const previewBody = (slot: CyberSlot) => setBodyView({ selected, slot });
+  const resetBody = () => setBodyView({ selected, slot: selected });
   const previewCell = (slot: CyberSlot, index: number) => {
     setHovered({ slot, index });
     previewBody(slot);
@@ -270,7 +274,13 @@ export function CyberDoll({
           type="button"
           className={neural.cyberLabelBtn}
           aria-pressed={isSelectedSlot}
+          title={
+            list.length > 0
+              ? `${label}（${list.length} 件）：${list.map((p) => p.name).join("、")}`
+              : `${label}：尚未装配`
+          }
           onMouseEnter={() => previewBody(slot)}
+          onMouseLeave={resetBody}
           onFocus={() => previewBody(slot)}
           onClick={() => {
             previewBody(slot);
@@ -305,7 +315,10 @@ export function CyberDoll({
                 data-empty=""
                 data-slot-active={isSelectedSlot || undefined}
                 onMouseEnter={() => previewCell(slot, idx)}
-                onMouseLeave={() => setHovered(null)}
+                onMouseLeave={() => {
+                  setHovered(null);
+                  resetBody();
+                }}
                 onFocus={(event) => {
                   previewBody(slot);
                   if (event.currentTarget.matches(":focus-visible")) {
@@ -340,22 +353,31 @@ export function CyberDoll({
               {visible.map((part, i) => {
                 const art = itemArtOf(part.id);
                 const element = itemElementOf(part.id);
+                const isSelectedPart =
+                  selectedPartId !== null ? part.id === selectedPartId : isSelectedSlot;
                 return (
                   <button
                     key={part.id}
                     type="button"
                     className={neural.cyberCell}
                     aria-pressed={
-                      onCell ? isSelectedSlot : pinned?.slot === slot && pinned.index === i
+                      onCell ? isSelectedPart : pinned?.slot === slot && pinned.index === i
                     }
                     aria-label={`${label}：${part.name}${part.broken ? "（已损毁）" : ""}`}
+                    title={`${part.name}${part.broken ? "（已损毁 · 需检修）" : ""} — 点击查看详情`}
                     data-slot-active={isSelectedSlot || undefined}
+                    data-part-active={
+                      (selectedPartId !== null && part.id === selectedPartId) || undefined
+                    }
                     data-broken={part.broken || undefined}
                     data-rarity={part.rarity}
                     data-iconic={part.iconic || undefined}
                     data-element={element}
                     onMouseEnter={() => previewCell(slot, i)}
-                    onMouseLeave={() => setHovered(null)}
+                    onMouseLeave={() => {
+                      setHovered(null);
+                      resetBody();
+                    }}
                     onFocus={(event) => {
                       previewBody(slot);
                       if (event.currentTarget.matches(":focus-visible")) {
@@ -419,6 +441,7 @@ export function CyberDoll({
                   data-empty=""
                   data-slot-active={isSelectedSlot || undefined}
                   onMouseEnter={() => previewBody(slot)}
+                  onMouseLeave={resetBody}
                   onFocus={() => previewBody(slot)}
                   onClick={() => {
                     previewBody(slot);
@@ -433,10 +456,19 @@ export function CyberDoll({
                 <button
                   type="button"
                   className={`${neural.cyberCell} ${neural.cyberMoreCell}`}
-                  aria-pressed={isSelectedSlot}
+                  aria-pressed={
+                    selectedPartId !== null
+                      ? list.slice(MAX_INLINE_CELLS - 1).some((p) => p.id === selectedPartId)
+                      : isSelectedSlot
+                  }
                   aria-label={`${label}另有 ${overflow} 件已装义体`}
+                  title={`展开查看其余 ${overflow} 件：${list
+                    .slice(MAX_INLINE_CELLS - 1)
+                    .map((p) => p.name)
+                    .join("、")}`}
                   data-slot-active={isSelectedSlot || undefined}
                   onMouseEnter={() => previewBody(slot)}
+                  onMouseLeave={resetBody}
                   onFocus={() => previewBody(slot)}
                   onClick={() => {
                     previewBody(slot);
@@ -465,8 +497,11 @@ export function CyberDoll({
   return (
     <div className={neural.cyberScreen}>
       <div className={neural.cyberBackdrop} aria-hidden>
+        <span className={neural.cyberScanGrid} />
         <span className={neural.cyberAxis} />
+        <span className={neural.cyberCrosshair} />
         <span className={neural.cyberRing} />
+        <span className={neural.cyberRingInner} />
       </div>
       <ul className={neural.cyberSide} data-side="left" aria-label="头部和躯干">
         {CYBER_SIDES[0]?.map(renderGroup)}

@@ -2908,6 +2908,22 @@ button.bioUrgent:focus-visible {
   min-height: 0;
 }
 
+/* 义体加宽页签：由内部双栏与右侧检视台独立滚动，外层不额外套双滚动条且完整吃满剩余高度 */
+.bio[data-wide] .growBody {
+  display: flex;
+  flex-direction: column;
+  height: min(680px, calc(100dvh - 185px));
+  overflow: hidden;
+  padding-bottom: 4px;
+}
+
+.bio[data-wide] .growBody > div {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* 标题一行：左边写这块装的是什么，右边写对应的键 */
 .peekHead {
   display: flex;
@@ -3601,6 +3617,13 @@ button.bioUrgent:focus-visible {
 
 .unread[data-wide] .growBody > div > :is(div, section) {
   flex: 1 1 0%;
+  min-height: 0;
+}
+
+.bio[data-wide] .growBody > div > div {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
   min-height: 0;
 }
 

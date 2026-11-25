@@ -1,5 +1,4 @@
-import { applyPatches } from "immer";
-import { type LogRecord, voidedSeqs } from "./kernel/turnlog";
+import { applyRecordPatches, type LogRecord, voidedSeqs } from "./kernel/turnlog";
 import type { Snapshot, WorldState } from "./kernel/world";
 import { healthDisplay } from "./systems/health/apply";
 import { HealthStateSchema } from "./systems/health/schema";
@@ -83,7 +82,7 @@ export function buildLedger(
   let world = base.world;
   for (const r of records.slice(base.nextSeq)) {
     if (r.kind === "void" || r.kind === "check" || voided.has(r.seq)) continue;
-    const next: WorldState = applyPatches(world, r.patches);
+    const next: WorldState = applyRecordPatches(world, r.patches);
     if (r.seq >= from && (r.kind === "turn" || r.kind === "action")) {
       const changes = diffStats(hardStats(world), hardStats(next));
       if (r.kind === "turn" || changes.length > 0) {

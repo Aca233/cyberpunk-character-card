@@ -1,8 +1,8 @@
 /** 新存档的初始世界和给玩家看的状态投影；后端和网页共用 */
 
-import { applyPatches } from "immer";
 import { feedDeliveries } from "./kernel/system";
 import {
+  applyRecordPatches,
   effectiveTurns,
   type LogRecord,
   logVersion,
@@ -662,7 +662,7 @@ export function sceneStartSeq(initial: WorldState, records: readonly LogRecord[]
   let start = 0;
   for (const record of records) {
     if (record.kind === "void" || record.kind === "check" || voided.has(record.seq)) continue;
-    world = applyPatches(world, record.patches);
+    world = applyRecordPatches(world, record.patches);
     const now = sceneOf(world);
     if (now !== scene) {
       scene = now;

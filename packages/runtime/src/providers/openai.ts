@@ -56,10 +56,16 @@ interface ChatChunk {
     readonly cache_creation_input_tokens?: number;
   } | null;
   readonly error?: {
-    readonly message?: string;
-    readonly code?: string | null;
-    readonly type?: string;
+    readonly message?: unknown;
+    readonly code?: string | number | null;
+    readonly type?: string | number | null;
   };
+}
+
+function normalizeErrorField(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }
 
 /** 仅向官方 OpenAI 端点附加 prompt_cache_key，避免部分第三方兼容中转站报 unknown field */
@@ -116,7 +122,7 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
                   type: "image_url" as const,
                   image_url: { url: `data:${img.mimeType};base64,${img.data}` },
                 })),
-                ...(m.content ? [{ type: "text" as const, text: m.content }] : []),
+                { type: "text" as const, text: m.content },
               ],
             };
           }
@@ -126,7 +132,6 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
         stream_options: { include_usage: true },
         ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
         ...(temperature !== undefined ? { temperature } : {}),
-        // 酒馆预设的 top_p；不能仅凭地址不同就认定上游支持 top_k，未确认能力时不发送扩展字段。
         // baseUrl 留空也可能走官方接口，不能用它与默认地址的字符串比较判断支持情况。
         ...(request.topP !== undefined ? { top_p: request.topP } : {}),
         ...(request.responseFormat?.type === "json"
@@ -141,7 +146,8 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
       if (!res.ok) {
         const detail = await errorDetail(res);
         if (signal?.aborted) throw new AbortedError();
-        if (detail.code && BLOCK_CODES.has(detail.code.toLowerCase())) {
+        const detailCode = normalizeErrorField(detail.code);
+        if (detailCode && BLOCK_CODES.has(detailCode.toLowerCase())) {
           yield { type: "blocked", reason: detail.message || "上游拦截了这段内容" };
           return;
         }
@@ -167,13 +173,24 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
           throw new UpstreamError(`${provider} 返回了看不懂的数据`, undefined, true);
         }
         if (chunk.error) {
-          const code = chunk.error.code ?? chunk.error.type ?? "";
-          if (BLOCK_CODES.has(code.toLowerCase())) {
-            yield { type: "blocked", reason: chunk.error.message || "上游拦截了这段内容" };
+          const code =
+            normalizeErrorField(chunk.error.code) || normalizeErrorField(chunk.error.type);
+          const msg = normalizeErrorField(chunk.error.message);
+          if (code && BLOCK_CODES.has(code.toLowerCase())) {
+            yield { type: "blocked", reason: msg || "上游拦截了这段内容" };
             return;
           }
+          const numericCode =
+            typeof chunk.error.code === "number" && Number.isInteger(chunk.error.code)
+              ? chunk.error.code
+              : /^\d{3}$/.test(code)
+                ? Number(code)
+                : undefined;
+          if (numericCode !== undefined && numericCode >= 400 && numericCode <= 599) {
+            throw statusError(provider, numericCode, msg);
+          }
           throw new UpstreamError(
-            `${provider} 生成到一半出错：${chunk.error.message ?? code}`,
+            `${provider} 生成到一半出错：${msg || code || "未知错误"}`,
             undefined,
             true,
           );

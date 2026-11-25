@@ -95,7 +95,11 @@ export const cyberwareStatus: readonly SystemStatus[] = [
           })),
       );
       if (load.tier === "heavy" || load.tier === "extreme" || load.dualCore || load.fullBorg) {
-        lines.push(`义体神经负荷（${load.label}）：${load.summary}`);
+        const pressure =
+          load.tier === "extreme"
+            ? `负荷指数 ${load.activeLoadScore}（已远超常规肉身神经承载，装新高压件、连开加速、双中枢并发、激战重伤或未用压制剂时极易直接触发排异与赛博精神病症状）`
+            : `负荷指数 ${load.activeLoadScore}（持续高压压榨、叠装重器或重大刺激时易起神经排异与感官失真）`;
+        lines.push(`义体神经负荷（${load.label}，${pressure}）：${load.summary}`);
       }
       const eyes = installed.filter((c) => c.slot === "eyes" && !c.broken);
       if (eyes.length > 0) {

@@ -1,4 +1,4 @@
-import { applyPatches, enablePatches } from "immer";
+import { applyPatches, enablePatches, type Patch } from "immer";
 import { z } from "zod";
 import { ImageSceneContextSchema } from "../schemas/image";
 import { PresentedContentMediaSchema } from "../schemas/presented-content-media";
@@ -331,10 +331,86 @@ const RETIRED_PATHS: readonly (readonly string[])[] = [
   // 危机章节已删除
   ["slices", "psychosis", "crisis"],
   ["slices", "psychosis", "crises"],
+  // v0.9.9 神经耐受度定性字段已删除
+  ["slices", "humanity", "tolerance"],
 ];
 
 function retired(path: readonly (string | number)[]): boolean {
-  return RETIRED_PATHS.some((r) => r.every((key, i) => path[i] === key));
+  if (RETIRED_PATHS.some((r) => r.every((key, i) => path[i] === key))) return true;
+  // v0.9.9 删除了好感数值（npc.npcs.<id>.affinity / phone.chatBudget.<id>.affinityGained / jobs.*.settlement.affinity）
+  if (path[0] === "slices" && path[1] === "npc" && path[2] === "npcs" && path[4] === "affinity") {
+    return true;
+  }
+  if (
+    path[0] === "slices" &&
+    path[1] === "phone" &&
+    path[2] === "chatBudget" &&
+    path[4] === "affinityGained"
+  ) {
+    return true;
+  }
+  if (
+    path[0] === "slices" &&
+    path[1] === "jobs" &&
+    path[2] === "jobs" &&
+    path[4] === "settlement" &&
+    path[5] === "affinity"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** 检查补丁的父路径能否在当前状态上解析，避免因内容更新（如删改预制 NPC）导致整条重放崩溃 */
+function canResolvePatch(world: WorldState, patch: Patch): boolean {
+  const { path, op } = patch;
+  if (path.length === 0) return false;
+  let cur: unknown = world;
+  for (let i = 0; i < path.length - 1; i++) {
+    if (cur === null || typeof cur !== "object") return false;
+    const key = path[i];
+    if (key === undefined) return false;
+    if (key === "__proto__" || key === "constructor" || key === "prototype") return false;
+    if (Array.isArray(cur)) {
+      const idx = typeof key === "number" ? key : Number(key);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= cur.length) return false;
+      cur = cur[idx];
+    } else {
+      cur = (cur as Record<string, unknown>)[String(key)];
+    }
+  }
+  if (cur === null || typeof cur !== "object") return false;
+  const last = path[path.length - 1];
+  if (last === "__proto__" || last === "constructor" || last === "prototype") return false;
+  if (Array.isArray(cur)) {
+    if (last === "length" && op === "replace") return true;
+    if (last === "-" && op === "add") return true;
+    const idx = typeof last === "number" ? last : Number(last);
+    if (!Number.isInteger(idx) || idx < 0) return false;
+    if (op === "add") return idx <= cur.length;
+    return idx < cur.length;
+  }
+  return true;
+}
+
+/**
+ * 过滤掉已退役字段以及因内容表更新导致父路径失效的补丁，逐条按状态前进应用。
+ * 供 replay、buildLedger、sceneStartSeq 共用，保持单一真相。
+ */
+export function applyRecordPatches(world: WorldState, patches: readonly Patch[]): WorldState {
+  const active = patches.filter((p) => !retired(p.path));
+  if (active.length === 0) return world;
+  try {
+    return applyPatches(world, active);
+  } catch {
+    // 个别旧日志补丁可能指向已更新/删除的内容路径，退回到逐条检查后跳过无效路径，保留其余状态变更
+    let next = world;
+    for (const patch of active) {
+      if (!canResolvePatch(next, patch)) continue;
+      next = applyPatches(next, [patch]);
+    }
+    return next;
+  }
 }
 
 /** 从快照往后按记录里的补丁重放：不重掷骰子，不调用模型 */
@@ -346,10 +422,7 @@ export function replay(base: Snapshot, records: readonly LogRecord[]): WorldStat
   let world = base.world;
   for (const record of records.slice(base.nextSeq)) {
     if (record.kind === "void" || record.kind === "check" || voided.has(record.seq)) continue;
-    world = applyPatches(
-      world,
-      record.patches.filter((p) => !retired(p.path)),
-    );
+    world = applyRecordPatches(world, record.patches);
   }
   return world;
 }

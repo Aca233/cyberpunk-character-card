@@ -9,6 +9,7 @@ import {
   type ActionRecord,
   type ActionRequest,
   applyPlayerAction,
+  applyRecordPatches,
   boardStart,
   buildExtractPrompt,
   buildImageSceneContext,
@@ -26,6 +27,7 @@ import {
   HISTORY_TURNS,
   isSnapshotValid,
   judgeCandidates,
+  LEDGER_TURNS,
   type LlmMessage,
   type LogRecord,
   loadoutText,
@@ -56,6 +58,7 @@ import {
   runPhoneChat,
   type SaveMeta,
   SaveMetaSchema,
+  type Snapshot,
   SUMMARY_SYSTEM,
   safehouseRules,
   sandevistanBlock,
@@ -937,7 +940,8 @@ export class GameService {
         return { status: 404, body: { error: `没有第 ${seq} 轮` } };
       }
       const before = records.slice(0, seq);
-      const world = replay({ nextSeq: 0, world: newGameWorld(meta, runtime.content) }, before);
+      const upto = records.slice(0, seq + 1);
+      const world = await this.worldAt(id, meta, before);
       const input = TurnInputSchema.safeParse(record.input);
       let prompts: StagePrompt[] = [];
       let rebuildError: string | null = null;
@@ -1111,10 +1115,7 @@ export class GameService {
               (record.ooc ? "场外提问，不推演" : "尚未触发需要推演的世界变化")),
           // 这一轮结算之后城里的动静（含已结束的），只在剧透视图里看
           city: cityRules.CityStateSchema.parse(
-            replay(
-              { nextSeq: 0, world: newGameWorld(meta, runtime.content) },
-              records.slice(0, seq + 1),
-            ).slices.city ?? {},
+            applyRecordPatches(world, record.patches).slices.city ?? {},
           ).events.map((e) => ({
             id: e.id,
             title: e.title,
@@ -1126,10 +1127,11 @@ export class GameService {
             updatedAt: e.updatedAt,
           })),
           // 账目对账：最近 10 轮各改了哪些硬数值，和当时生效的指令
-          ledger: buildLedger(
-            { nextSeq: 0, world: newGameWorld(meta, runtime.content) },
-            records.slice(0, seq + 1),
-          ),
+          ledger: await (async () => {
+            const ledgerStart = effectiveTurns(upto).slice(-LEDGER_TURNS)[0]?.seq ?? 0;
+            const base = await this.snapshotFor(id, meta, upto, ledgerStart);
+            return buildLedger(base, upto);
+          })(),
           unsettled: record.unsettled ?? null,
           check: record.check ?? null,
           choices: record.choices ?? [],
@@ -1152,7 +1154,6 @@ export class GameService {
   evalDraft(id: string, seq: number): Promise<Reply> {
     return this.locks.run(id, async (): Promise<Reply> => {
       const meta = await this.deps.saves.readMeta(id);
-      const runtime = this.runtime(meta);
       const { records } = await this.deps.saves.loadLog(id);
       const record = records[seq];
       if (record?.kind !== "turn" || !effectiveTurns(records).includes(record)) {
@@ -1162,7 +1163,7 @@ export class GameService {
       if (!input.success) return { status: 400, body: { error: "这一轮的玩家输入格式不对" } };
       const before = records.slice(0, seq);
       const ask = { input: input.data };
-      const world = replay({ nextSeq: 0, world: newGameWorld(meta, runtime.content) }, before);
+      const world = await this.worldAt(id, meta, before);
       const opening = openingPremise(
         meta.opening,
         meta.startLocation,
@@ -1795,18 +1796,30 @@ export class GameService {
     }
   }
 
+  /** 选一个位于指定记录区间及之前（且不晚于 maxSeq）的最新有效快照；没有时退回初始世界 */
+  private async snapshotFor(
+    id: string,
+    meta: SaveMeta,
+    records: readonly LogRecord[],
+    maxSeq?: number,
+  ): Promise<Snapshot> {
+    const runtime = this.runtime(meta);
+    const all = await this.deps.saves.readSnapshots(id);
+    const eligible = maxSeq === undefined ? all : all.filter((s) => s.nextSeq <= maxSeq);
+    const snapshot = pickSnapshot(eligible, records) ?? {
+      nextSeq: 0,
+      world: newGameWorld(meta, runtime.content),
+    };
+    return { ...snapshot, world: withAllSlices(snapshot.world) };
+  }
+
   /** 从适用于这段日志的快照重建世界；调用方持有这个存档的锁 */
   private async worldAt(
     id: string,
     meta: SaveMeta,
     records: readonly LogRecord[],
   ): Promise<WorldState> {
-    const runtime = this.runtime(meta);
-    const snapshot = pickSnapshot(await this.deps.saves.readSnapshots(id), records) ?? {
-      nextSeq: 0,
-      world: newGameWorld(meta, runtime.content),
-    };
-    return replay({ ...snapshot, world: withAllSlices(snapshot.world) }, records);
+    return replay(await this.snapshotFor(id, meta, records), records);
   }
 
   /** 调用方持有这个存档的锁 */

@@ -6,7 +6,13 @@ import { effectiveTurns, type LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { evaluatePhysicsBoundaries, type NarrativeIntensity } from "../../physics";
 import type { TurnInput } from "../../schemas/turn";
-import { CyberwareStateSchema, cyberwareCatalog, cyberwareSection } from "../../systems/cyberware";
+import { CombatStateSchema } from "../../systems/combat";
+import {
+  CyberwareStateSchema,
+  cyberwareCatalog,
+  cyberwareLoadProfile,
+  cyberwareSection,
+} from "../../systems/cyberware";
 import { EconomyStateSchema } from "../../systems/economy/schema";
 import { consequenceSection } from "../../systems/fallout";
 import {
@@ -619,12 +625,12 @@ export function uiActionsSection(
   if (actions.length === 0) return undefined;
   const lines = actions.map((a) => `- ${a.summary}`).join("\n");
   if (stage === "extract") {
-    return `【上一轮之后已在界面完成并结算的操作（严禁重复记账）】\n以下操作在玩家发本轮消息前已经通过界面直接扣款、交付或改好状态并写入【当前状态】，本轮正文只是把它们自然写进故事里。绝不要为以下事项再发 trade、item、money、cyberware、gunsmith、jobAccept、vehicle、safehouse、heal、suppressant 等重复指令：\n${lines}`;
+    return `【上一轮之后已在界面完成并结算的操作（严禁重复记账）】\n以下操作在玩家发本轮消息前已经通过界面直接扣款、交付或改好状态并写入【当前状态】，本轮正文只是把它们自然写进故事里。绝不要为以下事项再发 trade、item、money、cyberware、gunsmith、jobAccept、vehicle、safehouse、heal、suppressant 等重复指令（但若因刚叠装高压义体等在正文实际引发了新的神经排异症状，humanity affect 仍需照实记账）：\n${lines}`;
   }
   if (stage === "judge") {
     return `【上一轮之后玩家刚刚在界面完成的操作（已实际生效）】\n以下事在玩家输入本轮行动之前已经完成并结算，相关物品、义体、资金与状态都已更新到【当前状态】；不要把这些已完成的操作再次当成本轮新的购买意图（buy）：\n${lines}`;
   }
-  return `【上一轮之后玩家刚刚在界面完成的操作（必须写进本轮正文）】\n在发本轮行动前，玩家刚在界面上完成了以下操作（钱、货、装备、义体与状态已由代码实际结算完毕）。请在写本轮正文时把这些刚发生的举动顺理成章、具体自然地写进开头或行文里（例如刚在柜台买下某物收进包里、刚装好义体、刚换上衣服等，不要跳过去不提，也不要用“界面/系统”等出戏词）：\n${lines}`;
+  return `【上一轮之后玩家刚刚在界面完成的操作（必须写进本轮正文）】\n在发本轮行动前，玩家刚在界面上完成了以下操作（钱、货、装备、义体与状态已由代码实际结算完毕）。请在写本轮正文时把这些刚发生的举动顺理成章、具体自然地写进开头或行文里（例如刚在柜台买下某物收进包里、刚装好义体、刚换上衣服等，不要跳过去不提，也不要用“界面/系统”等出戏词；如果刚叠装了高负荷义体且【当前状态】已进入高压重改或极限超载，同时如实写出刚下手术台时的神经排异与负荷反应）：\n${lines}`;
 }
 
 /** 按阶段拼局面：状态、阶段可见的情境节、商品报价、场景记忆、物理约束、原剧时间线与开场 */
@@ -670,13 +676,67 @@ export function boostNote(
 ): string | undefined {
   if (plan.input.sandevistan !== true || !view.sandevistan) return undefined;
   const { name } = view.sandevistan;
-  return `【斯安威斯坦时刻】\n玩家要求开启${name}。根据实际距离、身体动作、设备状态和对手反应判断能完成什么，不设固定动作格；快速破解的上传、装填和物体运动各有实际耗时。${stage === "narrate" ? "写出加速感知和动作的可见结果；只有实际出现的过热、神经症状或损伤才记后果，不按使用次数扣人性。" : "在 ruling 中说明具体可行条件与阻碍，不替玩家追加动作。"}`;
+  const load = cyberwareLoadProfile(
+    view.cyberware
+      .filter((c) => !c.broken)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        slot: c.slot,
+        humanityCost: c.humanityCost,
+        iconic: c.iconic,
+        armor: c.armor,
+        accelerator: c.accelerator,
+        ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
+        ...(c.deckTraits ? { deckTraits: c.deckTraits } : {}),
+        ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
+      })),
+  );
+  const loadWarn =
+    load.tier === "extreme"
+      ? `当前全身神经负荷已处于「极限超载」（${load.activeLoadScore}）${view.humanity.suppressed ? "，虽有压制剂暂时兜底但脊柱与中枢仍在硬抗高压" : "且未在压制剂药效内"}，强开加速极易直接触发鼻血、耳鸣色散、脊柱过热剧痛或赛博精神病症状。`
+      : load.tier === "heavy" || load.dualCore
+        ? `当前神经负荷处于「${load.label}」${load.dualCore ? "（双中枢并行）" : ""}，连续开启或同步并发其他高压硬件易起神经排异与感官失真。`
+        : "";
+  return `【斯安威斯坦时刻】\n玩家要求开启${name}。根据实际距离、身体动作、设备状态和对手反应判断能完成什么，不设固定动作格；快速破解的上传、装填和物体运动各有实际耗时。${loadWarn}${stage === "narrate" ? "写出加速感知和动作的可见结果；高压/极限负荷下出现的过热、鼻血、感官色散或神经症状如实写出并由后续记账，不按固定次数抽象扣点。" : "在 ruling 中说明具体可行条件、阻碍以及高负荷反噬，不替玩家追加动作。"}`;
 }
 
 const NARRATIVE_VEHICLE =
   /开车|骑车|取车|叫车|呼叫.*车|把车|停在|车门|方向盘|副驾|后备箱|驶向|驶出|开回|开去|摩托|座驾/;
+const NARRATIVE_NEURAL_SYMPTOM =
+  /过载|耳鸣|幻听|幻觉|失控|排异|解离|神经|崩溃|鼻血|色散|重影|抽搐|震颤|灼痛|脊柱发烫|记忆空白|赛博精神病/;
 
-/** 写正文与抽取阶段的模块激活：除玩家输入外，敌方黑客反制/正文涉及黑客攻防时补齐 hacking，正文涉及取车/开车/载具变动或玩家名下有车移动时补齐 travel。 */
+/** 计算玩家当前完好义体的纯事实神经负荷（供各阶段规则模块联动使用） */
+function playerChromeLoad(world: WorldState, data: Readonly<Record<string, unknown>> | undefined) {
+  const cyber = CyberwareStateSchema.safeParse(world.slices.cyberware ?? {});
+  if (!cyber.success || cyber.data.installed.length === 0) return null;
+  const health = HealthStateSchema.safeParse(world.slices.health ?? {});
+  const broken = new Set(health.success ? health.data.brokenChrome : []);
+  const catalog = cyberwareCatalog(data ?? {});
+  const probes = cyber.data.installed
+    .filter((c) => !broken.has(c.id))
+    .flatMap((c) => {
+      const def = catalog.get(c.id);
+      if (!def) return [];
+      return [
+        {
+          id: def.id,
+          name: def.name,
+          slot: def.slot,
+          humanityCost: def.humanityCost,
+          iconic: def.iconic,
+          armor: def.armor,
+          accelerator: def.accelerator,
+          ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
+          ...(def.deckTraits ? { deckTraits: def.deckTraits } : {}),
+          ...(def.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),
+        },
+      ];
+    });
+  return cyberwareLoadProfile(probes);
+}
+
+/** 判断/写正文/抽取三步共用的模块激活：在单切片规则之外，补齐跨系统联动（义体高负荷与神经症状、黑客攻防、载具移动）。 */
 export function stageModules(
   world: WorldState,
   input: TurnInput,
@@ -699,6 +759,33 @@ export function stageModules(
     const hasActiveVehicle = (travelSlice?.vehicles ?? []).some((v) => !v.abandoned);
     if (narrative !== undefined && (NARRATIVE_VEHICLE.test(narrative) || hasActiveVehicle)) {
       extraIds.add("travel");
+    }
+  }
+  if (!base.some((m) => m.id === "cyberpsychosis")) {
+    const load = playerChromeLoad(world, extras.data);
+    const highLoad =
+      load !== null &&
+      (load.tier === "heavy" || load.tier === "extreme" || load.dualCore || load.fullBorg);
+    const cyber = CyberwareStateSchema.safeParse(world.slices.cyberware ?? {});
+    const recentBoost =
+      input.sandevistan === true ||
+      (cyber.success && cyber.data.boost !== null && world.time - cyber.data.boost.lastAt <= 60);
+    const health = HealthStateSchema.safeParse(world.slices.health ?? {});
+    const severeInjury =
+      health.success &&
+      (health.data.condition !== "up" ||
+        health.data.injuries.some((inj) => inj.tier === "heavy" || inj.tier === "lethal") ||
+        health.data.lostLimbs.length > 0);
+    const combat = CombatStateSchema.safeParse(world.slices.combat ?? {});
+    const inCombat = combat.success && combat.data.active !== null;
+    const narrativeSymptom = narrative !== undefined && NARRATIVE_NEURAL_SYMPTOM.test(narrative);
+    if (
+      highLoad ||
+      narrativeSymptom ||
+      (recentBoost && (inCombat || severeInjury)) ||
+      (load !== null && load.tier === "standard" && severeInjury && inCombat)
+    ) {
+      extraIds.add("cyberpsychosis");
     }
   }
   if (extraIds.size === 0) return base;

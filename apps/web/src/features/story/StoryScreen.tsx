@@ -51,6 +51,7 @@ import {
   Weapon,
   Zone,
 } from "./Corners";
+import type { CyberSlot } from "./CyberDoll";
 import { CyberdeckPage } from "./CyberdeckPage";
 import type { HackTarget } from "./DeckQuickbar";
 import { DivePanel } from "./DivePanel";
@@ -487,6 +488,9 @@ export function StoryScreen() {
   const [person, setPerson] = useState<string | null>(null);
   // 商店、义体医生、好车中间人终端叠在界面上面
   const [atDoc, setAtDoc] = useState(false);
+  const [docFocus, setDocFocus] = useState<
+    { readonly slot?: CyberSlot | "installed"; readonly installedId?: string } | undefined
+  >(undefined);
   const [atShop, setAtShop] = useState<string | null>(null);
   const [atAutofixer, setAtAutofixer] = useState(false);
   // 准备买下的公寓 id：先弹确认框
@@ -521,6 +525,7 @@ export function StoryScreen() {
     setMapFocus(undefined);
     setPerson(null);
     setAtDoc(false);
+    setDocFocus(undefined);
     setAtShop(null);
     setAtAutofixer(false);
     setBuyingHome(null);
@@ -1289,7 +1294,21 @@ export function StoryScreen() {
             onActionDraft={draftAction}
           />
         ) : effectiveBioTab === "cyberware" ? (
-          <CyberwarePage view={view} onRipperdoc={() => setAtDoc(true)} />
+          <CyberwarePage
+            view={view}
+            busy={busy}
+            onRipperdoc={(focus) => {
+              setDocFocus(focus);
+              setAtDoc(true);
+            }}
+            onOpenDeck={view.hacking ? () => setBioTab("deck") : undefined}
+            onActionDraft={draftAction}
+            onUseSuppressant={
+              busy || view.death || view.ended
+                ? undefined
+                : () => act({ type: "useSuppressant" }, "suppressant", true)
+            }
+          />
         ) : effectiveBioTab === "chronicle" ? (
           <ChronicleBody view={view} />
         ) : (
@@ -2015,6 +2034,8 @@ export function StoryScreen() {
           <Ripperdoc
             view={view}
             doc={view.ripperdoc}
+            initialSlot={docFocus?.slot}
+            initialInstalledId={docFocus?.installedId}
             onBuy={
               busy || view.death || view.ended
                 ? undefined
@@ -2051,7 +2072,10 @@ export function StoryScreen() {
                     await act({ type: "repairCyberware", id, doc: doc.id }, "ripperdoc", true);
                   }
             }
-            onClose={() => setAtDoc(false)}
+            onClose={() => {
+              setAtDoc(false);
+              setDocFocus(undefined);
+            }}
           />
         )}
         {atAutofixer && view.travel.autofixer && (

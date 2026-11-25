@@ -16,7 +16,7 @@ export const psychosisStatus: readonly SystemStatus[] = [
       const s = p.suppressant;
       if (s.until) {
         lines.push(
-          `压制剂生效到 ${s.until}：药力把颤抖和日常幻觉压了下去（若人性归零，极端刺激仍可能冲破药力）${s.tolerant ? "；已产生耐药，药效减半" : ""}`,
+          `压制剂生效到 ${s.until}：药力把颤抖和日常幻觉压了下去（若神经状态已达临界 crisis，极端刺激仍可能冲破药力）${s.tolerant ? "；已产生耐药，药效减半" : ""}`,
         );
       }
       if (s.withdrawal) {
@@ -24,7 +24,10 @@ export const psychosisStatus: readonly SystemStatus[] = [
       } else if (s.dependent) {
         lines.push("已经依赖压制剂：停药超过一天就会出现戒断");
       }
-      if (p.episodeHere) lines.push("这个场景已经发作过一次，不再安排发作");
+      if (p.episodeHere)
+        lines.push(
+          "当前神经症状发作尚未平复（发作持续中，确已平复时写 episode action:end 关闭；持续期间若防线彻底崩不住可写 lostControl）",
+        );
       if (p.blackoutOpen)
         lines.push("意识正处在严重发作后的断层里：这一段事后会成为记忆空白，场景结束后角色记不清");
       if (p.blackouts.length > 0)

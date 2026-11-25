@@ -34,7 +34,7 @@ export const HumanityCommandSchema = z
       ctx.addIssue({ code: "custom", message: "affect 要写 stage 与 symptom（实际症状）" });
   })
   .describe(
-    "神经或精神状态事实：affect 记录实际发生的症状、诱因及定性状态；recover 记录已有症状经实际治疗、休息或支持缓解。义体安装、使用次数、残忍行为本身不自动扣人性；不写数值变化",
+    "神经或精神状态事实：affect 记录实际出现的排异、过载、失真、解离等症状（写清 stage 与 symptom、诱因 reason）；recover 记录已有症状经压制外实际治疗、休息、调校、拆件或亲友支持后缓解。不写抽象数值加减，但高压/极限义体负荷在装机排异、连开加速、双中枢并发、激战、重伤或断药时引发的真实生理与精神症状必须如实记账",
   );
 export type HumanityCommand = z.infer<typeof HumanityCommandSchema>;
 export const SuppressHumanitySchema = z.object({

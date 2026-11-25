@@ -48,6 +48,8 @@ function ripLoadTag(cost: number): { readonly label: string; readonly tone?: "ok
 export function Ripperdoc({
   view,
   doc,
+  initialSlot = "all",
+  initialInstalledId,
   onBuy,
   onRemove,
   onRepay,
@@ -56,6 +58,10 @@ export function Ripperdoc({
 }: {
   readonly view: View;
   readonly doc: Doc;
+  /** 从义体页跳转时默认定位到对应部位或已装列表 */
+  readonly initialSlot?: SlotFilter | undefined;
+  /** 从义体页某件已装义体直接跳转到诊所并聚焦该件 */
+  readonly initialInstalledId?: string | undefined;
   /** 正在生成时不传，按钮不能点；credit 是钱不够时赊账 */
   readonly onBuy?: ((id: string, credit: boolean) => Promise<void>) | undefined;
   readonly onRemove?: ((id: string) => Promise<void>) | undefined;
@@ -64,19 +70,25 @@ export function Ripperdoc({
   readonly onRepair?: ((id: string) => Promise<void>) | undefined;
   readonly onClose: () => void;
 }) {
-  const [slotFilter, setSlotFilter] = useState<SlotFilter>("all");
+  const [slotFilter, setSlotFilter] = useState<SlotFilter>(initialSlot);
   const [rarityFilter, setRarityFilter] = useState<string>("all");
   const [onlyZeroLoad, setOnlyZeroLoad] = useState(false);
   const [onlyAffordable, setOnlyAffordable] = useState(false);
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [query, setQuery] = useState("");
-  const [focus, setFocus] = useState<FocusRef | null>(() =>
-    doc.shelf[0]
-      ? { kind: "shelf", id: doc.shelf[0].id }
-      : view.cyberware[0]
-        ? { kind: "installed", id: view.cyberware[0].id }
-        : null,
-  );
+  const [focus, setFocus] = useState<FocusRef | null>(() => {
+    if (initialInstalledId && view.cyberware.some((c) => c.id === initialInstalledId)) {
+      return { kind: "installed", id: initialInstalledId };
+    }
+    const slotMatch =
+      initialSlot !== "all" && initialSlot !== "installed"
+        ? doc.shelf.find((item) => item.slot === initialSlot)
+        : undefined;
+    if (slotMatch) return { kind: "shelf", id: slotMatch.id };
+    if (doc.shelf[0]) return { kind: "shelf", id: doc.shelf[0].id };
+    if (view.cyberware[0]) return { kind: "installed", id: view.cyberware[0].id };
+    return null;
+  });
   const [confirming, setConfirming] = useState<ShelfItem | null>(null);
   const [working, setWorking] = useState(false);
 

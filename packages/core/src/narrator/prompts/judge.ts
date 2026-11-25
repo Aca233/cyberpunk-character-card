@@ -3,7 +3,6 @@ import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { CARRY_AND_WEAPON_RULES } from "../../systems/inventory/prompt";
 import { memoryRecords } from "../../systems/memory";
-import { registry } from "../../systems/registry";
 import { schemaDoc } from "../doc";
 import { JudgeDocSchema, type Memory } from "../stages";
 import {
@@ -16,6 +15,7 @@ import {
   type PromptExtras,
   recapFor,
   situation,
+  stageModules,
 } from "./context";
 import { BASE_RULES, modulesBlock, systemMessage, userMessage } from "./layers";
 
@@ -37,7 +37,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 没有已知阻碍、未触及人物利益或底线的日常对话、逛街、休息和信息交换，ruling 写 null；不为了安排代价临时编出威胁。
 - 只有当行动涉及物理硬条件（护甲/口径/断肢/没装接入仓/离线气隙/城区安防门禁/重伤疲惫）、硬闯潜入、正面交锋，或触及 NPC 利益与底线时，才给出 ruling：
   1. blocked（客观阻断）：明确违背现实逻辑或缺少硬条件（比如没装螳螂刀却要弹出刀片、轻手枪正面轰重型机甲、无线黑没有电子接口的纯肉体/气隙主机、在防备森严的公司大堂公然提长枪硬闯），在 outcome 写明它怎么在现实里被挡回来。
-  2. costly（有具体代价地做成 / 部分做成）：已有条件导致可说明的代价，例如踩松动铁皮发出声响、切入带反制的军用冰墙遭反馈。outcome 写明收获、代价及其原因；没有因果依据就不选 costly。暴露或耗时不等于受伤，harm 按具体身体伤害风险写 none / graze / heavy / lethal，不把“危险”直接写成必然中弹。
+  2. costly（有具体代价地做成 / 部分做成）：已有条件导致可说明的代价，例如踩松动铁皮发出声响、切入带反制的军用冰墙遭反馈，或全身处于「高压重改/极限超载」义体神经负荷下强行连开加速、双中枢并发、叠加军用重器或高烈度硬拼引发的过热、鼻血与神经排异反噬。outcome 写明收获、代价及其原因；没有因果依据就不选 costly。暴露、耗时或神经反噬不等于中弹，harm 按具体身体伤害风险写 none / graze / heavy / lethal，不把“危险”直接写成必然中弹。
   3. possible（条件充分顺畅做成）：玩家规划周密、条件全对得上（用对钥匙、穿对衣服、从暗格避过安检、找准对方诉求或过往恩怨谈拢），或**玩家的义体武装度与武器对当前对手构成明显硬件代差**（如重度/顶配义体收拾街头混混与普通杂兵），写明顺理成章怎么干脆做成，harm 写 none；不要为了制造紧张感强行把硬件碾压降格成 costly。
 - 社交与说服不按好感数字放水：哪怕熟人深交，触到底线也会讨价还价或拒绝；看【人物】里的诉求、忌讳、人情债与秘密判断对方会怎么接招。
 - 加成的条件（武器、义体、物品、人脉）必须在【当前状态】或【装备/义体】里真实存在；没有就是没有。
@@ -86,7 +86,7 @@ export function buildJudgePrompt(
   const opening = activeOpening(records, extras.opening);
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
-  const modules = registry.activeRules(world, plan.input);
+  const modules = stageModules(world, plan.input, extras);
   const recent = view.turns
     .slice(-JUDGE_TURNS)
     .map((t) => `${formatInput(t.input)}\n${t.text}`)

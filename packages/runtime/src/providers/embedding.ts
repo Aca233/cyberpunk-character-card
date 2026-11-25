@@ -4,7 +4,7 @@ import { AbortedError, errorDetail, statusError, toAbortSignal, UpstreamError } 
 
 /**
  * 多提供方向量嵌入客户端：
- * - OpenAI 兼容 / Ollama：POST {base}/embeddings（自动分批）
+ * - OpenAI 兼容 / Ollama：POST {base}/embeddings（自动分批，遇单批条数限制时自适应降批）
  * - Gemini 原生：POST {base}/models/{model}:batchEmbedContents（支持 RETRIEVAL_QUERY / RETRIEVAL_DOCUMENT）
  * 常规回合调用失败或超时时降级为空数组并回调警告，不阻断回合；
  * 连接测试（probeEmbedding）会直接抛出明确错误并返回向量维度。
@@ -17,7 +17,30 @@ const DEFAULT_BASE: Readonly<Record<"openai" | "ollama" | "gemini", string>> = {
 };
 
 const EMBEDDING_TIMEOUT_MS = 15_000;
-const EMBEDDING_BATCH_SIZE = 64;
+/** 默认每批 16 条：兼顾主流中转站与部分模型 16/20/25 条的单批上限，减少首轮 400 重拆 */
+const EMBEDDING_BATCH_SIZE = 16;
+
+/** 识别上游 HTTP 400 明确提示“单批输入条数超限”的报错文案 */
+const BATCH_LIMIT_HINT_RE =
+  /最多|上限|分批|batch|too many|exceed|max(?:imum)?\s*(?:batch|inputs?|items?|texts?|requests?)|input[s]?\s*(?:size|count|length|limit)|array\s*(?:length|size)/i;
+
+const BATCH_LIMIT_NUMBER_PATTERNS: readonly RegExp[] = [
+  /最多\s*(?:支持|允许|包含|处理)?\s*(\d+)\s*(?:条|个|项)?/,
+  /不超过\s*(\d+)\s*(?:条|个|项)?/,
+  /(?:max(?:imum)?\s*(?:batch\s*size|inputs?|items?|texts?|requests?)?|up\s+to|at\s+most|limit\s*(?:is|of|:)?)\s*(\d+)/i,
+];
+
+function extractBatchLimit(message: string, currentSize: number): number | undefined {
+  if (currentSize <= 1 || !BATCH_LIMIT_HINT_RE.test(message)) return undefined;
+  for (const pattern of BATCH_LIMIT_NUMBER_PATTERNS) {
+    const match = pattern.exec(message);
+    const parsed = match?.[1] ? Number(match[1]) : Number.NaN;
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed < currentSize) {
+      return parsed;
+    }
+  }
+  return Math.max(1, Math.floor(currentSize / 2));
+}
 
 export type EmbeddingProviderType = "openai" | "ollama" | "gemini";
 
@@ -196,8 +219,12 @@ async function embedStrict(
 
   const callerSignal = toAbortSignal(options.signal);
   const results: (readonly number[])[] = [];
-  for (let start = 0; start < texts.length; start += EMBEDDING_BATCH_SIZE) {
-    const chunk = texts.slice(start, start + EMBEDDING_BATCH_SIZE);
+  let batchSize = EMBEDDING_BATCH_SIZE;
+  let start = 0;
+
+  while (start < texts.length) {
+    if (callerSignal?.aborted) throw new AbortedError();
+    const chunk = texts.slice(start, start + batchSize);
     const timeoutSignal = AbortSignal.timeout(EMBEDDING_TIMEOUT_MS);
     const signal = callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
     try {
@@ -206,9 +233,19 @@ async function embedStrict(
           ? await embedGeminiBatch(url, model, apiKey as string, chunk, options.task, signal)
           : await embedOpenAiBatch(url, model, apiKey, chunk, signal);
       results.push(...vectors);
+      start += chunk.length;
     } catch (error) {
       if (callerSignal?.aborted) throw new AbortedError();
-      if (error instanceof UpstreamError) throw error;
+      if (error instanceof UpstreamError) {
+        if (error.status === 400 && chunk.length > 1) {
+          const nextLimit = extractBatchLimit(error.message, chunk.length);
+          if (nextLimit !== undefined && nextLimit < chunk.length) {
+            batchSize = nextLimit;
+            continue;
+          }
+        }
+        throw error;
+      }
       if (error instanceof Error && error.name === "TimeoutError") {
         throw new UpstreamError("向量嵌入请求超时");
       }
