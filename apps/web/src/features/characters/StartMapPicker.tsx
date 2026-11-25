@@ -317,8 +317,8 @@ export function StartMapPicker({
           onPointerMove={(e) => {
             dragMove(e);
           }}
-          onPointerUp={dragEnd}
-          onPointerCancel={dragEnd}
+          onPointerUp={(e) => dragEnd(e)}
+          onPointerCancel={(e) => dragEnd(e)}
           onKeyDown={(e) => {
             keyPan(e);
           }}

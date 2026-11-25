@@ -178,10 +178,21 @@ export function CharacterCreator({
     };
   }, []);
 
+  const boardCustomCyberware = useMemo(
+    () => board.cyberware.filter((c) => Boolean(c.custom && c.slot)),
+    [board.cyberware],
+  );
   const data = useMemo(
     () =>
-      boardData ? mergeCreatorCatalog(boardData, localModules, [], localCyberware) : undefined,
-    [boardData, localModules, localCyberware],
+      boardData
+        ? mergeCreatorCatalog(
+            boardData,
+            localModules,
+            [],
+            [...localCyberware, ...boardCustomCyberware],
+          )
+        : undefined,
+    [boardData, localModules, localCyberware, boardCustomCyberware],
   );
   const fallbackLoc = defaultStartLocationFor(card, data);
   const validBoardLoc =
@@ -297,7 +308,7 @@ export function CharacterCreator({
     const slot = (slotOf.get(c.id) ?? c.slot) as CyberSlot | undefined;
     if (!slot) continue;
     const list = dollParts.get(slot) ?? [];
-    list.push({ id: c.id, name: c.name, rarity: rarityOf.get(c.id) });
+    list.push({ id: c.id, name: c.name, rarity: c.rarity ?? rarityOf.get(c.id) });
     dollParts.set(slot, list);
   }
   for (const i of inherent) {
@@ -888,7 +899,11 @@ export function CharacterCreator({
                           )}
                         </div>
                         {pickerProps ? (
-                          <CyberwareShelf {...pickerProps} slot={activeSlot} />
+                          <CyberwareShelf
+                            {...pickerProps}
+                            slot={activeSlot}
+                            onSlotChange={setActiveSlot}
+                          />
                         ) : (
                           <p className={wb.note}>正在加载义体货架…</p>
                         )}

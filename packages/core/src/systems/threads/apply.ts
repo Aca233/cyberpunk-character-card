@@ -276,13 +276,13 @@ function applyPlayer(draft: State, command: ThreadCommand, ctx: SystemContext): 
   return { ok: true, notes };
 }
 
-/** 传到玩家耳朵里了：把还没听说的几步都记成听说了 */
+/** 传到玩家耳朵里了：把还没听说的几步都记成听说了；尚无新 step 或已全部听说过时幂等通过，不连坐回滚同事件 */
 function applyTold(draft: State, command: ThreadTold): ApplyOutcome {
   const t =
     draft.threads.find((x) => x.id === command.id) ?? draft.closed.find((x) => x.id === command.id);
   if (!t) return fail(`没有 ${command.id} 这件事`);
   const fresh = t.steps.filter((s) => !s.told);
-  if (fresh.length === 0) return fail(`「${t.title}」没有玩家还没听说的事`);
+  if (fresh.length === 0) return { ok: true, notes: [] };
   for (const s of fresh) s.told = true;
   // 听说势力的事时同步公开地盘账，避免正文和地图对不上
   return {

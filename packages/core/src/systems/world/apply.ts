@@ -10,6 +10,7 @@ import {
   type WorldClockState,
   type WorldCommand,
   type WorldRest,
+  type WorldSavePlace,
 } from "./schema";
 
 const MINUTES_PER_DAY = 1440;
@@ -64,11 +65,27 @@ export function phaseIndexOf(minutes: number): PhaseIndex {
   return 3;
 }
 
+/** 按游戏日历日（UTC 00:00 切日，与 formatGameTime 一致）计算经过的自然日数；开场当天为 0 */
+export function calendarDayDiff(startTime: number, minutes: number): number {
+  const startDay = Math.floor(startTime / MINUTES_PER_DAY);
+  const currentDay = Math.floor(minutes / MINUTES_PER_DAY);
+  return Math.max(0, currentDay - startDay);
+}
+
+/** 格式化时长（分钟），超过 60 分钟自动转为「X 小时 Y 分钟」 */
+export function formatDuration(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} 分钟`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem > 0 ? `${h} 小时 ${rem} 分钟` : `${h} 小时`;
+}
+
 export function phaseClockOf(
   minutes: number,
   startTime = 0,
 ): PhaseClock & { readonly label: string } {
-  const elapsedDays = Math.max(0, Math.floor((minutes - startTime) / MINUTES_PER_DAY));
+  const elapsedDays = calendarDayDiff(startTime, minutes);
   const phase = phaseIndexOf(minutes);
   return {
     day: elapsedDays + 1,
@@ -141,20 +158,27 @@ export function applyWorld(
     }
   }
 
-  // 3.0 相位与疲劳推进
-  const crossedPhases =
-    command.phases ??
-    Math.max(
-      phaseIndexOf(target) !== phaseIndexOf(now) ? 1 : 0,
-      Math.floor((target - now) / MINUTES_PER_PHASE),
-    );
+  // 3.0 相位与疲劳推进：按实际清醒耗时累计（每满 1 相位 = 6 小时计 1 步），避免 20:55→21:05 这类 10 分钟跨边界误加一整段熬夜疲劳
+  const deltaMinutes = Math.max(0, target - now);
   if (command.activity === "rest") {
     draft.phasesAwake = 0;
-  } else if (crossedPhases > 0) {
+    draft.awakeMinutes = 0;
+  } else if (command.phases !== undefined && command.phases > 0) {
     const beforeFatigued = isFatigued(draft);
-    draft.phasesAwake = (draft.phasesAwake ?? 0) + crossedPhases;
+    draft.phasesAwake = (draft.phasesAwake ?? 0) + command.phases;
     if (!beforeFatigued && isFatigued(draft)) {
       notes.push("连续多个时段未睡眠，身体疲劳：眼皮发沉、发力与反应发滞");
+    }
+  } else if (deltaMinutes > 0) {
+    const beforeFatigued = isFatigued(draft);
+    const totalAwake = (draft.awakeMinutes ?? 0) + deltaMinutes;
+    const gained = Math.floor(totalAwake / MINUTES_PER_PHASE);
+    draft.awakeMinutes = totalAwake % MINUTES_PER_PHASE;
+    if (gained > 0) {
+      draft.phasesAwake = (draft.phasesAwake ?? 0) + gained;
+      if (!beforeFatigued && isFatigued(draft)) {
+        notes.push("连续多个时段未睡眠，身体疲劳：眼皮发沉、发力与反应发滞");
+      }
     }
   }
 
@@ -211,6 +235,7 @@ export function applyWorldRest(
   const notes: string[] = [];
   if (command.mode === "reset") {
     draft.phasesAwake = 0;
+    draft.awakeMinutes = 0;
     notes.push(`${command.reason}：睡了一觉，熬夜疲劳散去`);
   } else if (command.mode === "relief") {
     if (draft.phasesAwake > 0) {
@@ -224,4 +249,23 @@ export function applyWorldRest(
     return { ok: true, notes, advanceTo: target, signals };
   }
   return { ok: true, notes, signals };
+}
+
+/** 登记已解析好的地点条目（自动出行落盘新地点/首访原作地点时使用，保持与路程核算完全一致的坐标与城区） */
+export function applySavePlace(
+  draft: Draft<WorldClockState>,
+  command: WorldSavePlace,
+  now: number,
+): ApplyOutcome {
+  if (!Array.isArray(draft.places)) draft.places = [];
+  const existing = draft.places.find((p) => p.id === command.place.id);
+  if (existing) {
+    existing.visitedAt = now;
+    if (command.place.note !== undefined && existing.note === undefined) {
+      existing.note = command.place.note;
+    }
+    return { ok: true, notes: [] };
+  }
+  draft.places.push({ ...command.place, firstSeenAt: now, visitedAt: now });
+  return { ok: true, notes: [] };
 }

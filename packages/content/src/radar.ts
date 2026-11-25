@@ -14,6 +14,10 @@ export interface RadarAnchor {
   readonly name: string;
   /** 类别名，例如“义体医生”“地铁站”；第 ① 层地点是 null */
   readonly kind: string | null;
+  /** 原作标定的城区 id（如 watson、badlands、dogtown）；优先用于边界点归属，免受多边形误差影响 */
+  readonly district?: string | null;
+  /** 原作标定的街区 id（如 corpo_plaza、wellspring）；可为空 */
+  readonly sub?: string | null;
   readonly x: number;
   readonly y: number;
 }
@@ -44,6 +48,8 @@ export const RADAR_ANCHORS: readonly RadarAnchor[] = [
     id: `poi:${p.id}`,
     name: p.name ?? KIND_NAMES[p.kind],
     kind: KIND_NAMES[p.kind],
+    district: p.district,
+    sub: p.sub,
     x: p.x,
     y: p.y,
   })),
@@ -55,6 +61,8 @@ export const RADAR_ANCHORS: readonly RadarAnchor[] = [
             id: `ft:${f.id}`,
             name: f.name,
             kind: f.kind === "metro" ? "地铁站" : "地标",
+            district: f.district,
+            sub: f.sub,
             x: f.x,
             y: f.y,
           },

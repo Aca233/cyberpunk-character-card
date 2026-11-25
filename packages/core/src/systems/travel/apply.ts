@@ -15,6 +15,7 @@ import {
 import { HeatStateSchema } from "../heat";
 import { type NcpdState, NcpdStateSchema } from "../ncpd";
 import {
+  formatDuration,
   formatGameTime,
   type LocationDef,
   locationCatalog,
@@ -43,19 +44,29 @@ import {
 import { drivableVehiclesAt, resolveVehicleAt, vehicleCatalog, vehicleFactor } from "./vehicles";
 
 /**
- * 耗时 = 固定 + 每单位距离的分钟数；1 单位 100 米。两头都在路线表里时按路面距离（§七 简单版做法，步行和开车共用一张路面图，用户定的），
- * 否则按底图百分比坐标的直线距离，1 个百分点约 78 米（本作改编，待校准）。
- * 步行约每小时 5 公里；轻轨的固定时间是走到站、等车；出租车的固定时间是等车来。
+ * 耗时 = 固定 + 每单位距离的分钟数；1 单位 = 原作地图坐标 100 米。
+ * 说明：2077 游戏实景地图为都市微缩比例（跨全城仅约 4.5 公里），直接按 1:1 物理速度会导致跨 3 个城区开车只用 6 分钟。
+ * 因此在保留路线表真实拓扑比例的前提下，将车辆/轨道/步行的单位时间按大都市通勤尺度校准：
+ * - 步行：每 100m 约 1.35 分钟（含红绿灯、过街天桥与立体街区上下梯道）
+ * - 开车/赃车：每 100m 约 0.42 分钟（城区红绿灯、高架匝道与微缩尺度折算；跨全城约 20–30 分钟）
+ * - Delamain：等车 5 分钟 + 每 100m 约 0.45 分钟（合规范行车、不逆行）
+ * - NCART 轻轨：进站候车 8 分钟 + 每 100m 约 0.22 分钟（不受早晚高峰堵车影响，中远距跨区显著快于步行）
  */
 export const TRAVEL_SPEEDS: Readonly<
   Record<TravelMode, { readonly fixed: number; readonly perUnit: number }>
 > = {
-  walk: { fixed: 2, perUnit: 1.2 },
-  metro: { fixed: 12, perUnit: 0.15 },
-  taxi: { fixed: 6, perUnit: 0.18 },
-  car: { fixed: 2, perUnit: 0.15 },
-  stolen: { fixed: 4, perUnit: 0.15 },
+  walk: { fixed: 2, perUnit: 1.35 },
+  metro: { fixed: 8, perUnit: 0.22 },
+  taxi: { fixed: 5, perUnit: 0.45 },
+  car: { fixed: 3, perUnit: 0.42 },
+  stolen: { fixed: 4, perUnit: 0.4 },
 };
+/** 跨狗镇幽冥犬关口安检额外耗时（分钟） */
+export const DOGTOWN_CHECKPOINT_MINUTES = 12;
+/** 直线距离折算为估算路程的绕路系数（实测全城路面/直线中位数约 1.30） */
+const STRAIGHT_DETOUR_FACTOR = 1.3;
+/** 非表内近距直连阈值（米）：两地直线在该范围内或短于绕行锚点，按直线×绕路系数估算，避免倒退绕去远处锚点 */
+const DIRECT_NEAR_METERS = 800;
 /** Delamain 起步价和每单位距离的价钱（本作改编）；NCART 不要钱（原作依据 2.1） */
 export const TAXI_BASE = 20;
 export const TAXI_PER_UNIT = 1.5;
@@ -149,11 +160,11 @@ function spot(place: LocationDef | undefined): { x: number; y: number } | undefi
   return place?.x !== undefined && place.y !== undefined ? { x: place.x, y: place.y } : undefined;
 }
 
-/** 两地之间的距离（单位约 100 米）；有一边不在地图上时是 undefined */
+/** 两地之间的直线距离（单位 100 米，1% 底图 = METERS_PER_PERCENT 米）；有一边不在地图上时是 undefined */
 export function distanceBetween(a: LocationDef | undefined, b: LocationDef | undefined) {
   const p = spot(a);
   const q = spot(b);
-  return p && q ? Math.hypot(p.x - q.x, p.y - q.y) : undefined;
+  return p && q ? (Math.hypot(p.x - q.x, p.y - q.y) * METERS_PER_PERCENT) / 100 : undefined;
 }
 
 /**
@@ -258,9 +269,11 @@ export function tripDistance(
 ): { readonly d: number } | undefined {
   const straight = distanceBetween(a, b);
   if (!a || !b || straight === undefined) return undefined;
+  const straightMeters = straight * 100;
+  const directEstimate = (straightMeters * STRAIGHT_DETOUR_FACTOR) / 100;
   const table = routeTableOf(data);
-  // 没有路线表（旧数据、测试）时照旧按直线
-  if (!table) return { d: straight };
+  // 没有路线表（旧数据、测试）时按直线×绕路系数估算
+  if (!table) return { d: directEstimate };
   const road = roadMetersBetween(data, a.id, b.id);
   if (road !== undefined) return { d: road / 100 };
   const index = routeIndexOf(table);
@@ -272,8 +285,17 @@ export function tripDistance(
   const la = leg(a);
   const lb = leg(b);
   const mid = la && lb ? roadMetersBetween(data, la.id, lb.id) : undefined;
-  if (!la || !lb || mid === undefined) return { d: straight };
-  return { d: (la.meters + mid + lb.meters) / 100 };
+  if (!la || !lb || mid === undefined) return { d: directEstimate };
+  const viaAnchors = la.meters + mid + lb.meters;
+  // 若两头同接在同一个锚点，或属于近距/倒绕（绕锚点比直线长出过多），改用直线×绕路系数，避免 100m 变 500m 或 1km 变 4.4km
+  if (
+    la.id === lb.id ||
+    (straightMeters <= DIRECT_NEAR_METERS && viaAnchors > straightMeters * 1.8) ||
+    viaAnchors > straightMeters * 2.5
+  ) {
+    return { d: Math.min(viaAnchors, straightMeters * STRAIGHT_DETOUR_FACTOR) / 100 };
+  }
+  return { d: viaAnchors / 100 };
 }
 
 const RISK_ORDER: readonly Risk[] = ["low", "medium", "high"];
@@ -372,8 +394,37 @@ export function routeOptions(
     const carDef = car ? cars.get(car.model) : undefined;
     const carName = carDef?.name ?? car?.model;
     const factor = car ? vehicleFactor(car, carDef) : 1;
+    // 时段路况与地形修正：仅作用于地面车辆，轻轨不受早晚高峰堵车影响
+    const isRoadVehicle = mode === "car" || mode === "stolen" || mode === "taxi";
+    const trafficFactor = !isRoadVehicle
+      ? 1
+      : period === "dusk"
+        ? 1.25
+        : period === "day"
+          ? 1.1
+          : period === "night"
+            ? 0.85
+            : 1;
+    // 恶土荒原土路：普通轿跑/行政车降速，越野车与摩托基本不受影响
+    const badlandsRoad =
+      isRoadVehicle &&
+      (here?.district === "恶土" || there?.district === "恶土") &&
+      carDef?.class !== "offroad" &&
+      carDef?.class !== "moto"
+        ? 1.15
+        : 1;
+    const checkpointDelay = crossesDogtown(here, there) ? DOGTOWN_CHECKPOINT_MINUTES : 0;
     const minutes =
-      d === undefined ? 0 : Math.max(1, Math.round(speed.fixed + d * speed.perUnit * factor));
+      d === undefined
+        ? 0
+        : Math.max(
+            1,
+            Math.round(
+              speed.fixed +
+                d * speed.perUnit * factor * trafficFactor * badlandsRoad +
+                checkpointDelay,
+            ),
+          );
     const cost =
       mode === "taxi" && d !== undefined ? Math.ceil((TAXI_BASE + d * TAXI_PER_UNIT) / 5) * 5 : 0;
     const { risk, warnings: baseWarnings } = routeHazard(w, data, mode, period, here, there);
@@ -532,7 +583,7 @@ export function tripText(trip: PlannedTrip): string {
   const hazard =
     route.warnings && route.warnings.length > 0 ? `（沿途注意：${route.warnings.join("；")}）` : "";
   const lines = [
-    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上 ${route.minutes} 分钟，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}${hazard}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
+    `【出行】玩家在路线面板确认：${route.label}从${from.name}去${to.name}（${to.district}），路上 ${formatDuration(route.minutes)}，${formatGameTime(trip.arriveAt)}（${PERIOD_LABELS[periodOf(trip.arriveAt)]}）到，${money}，风险${route.riskLabel}${hazard}。时间和地点由代码记，world 里不要再写 location，time 只能写到达以后。`,
   ];
   // 偶遇是代码抽的素材，合适才写、可以改写或推迟（用户 2026-11-01 定的「全改」第 3 步：模型当主持人，代码只管记账）
   if (trip.encounter) {
@@ -567,6 +618,26 @@ export type AutoMove =
  * 500 米内算走过去，代码按步行算用时；更远的自动转成一次出行，照路线表扣时间和路费，不抽路上偶遇（正文已经写完了）。
  * 目的地不在地点表（含存档记下的地点）里、现在的位置不在地图上、或者哪种方式都走不了时是 none，照旧直接换位置
  */
+/** 自动出行在脚下有多辆合法自有车时，优先挑选完好且最快的那一辆（避免因多车未点名而退回走路/打车） */
+function pickAutoCar(w: TripWorld, data: Readonly<Record<string, unknown>>): string | undefined {
+  const owned = drivableVehiclesAt(w.travel.vehicles, w.location).filter((v) => !v.stolen);
+  if (owned.length === 0) return undefined;
+  const cars = vehicleCatalog(data);
+  const partySize = w.partySize ?? 1;
+  const ranked = [...owned].sort((a, b) => {
+    const da = cars.get(a.model);
+    const db = cars.get(b.model);
+    const fitA = (da?.seats ?? 2) >= partySize ? 1 : 0;
+    const fitB = (db?.seats ?? 2) >= partySize ? 1 : 0;
+    if (fitA !== fitB) return fitB - fitA;
+    const intactA = a.condition === "intact" ? 1 : 0;
+    const intactB = b.condition === "intact" ? 1 : 0;
+    if (intactA !== intactB) return intactB - intactA;
+    return vehicleFactor(a, da) - vehicleFactor(b, db);
+  });
+  return ranked[0]?.id;
+}
+
 export function autoMove(
   w: TripWorld,
   data: Readonly<Record<string, unknown>>,
@@ -576,7 +647,8 @@ export function autoMove(
   const key = placeKey(raw);
   const to = places.get(raw.trim()) ?? [...places.values()].find((p) => placeKey(p.name) === key);
   if (!to || w.location === null || to.id === w.location) return { kind: "none" };
-  const dist = tripDistance(data, places.get(w.location), to);
+  const from = places.get(w.location) ?? locationForTravel(data, w.location);
+  const dist = tripDistance(data, from, to);
   if (!dist) return { kind: "none" };
   if (dist.d * 100 <= NEAR_METERS) {
     const walk = routeOptions(w, data, to.id).find((r) => r.mode === "walk");
@@ -584,8 +656,13 @@ export function autoMove(
       ? { kind: "near", to: to.id, minutes: walk.minutes }
       : { kind: "none" };
   }
+  const autoCar = pickAutoCar(w, data);
   for (const mode of AUTO_MODES) {
-    const planned = planTrip(w, data, { to: to.id, mode });
+    const planned = planTrip(w, data, {
+      to: to.id,
+      mode,
+      ...(mode === "car" && autoCar ? { vehicle: autoCar } : {}),
+    });
     if (planned.ok) return { kind: "trip", trip: planned.trip };
   }
   return { kind: "none" };
@@ -599,6 +676,14 @@ export function applyTravel(
   ctx: SystemContext,
 ): ApplyOutcome {
   const clock = ctx.read<{ scene: number; location: string | null }>("world");
+  const npcSlice = ctx.read<{
+    readonly npcs?: Readonly<
+      Record<string, { readonly alive?: boolean; readonly following?: boolean }>
+    >;
+  }>("npc");
+  const companions = Object.values(npcSlice?.npcs ?? {}).filter(
+    (card) => card.alive !== false && card.following === true,
+  ).length;
   const w: TripWorld = {
     now: ctx.now,
     scene: clock.scene,
@@ -610,6 +695,7 @@ export function applyTravel(
     travel: draft as TravelState,
     factions: FactionsStateSchema.parse(ctx.read("factions") ?? {}),
     ncpd: NcpdStateSchema.parse(ctx.read("ncpd") ?? {}),
+    partySize: 1 + companions,
   };
   const fact = TravelFactSchema.safeParse(ctx.facts.travel);
   const fixed =
@@ -662,7 +748,7 @@ export function applyTravel(
     encounter: encounter?.id ?? null,
   });
   if (draft.trips.length > TRIPS_KEPT) draft.trips.splice(0, draft.trips.length - TRIPS_KEPT);
-  const notes = [`${route.label}从${from.name}到${to.name}：${route.minutes} 分钟`];
+  const notes = [`${route.label}从${from.name}到${to.name}：${formatDuration(route.minutes)}`];
   if (encounter) {
     draft.encounterScene = clock.scene;
     draft.encounter = {

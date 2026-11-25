@@ -3,7 +3,12 @@ import type { WorldState } from "../kernel/world";
 import { EconomyStateSchema, isBigSpend } from "../systems/economy/schema";
 import { registry } from "../systems/registry";
 import { autoMove, tripFact, tripWorldOf } from "../systems/travel";
-import { formatGameTime, WorldClockStateSchema, withSavedPlaces } from "../systems/world";
+import {
+  formatDuration,
+  formatGameTime,
+  WorldClockStateSchema,
+  withSavedPlaces,
+} from "../systems/world";
 import {
   type BigSpend,
   type BuyProposal,
@@ -112,8 +117,13 @@ function applyMovement(world: WorldState, command: Command, ctx: ApplyContext): 
   // 首访 poi:/ft: 或新建 {name, in, sub?} 地点都先在临时状态解析落点，统一走 autoMove 路程核算。
   const located = registry.applyCommands(world, [{ ...command, time: world.time }], ctx);
   if (!located.results[0]?.result.ok) return located;
-  const target = WorldClockStateSchema.parse(located.world.slices.world).location;
+  const beforePlaces = new Set(
+    WorldClockStateSchema.parse(world.slices.world).places.map((p) => p.id),
+  );
+  const locatedClock = WorldClockStateSchema.parse(located.world.slices.world);
+  const target = locatedClock.location;
   if (!target) return registry.applyCommands(world, [command], ctx);
+  const newlySaved = locatedClock.places.find((p) => p.id === target && !beforePlaces.has(p.id));
   const data = withSavedPlaces(ctx.data ?? {}, located.world);
   const move = autoMove(tripWorldOf(world), data, target);
   if (move.kind === "none") return registry.applyCommands(world, [command], ctx);
@@ -147,13 +157,18 @@ function applyMovement(world: WorldState, command: Command, ctx: ApplyContext): 
   );
   if (!travel.results[0]?.result.ok)
     return { ...travel, results: travel.results.map((r) => ({ ...r, command })) };
-  // 用原始地点数据登记首访地点，再保留正文描述的额外经过时间。
-  const arrival = registry.applyCommands(
-    travel.world,
-    [{ ...command, time: Math.max(statedAt, travel.world.time) }],
-    ctx,
-  );
-  if (!arrival.results[0]?.result.ok) return { world, patches: [], results: arrival.results };
+  // 把首次解析好的新地点/首访原作地点按原落点落盘，再同步正文描述的活动、相位与额外耗时（不重复解析 location，避免漂移到恶土/城区中心）
+  const followups: Command[] = [
+    ...(newlySaved ? [{ type: "world.savePlace" as const, place: newlySaved }] : []),
+    {
+      ...command,
+      location: target,
+      time: Math.max(statedAt, travel.world.time),
+    },
+  ];
+  const arrival = registry.applyCommands(travel.world, followups, ctx);
+  const failed = arrival.results.find((r) => !r.result.ok);
+  if (failed) return { world, patches: [], results: arrival.results };
   return {
     world: arrival.world,
     patches: [...travel.patches, ...arrival.patches],
@@ -186,7 +201,7 @@ export function preparePurchases(
         const cost =
           EconomyStateSchema.parse(before.slices.economy).eddies -
           EconomyStateSchema.parse(preview.slices.economy).eddies;
-        journey = `先前往 ${proposal.destination}，出行耗时 ${preview.time - before.time} 分钟，路费 ${cost} 欧元，抵达 ${formatGameTime(preview.time)}。下列交易已按抵达后的余额核对；到达与路费由出行统一结算，不再另列扣款。`;
+        journey = `先前往 ${proposal.destination}，出行耗时 ${formatDuration(preview.time - before.time)}，路费 ${cost} 欧元，抵达 ${formatGameTime(preview.time)}。下列交易已按抵达后的余额核对；到达与路费由出行统一结算，不再另列扣款。`;
       }
     }
     if (purchases.length === 0) eddies = EconomyStateSchema.parse(preview.slices.economy).eddies;

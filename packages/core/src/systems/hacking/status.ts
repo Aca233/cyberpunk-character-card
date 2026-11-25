@@ -9,6 +9,7 @@ type CyberwareItem = {
   readonly slot: string;
   readonly broken: boolean;
   readonly deckTraits?: readonly string[] | undefined;
+  readonly deckProfile?: string | undefined;
 };
 
 const hackingOf = (ctx: StatusContext) => ctx.views.hacking as HackingView;
@@ -21,7 +22,10 @@ export const hackingStatus: readonly SystemStatus[] = [
       if (!h) {
         const chrome = (ctx.views.cyberware as readonly CyberwareItem[] | undefined) ?? [];
         const brokenDeck = chrome.find(
-          (c) => c.slot === "os" && c.deckTraits !== undefined && c.broken,
+          (c) =>
+            c.slot === "os" &&
+            (c.deckTraits !== undefined || c.deckProfile !== undefined) &&
+            c.broken,
         );
         if (brokenDeck) {
           return [

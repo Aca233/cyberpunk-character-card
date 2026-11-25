@@ -490,6 +490,7 @@ export const NpcUpdateSchema = z
   .object({
     type: z.literal("npcUpdate"),
     id: NpcIdSchema,
+    pronoun: NpcCardSchema.shape.pronoun.optional(),
     age: NpcCardSchema.shape.age,
     adult: NpcCardSchema.shape.adult,
     entity: NpcCardSchema.shape.entity,

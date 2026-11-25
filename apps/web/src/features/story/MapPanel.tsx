@@ -269,6 +269,23 @@ function destTitle(d: MapDestination): string {
   return `${d.name} · ${area}${d.metro ? " · NCART 地铁站" : ""}${d.here ? "（当前位置）" : ""}`;
 }
 
+/** 格式化出行耗时：超过 60 分钟转为「X 小时 Y 分钟」 */
+function formatMinutes(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} 分钟`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem > 0 ? `${h} 小时 ${rem} 分钟` : `${h} 小时`;
+}
+
+/** 根据当前游戏时钟分钟数推算预计到达钟点（HH:mm，跨日加注） */
+function formatEta(nowMinutes: number, addMinutes: number): string {
+  const arrive = nowMinutes + Math.max(0, Math.round(addMinutes));
+  const hhmm = new Date(arrive * 60000).toISOString().slice(11, 16);
+  const dayDiff = Math.floor(arrive / 1440) - Math.floor(nowMinutes / 1440);
+  return dayDiff > 0 ? `次日 ${hhmm}` : hhmm;
+}
+
 interface Box {
   readonly x0: number;
   readonly y0: number;
@@ -317,46 +334,70 @@ export function MapBody({
   const here = destinations.find((d) => d.here);
   const dest = picked !== null ? destById.get(picked) : undefined;
   // 委托地点：只标手头已经接下的委托，免得未接的对话传闻像预设任务点那样挂在地图上
-  const openJobs = view.jobs.list.filter((j) => j.status === "active" && j.location !== null);
-  const jobsAt = new Map<string, (typeof openJobs)[number][]>();
-  for (const j of openJobs) {
-    const exact = j.location !== null ? destById.get(j.location) : undefined;
-    // 旧委托可能写的是名字；同名地点不止一个时不随便挑，避免把委托标到别处
-    const named = exact ? [] : destinations.filter((x) => x.name === j.location);
-    const d = exact ?? (named.length === 1 ? named[0] : undefined);
-    if (d) jobsAt.set(d.id, [...(jobsAt.get(d.id) ?? []), j]);
-  }
+  const jobsAt = useMemo(() => {
+    const openJobs = view.jobs.list.filter((j) => j.status === "active" && j.location !== null);
+    const out = new Map<string, (typeof openJobs)[number][]>();
+    for (const j of openJobs) {
+      const exact = j.location !== null ? destById.get(j.location) : undefined;
+      // 旧委托可能写的是中文地名：若同名地点存在唯一核心固定地点（fixed）优先落到固定地点，避免与同名 poi:/ft: 冲突导致丢标
+      let resolved = exact;
+      if (!resolved && j.location !== null) {
+        const named = destinations.filter((x) => x.name === j.location);
+        if (named.length === 1) {
+          resolved = named[0];
+        } else if (named.length > 1) {
+          const fixed = named.filter((x) => x.layer === "fixed");
+          if (fixed.length === 1) resolved = fixed[0];
+        }
+      }
+      if (resolved) out.set(resolved.id, [...(out.get(resolved.id) ?? []), j]);
+    }
+    return out;
+  }, [view.jobs.list, destById, destinations]);
   const destJobs = dest ? (jobsAt.get(dest.id) ?? []) : [];
   // 人物（用户 2026-11-02："npc是能移动的"，中间人也是普通人物）：见过、活着的人按现在在的地点合并成一个标记；
   // 地点 id 对不上地图上的地点就不画，不猜坐标。在玩家眼前的人跟着当前位置走
-  const npcsAt = new Map<string, View["npcs"][number][]>();
-  for (const n of view.npcs) {
-    if (!n.alive || n.placeId === null) continue;
-    const d = destById.get(n.placeId);
-    if (d) npcsAt.set(d.id, [...(npcsAt.get(d.id) ?? []), n]);
-  }
+  const npcsAt = useMemo(() => {
+    const out = new Map<string, View["npcs"][number][]>();
+    for (const n of view.npcs) {
+      if (!n.alive || n.placeId === null) continue;
+      const d = destById.get(n.placeId);
+      if (d) out.set(d.id, [...(out.get(d.id) ?? []), n]);
+    }
+    return out;
+  }, [view.npcs, destById]);
   const destNpcs = dest ? (npcsAt.get(dest.id) ?? []) : [];
   // 住处 / 安全屋：按地点合并，标在地图上并在路线卡里提示
-  const homesAt = new Map<string, View["safehouse"]["homes"][number][]>();
-  for (const h of view.safehouse.homes) {
-    const d = destById.get(h.location);
-    if (d) homesAt.set(d.id, [...(homesAt.get(d.id) ?? []), h]);
-  }
+  const homesAt = useMemo(() => {
+    const out = new Map<string, View["safehouse"]["homes"][number][]>();
+    for (const h of view.safehouse.homes) {
+      const d = destById.get(h.location);
+      if (d) out.set(d.id, [...(out.get(d.id) ?? []), h]);
+    }
+    return out;
+  }, [view.safehouse.homes, destById]);
   const destHomes = dest ? (homesAt.get(dest.id) ?? []) : [];
   // 停放载具：按当前停放地点合并，玩家一眼能看到车停在哪
-  const vehiclesAt = new Map<string, View["travel"]["vehicles"][number][]>();
-  for (const v of view.travel.vehicles) {
-    if (!v.location) continue;
-    const d = destById.get(v.location);
-    if (d) vehiclesAt.set(d.id, [...(vehiclesAt.get(d.id) ?? []), v]);
-  }
+  const vehiclesAt = useMemo(() => {
+    const out = new Map<string, View["travel"]["vehicles"][number][]>();
+    for (const v of view.travel.vehicles) {
+      if (!v.location) continue;
+      const d = destById.get(v.location);
+      if (d) out.set(d.id, [...(out.get(d.id) ?? []), v]);
+    }
+    return out;
+  }, [view.travel.vehicles, destById]);
   const destVehicles = dest ? (vehiclesAt.get(dest.id) ?? []) : [];
   const destAlerts = dest ? view.ncpd.alerts.filter((a) => a.location === dest.id) : [];
   const destGigs = dest ? view.sidegigs.list.filter((g) => g.location === dest.id) : [];
   const info = asset(MAP);
-  const gangs = view.factions.list.filter((f) => f.kind === "gang" && f.turf.length > 0);
+  // 城区势力：包含帮派以及明确占据城区的公司/势力（如市政中心的荒坂），不再只过滤 kind === "gang"
+  const turfFactions = useMemo(
+    () => view.factions.list.filter((f) => f.turf.length > 0),
+    [view.factions.list],
+  );
 
-  // 搜索匹配：按地名、城区、街区、服务类别过滤，当前去过的核心地点和名称前缀匹配优先
+  // 搜索匹配：按地名、城区、街区、服务类别、以及所在的人物/委托/住处/停放载具过滤
   const trimmedQuery = query.trim().toLowerCase();
   const searchResults = useMemo(() => {
     if (!trimmedQuery) return [];
@@ -366,10 +407,23 @@ export function MapBody({
       const district = d.district.toLowerCase();
       const sub = (d.sub ?? "").toLowerCase();
       const kind = (d.kind ? (KIND_NAME.get(d.kind as MapPoiKind) ?? d.kind) : "").toLowerCase();
+      const hasNpc = (npcsAt.get(d.id) ?? []).some((n) =>
+        n.name.toLowerCase().includes(trimmedQuery),
+      );
+      const hasJob = (jobsAt.get(d.id) ?? []).some((j) =>
+        j.title.toLowerCase().includes(trimmedQuery),
+      );
+      const hasHome = (homesAt.get(d.id) ?? []).some((h) =>
+        h.name.toLowerCase().includes(trimmedQuery),
+      );
+      const hasCar = (vehiclesAt.get(d.id) ?? []).some((v) =>
+        v.name.toLowerCase().includes(trimmedQuery),
+      );
       let score = 0;
       if (name === trimmedQuery) score = 100;
       else if (name.startsWith(trimmedQuery)) score = 80;
       else if (name.includes(trimmedQuery)) score = 60;
+      else if (hasNpc || hasJob || hasHome || hasCar) score = 55;
       else if (sub.includes(trimmedQuery)) score = 40;
       else if (district.includes(trimmedQuery)) score = 30;
       else if (kind.includes(trimmedQuery)) score = 20;
@@ -379,8 +433,8 @@ export function MapBody({
       scored.push({ dest: d, score });
     }
     scored.sort((a, b) => b.score - a.score || a.dest.name.localeCompare(b.dest.name, "zh-CN"));
-    return scored.slice(0, 12).map((s) => s.dest);
-  }, [destinations, trimmedQuery]);
+    return scored.slice(0, 20).map((s) => s.dest);
+  }, [destinations, trimmedQuery, npcsAt, jobsAt, homesAt, vehiclesAt]);
 
   useEffect(() => {
     try {
@@ -530,9 +584,10 @@ export function MapBody({
     if (picked !== null) setFocusedArea(null);
   }, [picked]);
 
-  // 搜索框打开时 Esc 先收起下拉，再取消选中地点，最后交给神经界面关闭
+  // Esc 分层退回：先收起搜索下拉 → 再取消选中地点 → 再取消聚焦区域 → 最后关闭地图
   useLayer(() => setSearchOpen(false), searchOpen);
   useLayer(() => setPicked(null), !searchOpen && picked !== null);
+  useLayer(() => setFocusedArea(null), !searchOpen && picked === null && focusedArea !== null);
 
   // 瓦片和边界 SVG 的视野（共用 mapCamera.ts，算法照旧）
   const tileImgs = tileImages(tiles, cam, size, toScreen(0, 0));
@@ -587,9 +642,9 @@ export function MapBody({
 
   // 服务点：1 倍就显示，不再等放大（用户 2026-11-02 选的"降低门槛"）；挤在一起的只留第一个，避免糊成一片；
   // 图例里关掉的类别不占位置
-  const pois: { readonly poi: MapPoi; readonly style: CSSProperties }[] = [];
+  const pois: { readonly poi: MapPoi; readonly style: CSSProperties; extra: number }[] = [];
   {
-    const taken = new Set<string>();
+    const cellEntry = new Map<string, (typeof pois)[number]>();
     // 已经去过、记下的原作店作为目的地图钉画，装饰图标不再重复画
     const booked = new Set(destinations.filter((d) => !d.firstVisit).map((d) => d.id));
     for (const poi of MAP_POIS) {
@@ -599,11 +654,16 @@ export function MapBody({
       const at = toScreen(poi.x, poi.y);
       if (!onScreen(at)) continue;
       const cell = `${Math.round(at.left / 24)}:${Math.round(at.top / 24)}`;
-      if (taken.has(cell)) continue;
+      const existing = cellEntry.get(cell);
+      if (existing) {
+        existing.extra += 1;
+        continue;
+      }
       const style = iconStyle(poiIcon(poi.kind), at);
       if (!style) continue;
-      taken.add(cell);
-      pois.push({ poi, style });
+      const entry = { poi, style, extra: 0 };
+      cellEntry.set(cell, entry);
+      pois.push(entry);
     }
   }
 
@@ -707,7 +767,25 @@ export function MapBody({
             null,
           )
       : null;
-  const hoverGangs = hover ? gangs.filter((g) => g.turf.includes(hover.district)) : [];
+  const activeSector: Hover | null =
+    hover ??
+    (focusedArea
+      ? focusedArea.level === "district"
+        ? { district: focusedArea.name, sub: null }
+        : {
+            district:
+              DISTRICT_SHAPES.find(
+                (d) => d.id === SUBDISTRICT_SHAPES.find((s) => s.id === focusedArea.id)?.district,
+              )?.name ?? focusedArea.name,
+            sub: focusedArea.name,
+          }
+      : null);
+  const sectorFactions = activeSector
+    ? turfFactions.filter((f) => f.turf.includes(activeSector.district))
+    : [];
+  const sectorContested = activeSector
+    ? (view.factions.contested.find((c) => c.district === activeSector.district) ?? null)
+    : null;
 
   return (
     <section aria-label="地图" className={styles.mapScreen} style={pinVars()}>
@@ -936,8 +1014,8 @@ export function MapBody({
           );
         }}
         onPointerLeave={() => setHover(null)}
-        onPointerUp={dragEnd}
-        onPointerCancel={dragEnd}
+        onPointerUp={(e) => dragEnd(e)}
+        onPointerCancel={(e) => dragEnd(e)}
         onKeyDown={(e) => {
           keyPan(e);
         }}
@@ -1013,31 +1091,46 @@ export function MapBody({
               ) : null;
             })}
 
-            {pois.map(({ poi, style }) => {
+            {pois.map(({ poi, style, extra }) => {
               const sub = poi.sub ? SUB_NAME.get(poi.sub) : undefined;
               const label = `${KIND_NAME.get(poi.kind) ?? poi.kind}${sub ? ` · ${sub}` : ""}`;
+              const extraNote = extra > 0 ? `（附近另有 ${extra} 处服务点，放大可逐个查看）` : "";
               const go = firstVisits.get(`poi:${poi.id}`);
-              // 原作店第一次去：图标点了出路线卡，照常出行，到了才记下来
-              return go ? (
-                <button
-                  key={poi.id}
-                  type="button"
-                  className={styles.mapPoi}
-                  data-kind={poi.kind}
-                  data-go=""
-                  style={style}
-                  title={`${go.name}（${label}，还没去过）`}
-                  aria-label={`去${go.name}`}
-                  onClick={() => setPicked(go.id)}
-                />
-              ) : (
+              const iconVar = {
+                "--icon": (style as Record<string, string>)["--icon"],
+              } as CSSProperties;
+              // 原作店第一次去：图标点了出路线卡，照常出行，到了才记下来；多个图标重叠时显示 +N 提示放大
+              return (
                 <span
                   key={poi.id}
-                  className={styles.mapPoi}
-                  data-kind={poi.kind}
-                  style={style}
-                  title={label}
-                />
+                  className={styles.mapPoiWrap}
+                  style={{ left: style.left, top: style.top }}
+                >
+                  {go ? (
+                    <button
+                      type="button"
+                      className={styles.mapPoi}
+                      data-kind={poi.kind}
+                      data-go=""
+                      style={iconVar}
+                      title={`${go.name}（${label}，还没去过）${extraNote}`}
+                      aria-label={`去${go.name}`}
+                      onClick={() => setPicked(go.id)}
+                    />
+                  ) : (
+                    <span
+                      className={styles.mapPoi}
+                      data-kind={poi.kind}
+                      style={iconVar}
+                      title={`${label}${extraNote}`}
+                    />
+                  )}
+                  {extra > 0 && (
+                    <span className={styles.mapPoiCluster} aria-hidden="true">
+                      +{extra}
+                    </span>
+                  )}
+                </span>
               );
             })}
 
@@ -1077,7 +1170,7 @@ export function MapBody({
                       }}
                       aria-hidden="true"
                     >
-                      最快 {quickestMinutes} 分钟
+                      最快 {formatMinutes(quickestMinutes)}
                     </span>
                   )}
               </>
@@ -1125,7 +1218,7 @@ export function MapBody({
                   onClick={() => {
                     setFocusedArea(null);
                     if (d.here) {
-                      setPicked(null);
+                      setPicked((cur) => (cur === d.id ? null : d.id));
                       focusHere();
                     } else {
                       setPicked(d.id);
@@ -1170,7 +1263,7 @@ export function MapBody({
                   title={title}
                   aria-label={title}
                   aria-pressed={picked === id}
-                  onClick={() => setPicked(d.here ? null : id)}
+                  onClick={() => setPicked(id)}
                 />
               </div>
             );
@@ -1199,7 +1292,7 @@ export function MapBody({
                   title={title}
                   aria-label={title}
                   aria-pressed={picked === id}
-                  onClick={() => setPicked(d.here ? null : id)}
+                  onClick={() => setPicked(id)}
                 />
               </div>
             );
@@ -1254,7 +1347,7 @@ export function MapBody({
                 title={title}
                 aria-label={title}
                 aria-pressed={picked === id}
-                onClick={() => setPicked(d.here ? null : id)}
+                onClick={() => setPicked(id)}
               >
                 {list.length}
               </button>
@@ -1301,9 +1394,12 @@ export function MapBody({
         <span className={styles.mapVignette} aria-hidden="true" />
         <span className={styles.mapHudCorners} aria-hidden="true" />
 
-        {/* 右上角城区卡：照原作世界地图的 districtInfo（城区图标、城区和街区名、主要帮派列表），不挡鼠标 */}
-        {hover && (
-          <section className={styles.mapDistrictCard} aria-label={`${hover.district}的帮派`}>
+        {/* 右上角城区卡：悬停或点击“城区速览”聚焦时展示，涵盖帮派、占据企业势力与火拼争夺态 */}
+        {activeSector && !dest && (
+          <section
+            className={styles.mapDistrictCard}
+            aria-label={`${activeSector.district}势力情报`}
+          >
             <NineSlice
               id="map.shadowText"
               tint="#000"
@@ -1314,21 +1410,36 @@ export function MapBody({
               <span className={styles.mapDistrictKicker}>SECTOR INTEL</span>
               <div className={styles.mapDistrictHead}>
                 {/* 原作地区徽章自带颜色，有的没有透明底，不能当蒙版染色 */}
-                <Asset id={districtIcon(hover.district)} height={44} />
+                <Asset id={districtIcon(activeSector.district)} height={44} />
                 <div>
-                  <h3 className={styles.mapTitle}>{hover.district}</h3>
-                  {hover.sub && <span className={styles.mapDistrictSub}>{hover.sub}</span>}
+                  <h3 className={styles.mapTitle}>{activeSector.district}</h3>
+                  {activeSector.sub && (
+                    <span className={styles.mapDistrictSub}>{activeSector.sub}</span>
+                  )}
                 </div>
               </div>
-              {/* 原作 LocKey#77912 UI-Tooltips-LeadingGangs */}
-              <h4 className={styles.mapGangsLabel}>主要帮派</h4>
-              {hoverGangs.length > 0 ? (
+              {sectorContested && (
+                <p className={styles.mapContestedNote}>
+                  地盘争夺中：{sectorContested.factionNames.join(" × ")}（{sectorContested.reason}）
+                </p>
+              )}
+              <h4 className={styles.mapGangsLabel}>控制势力</h4>
+              {sectorFactions.length > 0 ? (
                 <ul className={styles.mapGangList}>
-                  {hoverGangs.map((g) => {
+                  {sectorFactions.map((g) => {
                     const logo = GANG_LOGOS[g.id];
                     return (
                       <li key={g.id} className={styles.mapGang}>
-                        {logo ? <Asset id={logo} height={34} width={34} /> : <i />}
+                        {logo ? (
+                          <Asset id={logo} height={34} width={34} />
+                        ) : (
+                          <span
+                            className={styles.mapFactionBadge}
+                            style={{ borderColor: g.color, color: g.color }}
+                          >
+                            {g.kindLabel}
+                          </span>
+                        )}
                         <span className={styles.mapGangText}>
                           <b style={{ color: g.color }}>{g.name}</b>
                           <small className={styles.dim}>
@@ -1341,7 +1452,7 @@ export function MapBody({
                   })}
                 </ul>
               ) : (
-                <p className={styles.dim}>没有帮派占着这里</p>
+                <p className={styles.dim}>无固定势力常驻控制</p>
               )}
             </div>
           </section>
@@ -1517,7 +1628,10 @@ export function MapBody({
                                 </span>
                               </span>
                               <span className={styles.routeMetaRow}>
-                                <span className={styles.routeDuration}>约 {r.minutes} 分钟</span>
+                                <span className={styles.routeDuration}>
+                                  约 {formatMinutes(r.minutes)} · 预计{" "}
+                                  {formatEta(view.time.minutes, r.minutes)} 到
+                                </span>
                                 <span className={styles.routeRiskPill} data-risk={riskTone}>
                                   风险·{r.riskLabel}
                                 </span>

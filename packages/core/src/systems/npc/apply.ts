@@ -395,6 +395,10 @@ export function applyNpc(
         npc.alias = command.alias;
         updated = true;
       }
+      if (command.pronoun !== undefined && command.pronoun !== npc.pronoun) {
+        npc.pronoun = command.pronoun;
+        updated = true;
+      }
       if (command.age !== undefined && command.age !== npc.age) {
         npc.age = command.age;
         updated = true;

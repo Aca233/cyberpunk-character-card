@@ -135,12 +135,45 @@ export function landmarkAnchors(
     .map((a) => ({ id: a.id, kind: (a as { kind?: string | null }).kind ?? null }));
 }
 
-function radarOf(
-  data: Data,
-): readonly { id: string; name: string; kind?: string | null; x: number; y: number }[] {
-  return Array.isArray(data.radar)
-    ? (data.radar as { id: string; name: string; kind?: string | null; x: number; y: number }[])
-    : [];
+interface RadarRow {
+  readonly id: string;
+  readonly name: string;
+  readonly kind?: string | null;
+  readonly district?: string | null;
+  readonly sub?: string | null;
+  readonly x: number;
+  readonly y: number;
+}
+
+function radarOf(data: Data): readonly RadarRow[] {
+  return Array.isArray(data.radar) ? (data.radar as readonly RadarRow[]) : [];
+}
+
+/** 离任意 NCART 地铁站步行可达半径（约 500 米，不含狗镇与恶土封锁/荒野区域） */
+export const METRO_REACH_METERS = 500;
+
+const metroCache = new WeakMap<object, readonly Pt[]>();
+
+function metroSpotsOf(data: Data): readonly Pt[] {
+  const raw = data.radar;
+  if (!Array.isArray(raw)) return [];
+  const cached = metroCache.get(raw);
+  if (cached) return cached;
+  const spots = (raw as readonly RadarRow[])
+    .filter((a) => a.id.startsWith("ft:") && a.kind === "地铁站")
+    .map((a) => ({ x: a.x, y: a.y }));
+  metroCache.set(raw, spots);
+  return spots;
+}
+
+/** 某坐标是否邻近可用 NCART 轻轨站；狗镇（封锁区）与恶土无轻轨服务 */
+export function hasNearbyMetro(data: Data, district: string, p: Pt): boolean {
+  if (district === "狗镇" || district === OUTSIDE) return false;
+  const stations = metroSpotsOf(data);
+  for (const s of stations) {
+    if (Math.hypot(s.x - p.x, s.y - p.y) * METERS_PER_PERCENT <= METRO_REACH_METERS) return true;
+  }
+  return false;
 }
 
 function districtAt(areas: Areas, p: Pt): string {
@@ -346,19 +379,32 @@ function findByName(data: Data, draft: Draft<WorldClockState>, name: string): st
   return bookOf(draft).find((p) => p.id === name.trim() || placeKey(p.name) === key)?.id;
 }
 
+/** 原作城区 id（如 watson、badlands）映射为中文城区名 */
+function districtNameById(areas: Areas, id: string | null | undefined): string | undefined {
+  if (!id) return undefined;
+  if (id === "badlands") return OUTSIDE;
+  return areas.districts.find((d) => d.id === id)?.name;
+}
+
+/** 原作街区 id 映射为中文街区名 */
+function subNameById(areas: Areas, id: string | null | undefined): string | undefined {
+  if (!id) return undefined;
+  return areas.subs.find((s) => s.id === id)?.name;
+}
+
 /** 原作服务点第一次去时记下的条目：名字只用原作的，没有时用"街区 + 类别"做显示标签（§五） */
-function servicePlace(areas: Areas, point: ServicePointData, now: number): SavedPlace {
-  const sub = point.sub ? areas.subs.find((s) => s.id === point.sub)?.name : undefined;
-  const district =
-    (point.district ? areas.districts.find((d) => d.id === point.district)?.name : undefined) ??
-    OUTSIDE;
+function servicePlace(data: Data, areas: Areas, point: ServicePointData, now: number): SavedPlace {
+  const sub = subNameById(areas, point.sub);
+  const district = districtNameById(areas, point.district) ?? OUTSIDE;
   const kindName = areas.kindNames.get(point.kind) ?? point.kind;
+  const metro = hasNearbyMetro(data, district, point);
   return {
     id: `poi:${point.id}`,
     name: point.name ?? `${sub ?? ""}${kindName}`,
     district,
     ...(sub ? { sub } : {}),
     kind: point.kind,
+    ...(metro ? { metro: true } : {}),
     x: point.x,
     y: point.y,
     firstSeenAt: now,
@@ -372,17 +418,19 @@ function anchorPlace(data: Data, id: string, now: number): SavedPlace | undefine
   if (!areas) return undefined;
   if (id.startsWith("poi:")) {
     const point = servicePointsOf(data).find((p) => `poi:${p.id}` === id);
-    return point ? servicePlace(areas, point, now) : undefined;
+    return point ? servicePlace(data, areas, point, now) : undefined;
   }
   if (id.startsWith("ft:")) {
     const a = radarOf(data).find((r) => r.id === id);
     if (!a) return undefined;
-    const sub = subAt(areas, a);
-    const metro = a.kind === "地铁站";
+    // 优先采用原作标定的 district/sub，避免边界数据终端被多边形测试误划到相邻城区或恶土
+    const district = districtNameById(areas, a.district) ?? districtAt(areas, a);
+    const sub = a.district !== undefined ? subNameById(areas, a.sub) : subAt(areas, a);
+    const metro = a.kind === "地铁站" || hasNearbyMetro(data, district, a);
     return {
       id,
       name: a.name,
-      district: districtAt(areas, a),
+      district,
       ...(sub ? { sub } : {}),
       ...(metro ? { metro: true } : {}),
       x: a.x,
@@ -412,6 +460,22 @@ export function locationForTravel(data: Data, id: string): LocationDef | undefin
   };
 }
 
+/** 常见口语/简称到标准城区名的映射，供自由文本拆城区兜底 */
+const DISTRICT_SYNONYMS: readonly (readonly [string, string])[] = [
+  ["威斯布鲁克", "威斯特布鲁克"],
+  ["狗镇区", "狗镇"],
+  ["恶土区", "恶土"],
+];
+
+function stripDistrictPrefix(text: string, matched: string): string {
+  // 处理「沃森区小巷」「海伍德区暗巷」等带“区”字后缀的前缀，避免留下残余“区”字
+  const withSuffix = text.includes(`${matched}区`) ? `${matched}区` : matched;
+  return text
+    .replace(withSuffix, "")
+    .replace(/^[\s·・\-—–:：/]+|[\s·・\-—–:：/]+$/g, "")
+    .trim();
+}
+
 /** 从自由文本里拆出可能附带的城区名（如 "沃森 · 无名小巷" / "日本街暗巷"）用于兜底落点 */
 function inferFallbackDistrict(
   areas: Areas,
@@ -421,14 +485,19 @@ function inferFallbackDistrict(
 ): { readonly district: string; readonly name: string; readonly sub?: string } {
   for (const d of areas.centers.keys()) {
     if (text.includes(d)) {
-      const cleaned = text
-        .replace(d, "")
-        .replace(/^[\s·\-—–:：/]+|[\s·\-—–:：/]+$/g, "")
-        .trim();
+      const cleaned = stripDistrictPrefix(text, d);
       return { district: d, name: cleaned || text };
     }
   }
-  for (const s of areas.subs) {
+  for (const [alias, canonical] of DISTRICT_SYNONYMS) {
+    if (areas.centers.has(canonical) && text.includes(alias)) {
+      const cleaned = stripDistrictPrefix(text, alias);
+      return { district: canonical, name: cleaned || text };
+    }
+  }
+  // 长街区名优先匹配，避免「北区」先于「北橡区」命中
+  const subsByLen = [...areas.subs].sort((a, b) => b.name.length - a.name.length);
+  for (const s of subsByLen) {
     if (text.includes(s.name)) {
       const dName = areas.districts.find((d) => d.id === s.district)?.name;
       if (dName) return { district: dName, name: text, sub: s.name };
@@ -473,11 +542,13 @@ export function resolveLocation(
   const id = nextId(book);
   const spot = inferSpot(areas, data, draft, inferred.district, id, subArea);
   const sub = subAt(areas, spot) ?? subArea?.name;
+  const metro = hasNearbyMetro(data, inferred.district, spot);
   book.push({
     id,
     name: inferred.name,
     district: inferred.district,
     ...(sub ? { sub } : {}),
+    ...(metro ? { metro: true } : {}),
     x: spot.x,
     y: spot.y,
     firstSeenAt: now,
@@ -528,12 +599,14 @@ export function createPlace(
   const subArea = findSubArea(areas, district, place.sub);
   const spot = inferSpot(areas, data, draft, district, id, subArea);
   const sub = subAt(areas, spot) ?? subArea?.name;
+  const metro = hasNearbyMetro(data, district, spot);
   book.push({
     id,
     name,
     district,
     ...(sub ? { sub } : {}),
     ...(place.note !== undefined ? { note: place.note } : {}),
+    ...(metro ? { metro: true } : {}),
     x: spot.x,
     y: spot.y,
     firstSeenAt: now,
@@ -568,7 +641,7 @@ export function withPlaces(data: Data, places: readonly SavedPlace[] | undefined
         ...(p.note !== undefined ? { note: p.note } : {}),
         x: clampPct(p.x),
         y: clampPct(p.y),
-        ...(p.metro === true ? { metro: true } : {}),
+        ...(p.metro === true || hasNearbyMetro(data, p.district, p) ? { metro: true } : {}),
         ...(p.kind !== undefined ? { kind: p.kind } : {}),
       })),
   ];

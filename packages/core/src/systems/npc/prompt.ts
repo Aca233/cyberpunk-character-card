@@ -9,6 +9,7 @@ import {
   NO_FACTION_LABEL,
   NPC_CHROME_MAX,
   NPC_GEAR_MAX,
+  NPC_UNDECIDED_PREFIX,
   type Npc,
   type NpcState,
 } from "./schema";
@@ -301,8 +302,16 @@ function oneLine(npc: Npc, stage: Stage): string {
     }
     return `- ${label(npc, stage)} ${npc.role}；已死`;
   }
+  const unfinalized =
+    !npc.canon &&
+    (npc.look.startsWith(NPC_UNDECIDED_PREFIX) || npc.voice.startsWith(NPC_UNDECIDED_PREFIX));
+  const unfinalizedTag = !unfinalized
+    ? ""
+    : stage.stage === "extract"
+      ? "；【档案未定型：正式出场时需 npcUpdate 补全外貌、代词、口吻与 body】"
+      : "；【外貌与说话口吻尚未定型，首次照面时按身份与经历自然定下来】";
   if (!npc.met) {
-    return `- ${label(npc, stage)} ${npc.role}；还没见过${npc.location ? `，常在 ${npc.location}` : ""}`;
+    return `- ${label(npc, stage)} ${npc.role}；还没见过${npc.location ? `，常在 ${npc.location}` : ""}${unfinalizedTag}`;
   }
   const wound =
     stage.data !== undefined && stage.now !== undefined
@@ -310,7 +319,7 @@ function oneLine(npc: Npc, stage: Stage): string {
       : undefined;
   const hurt = wound ? `；${wound}` : "";
   const doing = npc.doing ? `；最近：${npc.doing.text}` : "";
-  return `- ${label(npc, stage)} ${npc.role}；关系：${relationBrief(npc)}${npc.location ? `，最后在 ${npc.location}` : ""}${hurt}${doing}`;
+  return `- ${label(npc, stage)} ${npc.role}；关系：${relationBrief(npc)}${npc.location ? `，最后在 ${npc.location}` : ""}${hurt}${doing}${unfinalizedTag}`;
 }
 
 /** 玩家角色所在的城区；不在地点表里、或者没传 districtOf 时是 undefined */

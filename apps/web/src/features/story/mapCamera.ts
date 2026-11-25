@@ -177,6 +177,9 @@ export function useMapCamera() {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [camera, setCamera] = useState<Camera | null>(null);
   const drag = useRef<{ x: number; y: number; id: number } | null>(null);
+  /** 活跃触控点，用于双指捏合缩放 */
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchDist = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const home = fit(size.w, size.h);
   const cam = camera ? limit(camera, size.w, size.h, home.k * MAX_ZOOM) : home;
@@ -271,21 +274,75 @@ export function useMapCamera() {
     });
   };
 
-  /** 拖动平移：按下。浮层上的按下由调用方先用 onOverlay 拦掉 */
+  /** 拖动平移 / 双指捏合缩放：按下。浮层上的按下由调用方先用 onOverlay 拦掉 */
   const dragStart = (e: ReactPointerEvent<HTMLElement>) => {
-    drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDragging(true);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // 某些触控/模拟事件不支持指针捕获，忽略即可
+    }
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()] as [
+        { x: number; y: number },
+        { x: number; y: number },
+      ];
+      pinchDist.current = Math.hypot(a.x - b.x, a.y - b.y);
+      drag.current = null;
+      setDragging(true);
+      return;
+    }
+    if (pointers.current.size === 1) {
+      pinchDist.current = null;
+      drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      setDragging(true);
+    }
   };
-  /** 拖动中返回 true 并平移；没在拖时返回 false，调用方自己处理悬停 */
+  /** 拖动或捏合中返回 true 并更新视角；没在拖时返回 false，调用方自己处理悬停 */
   const dragMove = (e: ReactPointerEvent<HTMLElement>): boolean => {
+    if (pointers.current.has(e.pointerId)) {
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()] as [
+        { x: number; y: number },
+        { x: number; y: number },
+      ];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const prev = pinchDist.current;
+      pinchDist.current = dist;
+      if (prev && prev > 0 && dist > 0) {
+        const r = viewport.current?.getBoundingClientRect();
+        if (r) {
+          const midX = (a.x + b.x) / 2 - r.left;
+          const midY = (a.y + b.y) / 2 - r.top;
+          zoomAt(dist / prev, midX, midY);
+        }
+      }
+      return true;
+    }
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return false;
     drag.current = { ...d, x: e.clientX, y: e.clientY };
     pan(e.clientX - d.x, e.clientY - d.y);
     return true;
   };
-  const dragEnd = () => {
+  const dragEnd = (e?: ReactPointerEvent<HTMLElement>) => {
+    if (e) {
+      pointers.current.delete(e.pointerId);
+    } else {
+      pointers.current.clear();
+    }
+    pinchDist.current = null;
+    if (pointers.current.size === 1) {
+      const [remainingId, pos] = [...pointers.current.entries()][0] as [
+        number,
+        { x: number; y: number },
+      ];
+      drag.current = { id: remainingId, x: pos.x, y: pos.y };
+      setDragging(true);
+      return;
+    }
     drag.current = null;
     setDragging(false);
   };

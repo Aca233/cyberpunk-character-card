@@ -15,11 +15,12 @@ const NEWS_SEARCH_THRESHOLD = 6;
  */
 export function NewsBody({ view }: { readonly view: View }) {
   const entries = view.bulletins;
+  const wireNews = view.feed.filter((item) => item.channel === "news" && item.source !== "city");
   const streetRumors = view.feed.filter((item) => item.channel === "street");
   const localFlavor = view.sidegigs.list.filter((g) => g.here);
 
   const streetCount = streetRumors.length + localFlavor.length;
-  const broadcastCount = entries.length;
+  const broadcastCount = entries.length + wireNews.length;
   const totalCount = streetCount + broadcastCount;
 
   const [filter, setFilter] = useState<NewsFilter>("all");
@@ -46,6 +47,12 @@ export function NewsBody({ view }: { readonly view: View }) {
     );
   }, [activeFilter, keyword, localFlavor]);
 
+  const visibleWireNews = useMemo(() => {
+    if (activeFilter === "street") return [];
+    if (!keyword) return wireNews;
+    return wireNews.filter((n) => `${n.from}\n${n.text}`.toLocaleLowerCase().includes(keyword));
+  }, [activeFilter, keyword, wireNews]);
+
   const visibleEntries = useMemo(() => {
     if (activeFilter === "street") return [];
     if (!keyword) return entries;
@@ -55,7 +62,7 @@ export function NewsBody({ view }: { readonly view: View }) {
   }, [activeFilter, entries, keyword]);
 
   const hasVisibleStreet = visibleRumors.length > 0 || visibleLocal.length > 0;
-  const hasVisibleBroadcast = visibleEntries.length > 0;
+  const hasVisibleBroadcast = visibleEntries.length > 0 || visibleWireNews.length > 0;
   const noMatch = totalCount > 0 && !hasVisibleStreet && !hasVisibleBroadcast;
 
   return (
@@ -210,6 +217,24 @@ export function NewsBody({ view }: { readonly view: View }) {
                   <div className={styles.newsGroup}>
                     <h3 className={styles.newsSubhead}>N54 与电台</h3>
                     <ul className={styles.newsList}>
+                      {visibleWireNews.map((n) => (
+                        <li
+                          key={n.id}
+                          className={styles.newsCard}
+                          data-channel="news"
+                          data-unread={n.unread || undefined}
+                        >
+                          <header className={styles.newsCardHead}>
+                            <span className={styles.newsSource}>
+                              <Asset id="notify.journal" tint="var(--cp-cyan)" height={14} />
+                              <span>{n.from}</span>
+                            </span>
+                            {n.unread && <UnreadBadge>新</UnreadBadge>}
+                            <time className={styles.newsTime}>{n.time}</time>
+                          </header>
+                          <p className={styles.newsText}>{n.text}</p>
+                        </li>
+                      ))}
                       {visibleEntries.map((b) => (
                         <li
                           key={b.id}

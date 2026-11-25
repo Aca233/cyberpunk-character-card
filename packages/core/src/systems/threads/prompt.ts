@@ -16,7 +16,7 @@ export const threadRules: RuleModule<ThreadsState> = {
   narrate: `- 【眼前与本区实时风声】与【城中远方脉动】是城里背地里在推进的事实。走向与结局由场外演化决定，正文不私自代推未发生的结果。
 - 标着「玩家尚未听说」的进展，只有借新闻、电台、街头传闻、中间人、熟人或现场撞见透出来才算玩家知道；一轮最多透一件，战斗、潜入与闪回中不硬塞。
 - 玩家走进相关城区或碰上相关人物时，可自然露出局势迹象与插手机会；没传到玩家耳中的幕后真相不写成玩家已知。`,
-  text: `- 正文里让玩家听说了某件局势的新进展（新闻、传闻、消息、有人亲口说或现场撞见），写 threadTold，id 写那件事的 id；只听到模糊风声、说不清哪件的不算。
+  text: `- 仅当【城中远方脉动】或局势条目明确标着「玩家尚未听说」且正文里让玩家听说了该新进展（新闻、传闻、消息、有人亲口说或现场撞见）时，才写 threadTold，id 写那件事的 id；标着「玩家已知」或「尚无新进展」的不发 threadTold。
 - 玩家亲手插手了才写 thread：帮它办成关键一步写 push（马上到点）；拖住它（毁货、抓人、报信）写 stall；彻底搅黄它（干掉主事者、端据点、证据交对头）写 derail，此事收场。reason 一句话写玩家做了什么。只是听说、议论不算插手。`,
 };
 
@@ -43,7 +43,9 @@ function detailedLine(t: Thread): string {
 
 function compactLine(t: Thread): string {
   const latest = t.steps.at(-1);
-  const tail = latest ? `${latest.news}（${latest.told ? "玩家已知" : "玩家尚未听说"}）` : t.stage;
+  const tail = latest
+    ? `${latest.news}（${latest.told ? "玩家已知" : "玩家尚未听说"}）`
+    : `${t.stage}（尚无新进展）`;
   return `- ${t.id}｜${THREAD_KIND_LABELS[t.kind]}·${t.title}${metaTag(t)}：${tail}`;
 }
 

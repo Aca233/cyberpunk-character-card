@@ -40,6 +40,7 @@ export const travel = defineSystem<
     "cyberware",
     "factions",
     "ncpd",
+    "npc",
   ],
   state: TravelStateSchema,
   initial: () => ({

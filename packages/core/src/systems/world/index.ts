@@ -1,5 +1,5 @@
 import { defineSystem } from "../../kernel/system";
-import { applyDeadline, applyWorld, applyWorldRest, endScene } from "./apply";
+import { applyDeadline, applySavePlace, applyWorld, applyWorldRest, endScene } from "./apply";
 import { worldEvents } from "./events";
 import { worldFeed } from "./feed";
 import { merchantEntranceText } from "./merchant-context";
@@ -15,6 +15,8 @@ import {
   WorldCommandSchema,
   type WorldRest,
   WorldRestSchema,
+  type WorldSavePlace,
+  WorldSavePlaceSchema,
 } from "./schema";
 import { worldStatus } from "./status";
 import { worldView } from "./view";
@@ -22,7 +24,7 @@ import { worldView } from "./view";
 export const world = defineSystem<
   WorldClockState,
   WorldCommand | DeadlineCommand,
-  EndScene | WorldRest
+  EndScene | WorldRest | WorldSavePlace
 >({
   id: "world",
   state: WorldClockStateSchema,
@@ -33,6 +35,7 @@ export const world = defineSystem<
     sceneStartedAt: 0,
     places: [],
     phasesAwake: 0,
+    awakeMinutes: 0,
     blackLaceDoses: [],
     blackLaceActiveUntil: null,
   }),
@@ -40,7 +43,11 @@ export const world = defineSystem<
     world: WorldCommandSchema,
     deadline: DeadlineCommandSchema,
   },
-  internal: { "world.endScene": EndSceneSchema, "world.rest": WorldRestSchema },
+  internal: {
+    "world.endScene": EndSceneSchema,
+    "world.rest": WorldRestSchema,
+    "world.savePlace": WorldSavePlaceSchema,
+  },
   apply(draft, command, ctx) {
     switch (command.type) {
       case "world":
@@ -51,6 +58,8 @@ export const world = defineSystem<
         return endScene(draft, ctx.now);
       case "world.rest":
         return applyWorldRest(draft, command, ctx.now);
+      case "world.savePlace":
+        return applySavePlace(draft, command, ctx.now);
     }
   },
   // 统一的地点表（用户定的，2026-11-01："统一为地点"）：存档里记下的地点并进地点表和周边锚点，别的系统照旧用 locationCatalog 查

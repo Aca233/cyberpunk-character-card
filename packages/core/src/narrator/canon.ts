@@ -1,12 +1,12 @@
 import { type CanonNode, CanonTimelineSchema } from "../schemas/lore";
+import { calendarDayDiff } from "../systems/world/apply";
 
-const DAY = 24 * 60;
 /** 过去了的节点还在提示词里留几天：后续的新闻和传言还在传 */
 export const CANON_PAST_DAYS = 3;
 
-/** 从开场算的第几天，开场当天是 0 */
+/** 从开场算的第几个日历日，开场当天是 0（按 00:00 自然日切换，与时钟「第 X 天」同步） */
 export function canonDay(start: number, now: number): number {
-  return Math.floor((now - start) / DAY);
+  return now < start ? -1 : calendarDayDiff(start, now);
 }
 
 /** 这一天要带的节点：正在发生、明天开始、结束不到 CANON_PAST_DAYS 天的 */

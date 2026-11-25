@@ -111,6 +111,8 @@ export const WorldClockStateSchema = z.object({
   places: z.array(SavedPlaceSchema).default([]),
   /** 连续未睡眠的时段数，用于提示身体疲劳，不扣属性点。 */
   phasesAwake: z.number().int().min(0).default(0),
+  /** 距离下一次累计熬夜时段（360 分钟）的零头分钟，避免短时间跨整点误算一整段疲劳 */
+  awakeMinutes: z.number().int().min(0).default(0),
   /** 3.0 最近 7 天服用黑蕾丝（Black Lace）的时间点（分钟） */
   blackLaceDoses: z.array(z.number().int()).default([]),
   /** 3.0 黑蕾丝药效维持截止时间（期间无视伤势减值且肉体 +2） */
@@ -203,6 +205,13 @@ export function locationCatalog(
   locationCatalogs.set(raw, catalog);
   return catalog;
 }
+
+/** 只能由代码发出：把自动出行前已解析好的首访/新地点落盘到 world.places，避免二次解析漂移 */
+export const WorldSavePlaceSchema = z.object({
+  type: z.literal("world.savePlace"),
+  place: SavedPlaceSchema,
+});
+export type WorldSavePlace = z.infer<typeof WorldSavePlaceSchema>;
 
 /** 只能由代码发出：叙事模型标了 sceneEnd 之后由回合流程发出 */
 export const EndSceneSchema = z.object({ type: z.literal("world.endScene") });

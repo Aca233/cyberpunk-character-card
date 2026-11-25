@@ -41,7 +41,7 @@
 }
 
 .inputBox textarea {
-  min-height: 4.5rem;
+  min-height: 3.4rem;
   padding: 8px 14px 10px 12px;
   font-size: var(--fs-ui);
   line-height: 1.6;
@@ -455,8 +455,8 @@
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 15px 13px;
+  gap: 8px;
+  padding: 10px 14px 11px;
 }
 
 .customDraft {
@@ -698,15 +698,8 @@
   overflow: hidden;
 }
 
-@media (max-width: 1200px) {
-  .cyberShelfBody,
-  .cyberListScroll {
-    overflow: visible;
-    padding-right: 0;
-  }
-}
-
-.cyberListScroll {
+.cyberListScroll,
+.cyberEditorScroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -714,6 +707,166 @@
   padding-right: 4px;
   scrollbar-color: rgb(255 97 88 / 52%) transparent;
   scrollbar-width: thin;
+}
+
+@media (max-width: 1200px) {
+  .cyberShelfBody,
+  .cyberListScroll,
+  .cyberEditorScroll {
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
+.customFormHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgb(94 246 255 / 20%);
+}
+
+.customFormTitle {
+  color: var(--cp-cyan);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.customFormGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(9rem, 0.75fr);
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .customFormGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rarityPickBtn {
+  padding: 4px 10px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: rgb(14 16 26 / 84%);
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-size: var(--fs-label);
+  cursor: var(--cp-cursor-hand);
+}
+
+.rarityPickBtn[data-rarity="common"] {
+  border-color: rgb(168 168 168 / 45%);
+  color: var(--rar-common);
+}
+
+.rarityPickBtn[data-rarity="uncommon"] {
+  border-color: rgb(79 209 122 / 52%);
+  color: var(--rar-uncommon);
+}
+
+.rarityPickBtn[data-rarity="rare"] {
+  border-color: rgb(63 169 255 / 58%);
+  color: var(--rar-rare);
+}
+
+.rarityPickBtn[data-rarity="epic"] {
+  border-color: rgb(180 92 255 / 64%);
+  color: var(--rar-epic);
+}
+
+.rarityPickBtn[data-rarity="legendary"] {
+  border-color: rgb(255 161 37 / 72%);
+  color: var(--rar-legendary);
+}
+
+.rarityPickBtn[aria-pressed="true"] {
+  background: rgb(24 30 44 / 96%);
+  box-shadow: inset 0 0 0 1px currentColor;
+  font-weight: 600;
+}
+
+.rarityPickBtn:focus-visible {
+  outline: 2px solid var(--cp-cyan);
+  outline-offset: 2px;
+}
+
+.featureToggleList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.featureToggleRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background: rgb(10 14 22 / 78%);
+  color: var(--cp-text);
+  font: inherit;
+  text-align: left;
+  cursor: var(--cp-cursor-hand);
+}
+
+.featureToggleRow:hover {
+  border-color: rgb(94 246 255 / 45%);
+  background: rgb(14 22 32 / 90%);
+}
+
+.featureToggleRow[aria-pressed="true"] {
+  border-color: var(--cp-cyan);
+  border-left: 3px solid var(--cp-cyan);
+  background: rgb(11 32 39 / 90%);
+}
+
+.featureToggleRow:focus-visible {
+  outline: 2px solid var(--cp-cyan);
+  outline-offset: 2px;
+}
+
+.featureToggleName {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--cp-text);
+}
+
+.featureToggleRow[aria-pressed="true"] .featureToggleName {
+  color: var(--cp-cyan);
+}
+
+.featureToggleDesc {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--cp-text-dim);
+}
+.editorNotice {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgb(252 238 10 / 34%);
+  border-left: 3px solid var(--cp-yellow);
+  background: rgb(252 238 10 / 8%);
+  color: var(--cp-yellow);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+}
+
+.emptyShelfNote {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed rgb(255 255 255 / 14%);
+  background: rgb(10 12 20 / 50%);
 }
 
 .cyberGrid {
@@ -790,6 +943,26 @@
   width: 100%;
   height: 100%;
   color: var(--cp-text);
+}
+
+.cyberCard[data-rarity="common"] {
+  --box-line: rgb(168 168 168 / 52%);
+}
+
+.cyberCard[data-rarity="uncommon"] {
+  --box-line: rgb(79 209 122 / 64%);
+}
+
+.cyberCard[data-rarity="rare"] {
+  --box-line: rgb(63 169 255 / 72%);
+}
+
+.cyberCard[data-rarity="epic"] {
+  --box-line: rgb(180 92 255 / 80%);
+}
+
+.cyberCard[data-rarity="legendary"] {
+  --box-line: rgb(255 161 37 / 86%);
 }
 
 .cyberCard:hover:not([data-disabled]) {

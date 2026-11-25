@@ -522,7 +522,7 @@ export function mergeCreatorCatalog(
       name: item.name,
       slot: item.slot,
       slotLabel: cyberwareRules.SLOT_LABELS[item.slot],
-      rarity: "rare",
+      rarity: item.rarity ?? "rare",
       humanityCost: item.humanityCost,
       ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
       ...(item.armor ? { armor: true } : {}),
@@ -551,14 +551,23 @@ export function exportLocalWorkshopPack(
             id: c.id,
             name: c.name,
             slot: c.slot,
-            rarity: "rare" as const,
-            price: 18000,
+            rarity: c.rarity ?? ("rare" as const),
+            price:
+              c.rarity === "common"
+                ? 4000
+                : c.rarity === "uncommon"
+                  ? 9000
+                  : c.rarity === "epic"
+                    ? 36000
+                    : c.rarity === "legendary"
+                      ? 72000
+                      : 18000,
             humanityCost: c.humanityCost,
             ability: c.ability || c.summary || "自定义义体模块",
             armor: Boolean(c.armor),
             accelerator: Boolean(c.accelerator),
             iconic: false,
-            ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
+            ...(c.deckProfile ? { deckProfile: c.deckProfile, deckTraits: [] } : {}),
             ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
           },
         ]

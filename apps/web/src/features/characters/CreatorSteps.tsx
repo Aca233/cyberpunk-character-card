@@ -7,6 +7,7 @@ import {
   type CharacterCard,
   CUSTOM_EDDIES_MAX,
   cyberwareRules,
+  economyRules,
   FLAW_MAX,
   inventoryRules,
   PAST_MAX,
@@ -20,7 +21,7 @@ import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { itemArtOf } from "../story/art";
-import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
+import { CYBER_LABELS, CyberItemCell, type CyberSlot } from "../story/CyberDoll";
 import { vehicleArtOf } from "../story/vehicle-art";
 import { CustomCyberwareForm } from "./CustomCyberwareForm";
 import { CustomModuleForm } from "./CustomModuleForm";
@@ -74,6 +75,7 @@ type LoadoutPickerProps = Omit<PickerProps, "change"> & Partial<Pick<PickerProps
 type CyberwareShelfProps = Omit<PickerProps, "change"> &
   Partial<Pick<PickerProps, "change">> & {
     readonly slot: CyberSlot;
+    readonly onSlotChange?: (slot: CyberSlot) => void;
   };
 
 const isWorkshopEntry = (packId?: string): boolean => Boolean(packId && packId !== "local");
@@ -1179,7 +1181,14 @@ function chromeLoadTag(cost: number): { readonly label: string; readonly tone?: 
 
 type KindFilter = "all" | "zero" | "combat" | "custom";
 
-export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShelfProps) {
+export function CyberwareShelf({
+  card,
+  board,
+  data,
+  commit,
+  slot,
+  onSlotChange,
+}: CyberwareShelfProps) {
   type Offer = BoardData["cyberware"][number];
   const [shelfState, setShelfState] = useState<{
     readonly slot: CyberSlot;
@@ -1194,27 +1203,41 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
     slot,
     state: null,
   });
+  const [customScope, setCustomScope] = useState<"slot" | "all">("all");
+  const [editorNotice, setEditorNotice] = useState<string | null>(null);
   const rarity = shelfState.slot === slot ? shelfState.rarity : null;
   const kind = shelfState.slot === slot ? shelfState.kind : "all";
   const query = shelfState.slot === slot ? shelfState.query : "";
   const activeEditor = editor.slot === slot ? editor.state : null;
   const setRarity = (next: string | null) => setShelfState({ slot, rarity: next, kind, query });
-  const setKind = (next: KindFilter) => setShelfState({ slot, rarity, kind: next, query });
+  const setKind = (next: KindFilter) => {
+    setEditorNotice(null);
+    setShelfState({ slot, rarity, kind: next, query });
+  };
   const setQuery = (next: string) => setShelfState({ slot, rarity, kind, query: next });
-  const setActiveEditor = (next: CyberEditorState) => setEditor({ slot, state: next });
+  const setActiveEditor = (next: CyberEditorState) => {
+    setEditorNotice(null);
+    setEditor({ slot, state: next });
+  };
 
   const options = data.cyberware.filter((o) => o.slot === slot);
+  const allCustomOptions = data.cyberware.filter((o) => o.custom || isWorkshopEntry(o.packId));
+  const slotCustomCount = options.filter((o) => o.custom || isWorkshopEntry(o.packId)).length;
   const zeroCount = options.filter((o) => o.humanityCost <= 0).length;
-  const customCount = options.filter((o) => o.custom || isWorkshopEntry(o.packId)).length;
-  const rarities = RARITY_ORDER.filter((r) => options.some((o) => o.rarity === r));
+  const sourceOptions =
+    kind === "custom"
+      ? customScope === "all"
+        ? allCustomOptions
+        : options.filter((o) => o.custom || isWorkshopEntry(o.packId))
+      : options;
+  const rarities = RARITY_ORDER.filter((r) => sourceOptions.some((o) => o.rarity === r));
   const normalizedQuery = query.trim().toLowerCase();
-  const shown = options.filter((o) => {
+  const shown = sourceOptions.filter((o) => {
     if (kind === "zero" && o.humanityCost > 0) return false;
     if (kind === "combat" && o.humanityCost <= 0) return false;
-    if (kind === "custom" && !o.custom && !isWorkshopEntry(o.packId)) return false;
     if (rarity && o.rarity !== rarity) return false;
     if (!normalizedQuery) return true;
-    const hay = [o.name, o.ability, o.deckProfile ?? "", ...(o.deckTraits ?? [])]
+    const hay = [o.name, o.slotLabel, o.ability, o.deckProfile ?? "", ...(o.deckTraits ?? [])]
       .join(" ")
       .toLowerCase();
     return hay.includes(normalizedQuery);
@@ -1273,6 +1296,7 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
         ? board.cyberware.filter((c) => !conflict.blockers.some((b) => b.id === c.id))
         : board.cyberware;
     const group = cyberwareRules.cyberwareExclusiveGroup(probeOfOffer(o));
+    const parsedRarity = economyRules.RaritySchema.safeParse(o.rarity);
     return [
       ...base,
       {
@@ -1280,6 +1304,7 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
         name: o.name,
         humanityCost: o.humanityCost,
         slot: o.slot as CyberSlot,
+        ...(parsedRarity.success ? { rarity: parsedRarity.data } : {}),
         ...(o.custom ? { custom: true } : {}),
         ...(o.packId ? { packId: o.packId } : {}),
         ...(o.custom && o.ability ? { ability: o.ability } : {}),
@@ -1297,19 +1322,105 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
     commit({ ...board, cyberware: nextCyberware(o) });
   };
 
-  const toEditableStartChrome = (o: Offer): StartCyberware => ({
-    id: o.id,
-    name: o.name,
-    slot: o.slot as CyberSlot,
-    humanityCost: o.humanityCost,
-    ability: o.ability,
-    ...(o.armor ? { armor: true } : {}),
-    ...(o.accelerator ? { accelerator: true } : {}),
-    ...(o.deckProfile ? { deckProfile: o.deckProfile } : {}),
-    ...(o.exclusiveGroup ? { exclusiveGroup: o.exclusiveGroup } : {}),
-    custom: true,
-    packId: o.packId ?? "local",
-  });
+  const toEditableStartChrome = (o: Offer): StartCyberware => {
+    const parsedRarity = economyRules.RaritySchema.safeParse(o.rarity);
+    return {
+      id: o.id,
+      name: o.name,
+      slot: o.slot as CyberSlot,
+      rarity: parsedRarity.success ? parsedRarity.data : "rare",
+      humanityCost: o.humanityCost,
+      ability: o.ability,
+      ...(o.armor ? { armor: true } : {}),
+      ...(o.accelerator ? { accelerator: true } : {}),
+      ...(o.deckProfile ? { deckProfile: o.deckProfile } : {}),
+      ...(o.exclusiveGroup ? { exclusiveGroup: o.exclusiveGroup } : {}),
+      custom: true,
+      packId: o.packId ?? "local",
+    };
+  };
+
+  const handleCustomSave = (saved: StartCyberware, options: { readonly equip: boolean }) => {
+    const savedSlot = (saved.slot ?? slot) as CyberSlot;
+    const exists = board.cyberware.some((c) => c.id === saved.id);
+    const otherProbes = chosenProbes.filter((p) => p.id !== saved.id);
+    const savedProbe: cyberwareRules.ExclusiveProbe = {
+      id: saved.id,
+      name: saved.name,
+      slot: savedSlot,
+      ...(saved.armor ? { armor: true } : {}),
+      ...(saved.accelerator ? { accelerator: true } : {}),
+      ...(saved.deckProfile ? { deckProfile: saved.deckProfile } : {}),
+      ...(saved.exclusiveGroup ? { exclusiveGroup: saved.exclusiveGroup } : {}),
+    };
+
+    let notice: string | null = null;
+    if (activeEditor?.mode === "edit") {
+      if (exists) {
+        const conflict = cyberwareRules.cyberwareConflicts(savedProbe, otherProbes);
+        if (conflict.ok) {
+          commit({
+            ...board,
+            cyberware: board.cyberware.map((c) => (c.id === saved.id ? saved : c)),
+          });
+        } else if (conflict.limit === 1) {
+          commit({
+            ...board,
+            cyberware: board.cyberware
+              .filter((c) => !conflict.blockers.some((b) => b.id === c.id))
+              .map((c) => (c.id === saved.id ? saved : c)),
+          });
+          notice = `已更新「${saved.name}」，并替换了互斥件 ${conflict.blockers.map((b) => b.name).join("、")}`;
+        } else {
+          commit({
+            ...board,
+            cyberware: board.cyberware.filter((c) => c.id !== saved.id),
+          });
+          notice = `已更新「${saved.name}」，因「${conflict.label}」互斥上限已满，暂从当前角色卸下`;
+        }
+      }
+    } else if (options.equip) {
+      const conflict = cyberwareRules.cyberwareConflicts(savedProbe, otherProbes);
+      if (conflict.ok) {
+        commit({ ...board, cyberware: [...board.cyberware, saved] });
+      } else if (conflict.limit === 1) {
+        commit({
+          ...board,
+          cyberware: [
+            ...board.cyberware.filter((c) => !conflict.blockers.some((b) => b.id === c.id)),
+            saved,
+          ],
+        });
+        notice = `已保存并装上「${saved.name}」，同时替换了互斥件 ${conflict.blockers.map((b) => b.name).join("、")}`;
+      } else {
+        notice = `已存入自创库，但「${conflict.label}」最多装 ${conflict.limit} 件（已满），请先卸下一件后再装配`;
+      }
+    } else {
+      notice = `已将「${saved.name}」存入自创义体库（${CYBER_LABELS[savedSlot]}）`;
+    }
+
+    if (savedSlot !== slot) {
+      onSlotChange?.(savedSlot);
+    }
+    setActiveEditor(null);
+    setEditorNotice(notice);
+  };
+
+  if (activeEditor) {
+    return (
+      <div className={`${styles.pickerBody} ${styles.cyberShelfBody}`}>
+        <div className={styles.cyberEditorScroll}>
+          <CustomCyberwareForm
+            key={activeEditor.mode === "edit" ? activeEditor.item.id : `new-${slot}`}
+            slot={slot}
+            {...(activeEditor.mode === "edit" ? { initial: activeEditor.item } : {})}
+            onCancel={() => setActiveEditor(null)}
+            onAccept={handleCustomSave}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`${styles.pickerBody} ${styles.cyberShelfBody}`}>
@@ -1318,61 +1429,20 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
           <input
             type="search"
             value={query}
-            placeholder="搜索该部位义体名称或能力…"
+            placeholder={
+              kind === "custom" && customScope === "all"
+                ? "搜索全部自创/工坊义体名称、部位或能力…"
+                : "搜索该部位义体名称或能力…"
+            }
             aria-label="搜索义体"
             onChange={(e) => setQuery(e.target.value)}
           />
         </FrameBox>
-        {!activeEditor && (
-          <Button small onClick={() => setActiveEditor({ mode: "create" })}>
-            ＋ 自创义体
-          </Button>
-        )}
+        <Button small onClick={() => setActiveEditor({ mode: "create" })}>
+          ＋ 自创义体
+        </Button>
       </div>
-      {activeEditor && (
-        <CustomCyberwareForm
-          key={activeEditor.mode === "edit" ? activeEditor.item.id : `new-${slot}`}
-          slot={slot}
-          {...(activeEditor.mode === "edit" ? { initial: activeEditor.item } : {})}
-          onCancel={() => setActiveEditor(null)}
-          onAccept={(saved) => {
-            const exists = board.cyberware.some((c) => c.id === saved.id);
-            if (activeEditor.mode === "edit") {
-              if (exists) {
-                commit({
-                  ...board,
-                  cyberware: board.cyberware.map((c) => (c.id === saved.id ? saved : c)),
-                });
-              }
-            } else {
-              const conflict = cyberwareRules.cyberwareConflicts(
-                {
-                  id: saved.id,
-                  name: saved.name,
-                  slot,
-                  ...(saved.armor ? { armor: true } : {}),
-                  ...(saved.accelerator ? { accelerator: true } : {}),
-                  ...(saved.deckProfile ? { deckProfile: saved.deckProfile } : {}),
-                  ...(saved.exclusiveGroup ? { exclusiveGroup: saved.exclusiveGroup } : {}),
-                },
-                chosenProbes,
-              );
-              if (conflict.ok) {
-                commit({ ...board, cyberware: [...board.cyberware, saved] });
-              } else if (conflict.limit === 1) {
-                commit({
-                  ...board,
-                  cyberware: [
-                    ...board.cyberware.filter((c) => !conflict.blockers.some((b) => b.id === c.id)),
-                    saved,
-                  ],
-                });
-              }
-            }
-            setActiveEditor(null);
-          }}
-        />
-      )}
+      {editorNotice && <p className={styles.editorNotice}>{editorNotice}</p>}
       {mountedInSlot.length > 0 && (
         <section className={styles.equippedStrip} aria-label="该部位已装自选义体">
           <span className={styles.equippedLabel}>已装 ({mountedInSlot.length})</span>
@@ -1414,12 +1484,20 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
               实战与重装 ({options.length - zeroCount})
             </Button>
           )}
-          {customCount > 0 && (
-            <Button small pressed={kind === "custom"} onClick={() => setKind("custom")}>
-              自创/工坊 ({customCount})
-            </Button>
-          )}
+          <Button small pressed={kind === "custom"} onClick={() => setKind("custom")}>
+            自创/工坊 ({allCustomOptions.length})
+          </Button>
         </fieldset>
+        {kind === "custom" && allCustomOptions.length > 0 && (
+          <fieldset className={styles.shelfFilter} aria-label="自创义体查看范围">
+            <Button small pressed={customScope === "all"} onClick={() => setCustomScope("all")}>
+              全部部位 ({allCustomOptions.length})
+            </Button>
+            <Button small pressed={customScope === "slot"} onClick={() => setCustomScope("slot")}>
+              仅当前部位 ({slotCustomCount})
+            </Button>
+          </fieldset>
+        )}
         {rarities.length > 1 && (
           <fieldset className={styles.shelfFilter} aria-label="按稀有度筛">
             <Button small pressed={rarity === null} onClick={() => setRarity(null)}>
@@ -1496,7 +1574,15 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
         </p>
       )}
       {shown.length === 0 ? (
-        <p className={styles.note}>当前筛选下没有可用义体。</p>
+        <div className={styles.emptyShelfNote}>
+          <p className={styles.note}>
+            {kind === "custom"
+              ? customScope === "slot" && allCustomOptions.length > 0
+                ? `「${CYBER_LABELS[slot]}」部位暂无自创义体，可切换查看「全部部位」或直接新建。`
+                : "还没有自创或工坊义体，点上方「＋ 自创义体」即可手写创建并设置稀有度。"
+              : "当前筛选下没有可用义体。"}
+          </p>
+        </div>
       ) : (
         <div className={styles.cyberListScroll}>
           <ul className={styles.cyberGrid}>
@@ -1508,8 +1594,10 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
               const group = cyberwareRules.cyberwareExclusiveGroup(probeOfOffer(o));
               const groupLabel = group ? cyberwareRules.EXCLUSIVE_GROUP_LABELS[group] : null;
               const armEquippedCount =
-                slot === "arms"
-                  ? mountedInSlot.length + inherentInSlot.filter((i) => !i.replaced).length
+                o.slot === "arms"
+                  ? board.cyberware.filter((c) => slotOf(c) === "arms").length +
+                    inherentCyberware(card, data).filter((i) => i.slot === "arms" && !i.replaced)
+                      .length
                   : 0;
               const mountHint = cyberwareRules.cyberwareMountHint(
                 probeOfOffer(o),
@@ -1573,6 +1661,9 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
                         </span>
                       </div>
                       <div className={styles.cyberTileMeta}>
+                        {kind === "custom" && customScope === "all" && (
+                          <span className={styles.metaChip}>{o.slotLabel}</span>
+                        )}
                         {o.rarity && (
                           <span className={styles.shelfRarity} data-rarity={o.rarity}>
                             {RARITY_LABELS[o.rarity]}
@@ -1628,9 +1719,6 @@ export function CyberwareShelf({ card, board, data, commit, slot }: CyberwareShe
                           aria-label={`删除自创义体 ${o.name}`}
                           onClick={() => {
                             removeLocalCustomCyberware(o.id);
-                            if (activeEditor?.mode === "edit" && activeEditor.item.id === o.id) {
-                              setActiveEditor(null);
-                            }
                             if (on) {
                               commit({
                                 ...board,

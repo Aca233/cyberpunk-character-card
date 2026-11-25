@@ -3,7 +3,14 @@ import type { ApplyOutcome, SystemContext } from "../../kernel/system";
 import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
 import { rulingFact } from "../dice";
 import { InventoryStateSchema, itemCatalog } from "../inventory";
-import { locationCatalog, placeKey, WorldClockStateSchema } from "../world";
+import {
+  formatDuration,
+  locationCatalog,
+  locationForTravel,
+  placeKey,
+  WorldClockStateSchema,
+} from "../world";
+import { TRAVEL_SPEEDS, tripDistance } from "./apply";
 import {
   type OwnedVehicle,
   REPAIR_SHARE,
@@ -178,14 +185,28 @@ export function summonVehicle(
   if (car.abandoned || car.stolen || car.condition === "wrecked") {
     return fail("这辆车当前无法远程呼叫");
   }
-  car.location = command.to;
+  if (car.location === null) {
+    return fail("这辆车当前失去定位信号，无法远程呼叫");
+  }
+  const fromPlace = locationForTravel(ctx.data, car.location);
+  const toPlace = locationForTravel(ctx.data, command.to);
   const def = vehicleCatalog(ctx.data).get(car.model);
+  const dist = tripDistance(ctx.data, fromPlace, toPlace);
+  // 按车辆实际停放距离估算自动驶来耗时（最少 3 分钟，最远上限 30 分钟），并通过 world 指令同步时钟/疲劳/期限
+  const rawMinutes =
+    dist !== undefined
+      ? Math.round(2 + dist.d * TRAVEL_SPEEDS.car.perUnit * vehicleFactor(car, def))
+      : 5;
+  const minutes = Math.max(3, Math.min(30, rawMinutes));
+  car.location = command.to;
   const name = def?.name ?? car.model;
   return {
     ok: true,
-    notes: [`呼叫${name}自动驶到${locationName(ctx, command.to)}附近停妥（耗去 5 分钟）`],
-    advanceTo: ctx.now + 5,
+    notes: [
+      `呼叫${name}自动驶到${locationName(ctx, command.to)}附近停妥（耗去 ${formatDuration(minutes)}）`,
+    ],
     emit: [
+      { type: "world", activity: "travel", time: ctx.now + minutes },
       { type: "inventory.relocateVehicle", vehicle: car.id, location: command.to },
       { type: "cyberware.relocateVehicle", vehicle: car.id, location: command.to },
     ],

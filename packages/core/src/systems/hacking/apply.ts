@@ -96,7 +96,9 @@ function slotsForDeck(deck: CyberwareDef): number {
 
 function deckFrom(defs: readonly CyberwareDef[]): DeckInfo {
   const selfIce = defs.some((d) => d.id === SELF_ICE);
-  const deck = defs.find((d) => d.slot === "os" && d.deckTraits !== undefined);
+  const deck = defs.find(
+    (d) => d.slot === "os" && (d.deckTraits !== undefined || d.deckProfile !== undefined),
+  );
   if (!deck) return { ...NO_DECK, selfIce };
   return {
     deck: deck.id,

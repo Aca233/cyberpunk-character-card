@@ -6,6 +6,7 @@ import {
   cyberwareExclusiveGroup,
   ExclusiveGroupSchema,
 } from "../systems/cyberware/schema";
+import { type Rarity, RaritySchema } from "../systems/economy/schema";
 import type { LedgerKind } from "../systems/npc/schema";
 
 /**
@@ -286,6 +287,7 @@ export const StartCyberwareSchema = z.object({
   humanityCost: z.number().int().min(0).max(20),
   /** 创意工坊/自定义义体自包含快照字段 */
   slot: CyberwareSlotSchema.optional(),
+  rarity: RaritySchema.optional(),
   summary: line(200).optional(),
   ability: line(200).optional(),
   armor: z.boolean().optional(),
@@ -493,18 +495,19 @@ export function normalizeBoard(
     if (!def) {
       // 创意工坊/自定义义体自包含快照兜底：按物理互斥校验
       if (item.custom && item.slot) {
+        const rarity: Rarity = item.rarity ?? "rare";
         const probe: CyberwareDef = {
           id: item.id,
           name: item.name,
           slot: item.slot,
-          rarity: "rare",
+          rarity,
           price: 0,
           humanityCost: item.humanityCost,
           ability: item.ability || item.summary || "自定义义体模块",
           armor: Boolean(item.armor),
           accelerator: Boolean(item.accelerator),
           iconic: false,
-          ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+          ...(item.deckProfile ? { deckProfile: item.deckProfile, deckTraits: [] } : {}),
           ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
         };
         const conflict = cyberwareConflicts(probe, placed);
@@ -515,7 +518,7 @@ export function normalizeBoard(
           };
         }
         placed.push(probe);
-        cyberware.push(item);
+        cyberware.push({ ...item, rarity });
         continue;
       }
       return { ok: false, error: `义体表里没有 ${item.id}` };
@@ -537,6 +540,7 @@ export function normalizeBoard(
       name: def.name,
       humanityCost: def.humanityCost,
       slot: def.slot,
+      rarity: def.rarity,
       ...(def.ability ? { ability: def.ability } : {}),
       ...(def.armor ? { armor: true } : {}),
       ...(def.accelerator ? { accelerator: true } : {}),
@@ -564,14 +568,14 @@ export function customCyberwareDefs(
       id: item.id,
       name: item.name,
       slot: item.slot,
-      rarity: "rare",
+      rarity: item.rarity ?? "rare",
       price: 0,
       humanityCost: item.humanityCost,
       ability: item.ability || item.summary || "自定义义体模块",
       armor: Boolean(item.armor),
       accelerator: Boolean(item.accelerator),
       iconic: false,
-      ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+      ...(item.deckProfile ? { deckProfile: item.deckProfile, deckTraits: [] } : {}),
       ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
     });
   }

@@ -110,6 +110,7 @@ export const travelActions = {
       if (car.abandoned) return "这辆车已经弃置，无法远程呼叫";
       if (car.stolen) return "偷来的车未绑定你的神经密钥，无法远程呼叫";
       if (car.condition === "wrecked") return "这辆车已经报废，开不过来";
+      if (car.location === null) return "这辆车当前失去定位信号，无法远程呼叫";
       if (car.location === location) return "这辆车已经停在附近了";
       const travelData = withSavedPlaces(data, world);
       const isDogtown = (loc: string | null): boolean => {
