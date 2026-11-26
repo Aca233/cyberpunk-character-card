@@ -7,7 +7,7 @@ import {
   validateImageDataUrl,
 } from "./image-bytes";
 import { imageGenerationQueue } from "./image-queue";
-import { vertexModelUrl } from "./vertex";
+import { vertexAuthHeaders, vertexModelUrl } from "./vertex";
 
 export type AspectRatio = "1:1" | "3:4" | "4:3" | "16:9" | "9:16";
 
@@ -508,7 +508,10 @@ async function generateGeminiNative(
     profile.type === "vertex"
       ? vertexModelUrl(profile, apiKey, "generateContent")
       : `${cleanBaseUrl(profile.baseUrl, DEFAULT_BASE.gemini)}/models/${encodeURIComponent(model)}:generateContent`;
-  const headers = { "x-goog-api-key": apiKey };
+  const headers =
+    profile.type === "vertex"
+      ? await vertexAuthHeaders(apiKey, signal)
+      : { "x-goog-api-key": apiKey };
   const prompt = request.prompt;
   const body = {
     contents: [
@@ -577,7 +580,10 @@ async function generateGeminiImagen(
     profile.type === "vertex"
       ? vertexModelUrl(profile, apiKey, "predict")
       : `${cleanBaseUrl(profile.baseUrl, DEFAULT_BASE.gemini)}/models/${encodeURIComponent(model)}:predict`;
-  const headers = { "x-goog-api-key": apiKey };
+  const headers =
+    profile.type === "vertex"
+      ? await vertexAuthHeaders(apiKey, signal)
+      : { "x-goog-api-key": apiKey };
   const prompt = request.prompt;
   const body = {
     instances: [{ prompt }],

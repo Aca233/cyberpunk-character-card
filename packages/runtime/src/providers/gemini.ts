@@ -281,14 +281,26 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
 
 const blockedMessage = "Gemini 拦截了这段内容，请修改输入后重试";
 
-/** 流式请求地址构造器；Vertex 等同一 Gemini 协议的端点可替换 */
-export type GeminiStreamUrlFor = (profile: Profile, apiKey: string) => string;
+/** 同协议端点的传输钩子；Vertex 用它换地址构造和请求头认证 */
+export interface GeminiTransport {
+  urlFor?: ((profile: Profile, apiKey: string) => string) | undefined;
+  headersFor?:
+    | ((
+        profile: Profile,
+        apiKey: string,
+        signal?: AbortSignal,
+      ) => Record<string, string> | Promise<Record<string, string>>)
+    | undefined;
+}
 
 export function geminiClient(
   profile: Profile,
   apiKey: string,
-  streamUrlFor: GeminiStreamUrlFor = (p) => geminiStreamUrl(p),
+  transport?: GeminiTransport,
 ): LlmClient {
+  const urlFor = transport?.urlFor ?? ((p: Profile) => geminiStreamUrl(p));
+  const headersFor =
+    transport?.headersFor ?? ((_p: Profile, key: string) => ({ "x-goog-api-key": key }));
   const provider = `方案「${profile.name}」`;
   return {
     async *stream(request: LlmRequest, signalLike?: AbortSignalLike): AsyncGenerator<LlmEvent> {
@@ -296,8 +308,8 @@ export function geminiClient(
       if (signal?.aborted) throw new AbortedError();
       const res = await post(
         provider,
-        streamUrlFor(profile, apiKey),
-        { "x-goog-api-key": apiKey },
+        urlFor(profile, apiKey),
+        await headersFor(profile, apiKey, signal ?? undefined),
         geminiBody(profile, request),
         signal,
       );

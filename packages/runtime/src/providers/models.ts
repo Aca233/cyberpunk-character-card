@@ -1,6 +1,6 @@
 import type { ProviderType } from "../config";
 import { errorDetail, get, statusError, UpstreamError } from "./http";
-import { vertexModelsUrl } from "./vertex";
+import { vertexAuthHeaders, vertexModelsUrl } from "./vertex";
 
 export interface FetchModelsInput {
   readonly type: ProviderType;
@@ -194,7 +194,12 @@ async function fetchVertexModels(
   for (let page = 0; page < MAX_GEMINI_PAGES; page += 1) {
     const url = new URL(vertexModelsUrl(rawBase, apiKey));
     if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const json = await requestJson(label, url.toString(), { "x-goog-api-key": apiKey }, signal);
+    const json = await requestJson(
+      label,
+      url.toString(),
+      await vertexAuthHeaders(apiKey, signal),
+      signal,
+    );
     const record = asRecord(json);
     const items = Array.isArray(record?.publisherModels)
       ? record.publisherModels
