@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { playSfx } from "../audio";
 import { Asset } from "./Asset";
 import styles from "./dialog.module.css";
@@ -26,7 +27,7 @@ export function Dialog({ title, tone = "warning", children, actions, onClose }: 
       : tone === "info"
         ? "var(--cp-cyan)"
         : "var(--cp-yellow)";
-  return (
+  return createPortal(
     <div className={styles.backdrop}>
       <div role="alertdialog" aria-label={title} className={styles.dialog}>
         <Panel line={color}>
@@ -42,6 +43,7 @@ export function Dialog({ title, tone = "warning", children, actions, onClose }: 
           </div>
         </Panel>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
