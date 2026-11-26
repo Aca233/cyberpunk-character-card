@@ -7,6 +7,7 @@ import {
   validateImageDataUrl,
 } from "./image-bytes";
 import { imageGenerationQueue } from "./image-queue";
+import { vertexModelUrl } from "./vertex";
 
 export type AspectRatio = "1:1" | "3:4" | "4:3" | "16:9" | "9:16";
 
@@ -287,7 +288,7 @@ export function resolveImageProtocol(profile: Profile): ResolvedImageProtocol {
   if (profile.type === "sdwebui") return "sdwebui";
   if (profile.type === "comfyui") return "comfyui";
   if (profile.type === "novelai") return "novelai";
-  if (profile.type === "gemini") {
+  if (profile.type === "gemini" || profile.type === "vertex") {
     const cleanModel = profile.model.replace(/^models\//, "");
     return /^imagen/i.test(cleanModel) ? "gemini-imagen" : "gemini-native";
   }
@@ -499,12 +500,14 @@ async function generateGeminiNative(
   request: ImageGenerateRequest,
   signal?: AbortSignal,
 ): Promise<RawImageGenerateResult> {
-  const base = cleanBaseUrl(profile.baseUrl, DEFAULT_BASE.gemini);
   const model = profile.model.replace(/^models\//, "");
   if (!model || /[/?#\s]/u.test(model)) {
     throw new UpstreamError("Gemini 生图模型 ID 不合法");
   }
-  const url = `${base}/models/${encodeURIComponent(model)}:generateContent`;
+  const url =
+    profile.type === "vertex"
+      ? vertexModelUrl(profile, apiKey, "generateContent")
+      : `${cleanBaseUrl(profile.baseUrl, DEFAULT_BASE.gemini)}/models/${encodeURIComponent(model)}:generateContent`;
   const headers = { "x-goog-api-key": apiKey };
   const prompt = request.prompt;
   const body = {
@@ -566,12 +569,14 @@ async function generateGeminiImagen(
   request: ImageGenerateRequest,
   signal?: AbortSignal,
 ): Promise<RawImageGenerateResult> {
-  const base = cleanBaseUrl(profile.baseUrl, DEFAULT_BASE.gemini);
   const model = profile.model.replace(/^models\//, "");
   if (!model || /[/?#\s]/u.test(model)) {
     throw new UpstreamError("Imagen 模型 ID 不合法");
   }
-  const url = `${base}/models/${encodeURIComponent(model)}:predict`;
+  const url =
+    profile.type === "vertex"
+      ? vertexModelUrl(profile, apiKey, "predict")
+      : `${cleanBaseUrl(profile.baseUrl, DEFAULT_BASE.gemini)}/models/${encodeURIComponent(model)}:predict`;
   const headers = { "x-goog-api-key": apiKey };
   const prompt = request.prompt;
   const body = {

@@ -19,6 +19,7 @@ import shared from "./settings.module.css";
 
 type Preset =
   | "gemini"
+  | "vertex"
   | "anthropic"
   | "relay"
   | "openai"
@@ -40,6 +41,13 @@ const PRESETS: Record<
     hint: "Google AI Studio 密钥",
     type: "gemini",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  },
+  vertex: {
+    title: "Vertex AI（GCP 赠金）",
+    hint: "AI Studio 密钥；baseUrl 把项目ID换成自己的",
+    type: "vertex",
+    baseUrl:
+      "https://aiplatform.googleapis.com/v1/projects/项目ID/locations/global/publishers/google",
   },
   anthropic: {
     title: "Anthropic 官方",

@@ -266,7 +266,7 @@ export function profileRoutes(config: ConfigService): Hono {
           // Gemini 的输出额度包含思考 token，不能固定压到 64。
           // 测试最多用 2048；用户配置更低时尊重配置，不偷偷提高。
           maxOutputTokens:
-            resolved.profile.type === "gemini"
+            resolved.profile.type === "gemini" || resolved.profile.type === "vertex"
               ? Math.min(resolved.profile.maxOutputTokens ?? 2048, 2048)
               : 64,
           messages: [{ role: "user", content: "连接测试：只回复 OK。" }],

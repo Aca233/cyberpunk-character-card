@@ -1,5 +1,6 @@
 import type { ProviderType } from "../config";
 import { errorDetail, get, statusError, UpstreamError } from "./http";
+import { vertexModelsUrl } from "./vertex";
 
 export interface FetchModelsInput {
   readonly type: ProviderType;
@@ -10,6 +11,7 @@ export interface FetchModelsInput {
 const LABELS: Record<ProviderType, string> = {
   openai: "OpenAI / 兼容接口",
   gemini: "Gemini",
+  vertex: "Vertex AI",
   ollama: "Ollama",
   anthropic: "Anthropic",
   sdwebui: "Stable Diffusion WebUI",
@@ -20,6 +22,7 @@ const LABELS: Record<ProviderType, string> = {
 const DEFAULT_BASE: Record<ProviderType, string> = {
   openai: "https://api.openai.com/v1",
   gemini: "https://generativelanguage.googleapis.com/v1beta",
+  vertex: "https://aiplatform.googleapis.com/v1",
   ollama: "http://127.0.0.1:11434/v1",
   anthropic: "https://api.anthropic.com/v1",
   sdwebui: "http://127.0.0.1:7860",
@@ -178,6 +181,54 @@ async function fetchGeminiModels(
   return uniqueSorted(preferred.length > 0 ? preferred : fallback);
 }
 
+/** Vertex 快捷模式模型列表：{集合根}/models 返回 publisherModels 或 models */
+async function fetchVertexModels(
+  label: string,
+  rawBase: string,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const preferred: string[] = [];
+  const fallback: string[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < MAX_GEMINI_PAGES; page += 1) {
+    const url = new URL(vertexModelsUrl(rawBase, apiKey));
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const json = await requestJson(label, url.toString(), { "x-goog-api-key": apiKey }, signal);
+    const record = asRecord(json);
+    const items = Array.isArray(record?.publisherModels)
+      ? record.publisherModels
+      : Array.isArray(record?.models)
+        ? record.models
+        : [];
+    for (const item of items) {
+      const entry = asRecord(item);
+      const rawName = typeof entry?.name === "string" ? entry.name.trim() : "";
+      if (!rawName) continue;
+      // Vertex 资源名形如 projects/{p}/locations/{l}/publishers/google/models/{id}
+      const id = rawName.includes("/models/")
+        ? rawName.slice(rawName.lastIndexOf("/models/") + "/models/".length)
+        : rawName.replace(/^models\//, "");
+      if (!id || id.includes("/")) continue;
+      fallback.push(id);
+      const methods = entry?.supportedGenerationMethods;
+      if (
+        !Array.isArray(methods) ||
+        methods.includes("generateContent") ||
+        methods.includes("predict")
+      ) {
+        preferred.push(id);
+      }
+    }
+    pageToken =
+      typeof record?.nextPageToken === "string" && record.nextPageToken.trim() !== ""
+        ? record.nextPageToken.trim()
+        : undefined;
+    if (!pageToken) break;
+  }
+  return uniqueSorted(preferred.length > 0 ? preferred : fallback);
+}
+
 /** 向当前或已保存的提供方接口拉取可用模型 ID 列表 */
 export async function fetchProviderModels(
   input: FetchModelsInput,
@@ -191,6 +242,11 @@ export async function fetchProviderModels(
   if (input.type === "gemini") {
     if (!apiKey) throw new UpstreamError(`请先填写或保存 ${label} API 密钥再获取模型列表`);
     return fetchGeminiModels(label, base, apiKey, signal);
+  }
+
+  if (input.type === "vertex") {
+    if (!apiKey) throw new UpstreamError(`请先填写或保存 ${label} API 密钥再获取模型列表`);
+    return fetchVertexModels(label, rawBase, apiKey, signal);
   }
 
   if (input.type === "anthropic") {

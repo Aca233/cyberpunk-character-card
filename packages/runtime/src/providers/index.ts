@@ -20,6 +20,7 @@ import { geminiClient } from "./gemini";
 import { UpstreamError } from "./http";
 import { openAiClient } from "./openai";
 import { createReranker, isRerankProviderType, rerankUrl } from "./rerank";
+import { vertexClient } from "./vertex";
 
 export type Resolved =
   | { readonly ok: true; readonly profile: Profile; readonly client: LlmClient }
@@ -112,6 +113,14 @@ export class LlmRouter implements LlmClient {
           };
         }
         return { ok: true, profile, client: geminiClient(profile, key) };
+      case "vertex":
+        if (!key) {
+          return {
+            ok: false,
+            error: `${role}方案「${profile.name}」没有密钥：到设置页的「模型方案」里粘贴密钥并保存`,
+          };
+        }
+        return { ok: true, profile, client: vertexClient(profile, key) };
       case "anthropic":
         if (!key) {
           return {

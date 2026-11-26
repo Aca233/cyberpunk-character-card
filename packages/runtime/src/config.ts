@@ -6,6 +6,7 @@ z.config(z.locales.zhCN());
 
 export const ProviderTypeSchema = z.enum([
   "gemini",
+  "vertex",
   "anthropic",
   "openai",
   "ollama",

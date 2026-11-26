@@ -392,6 +392,7 @@ export type KeyStatus = "configured" | "missing" | "notNeeded";
 
 export type ProviderType =
   | "gemini"
+  | "vertex"
   | "anthropic"
   | "openai"
   | "ollama"
