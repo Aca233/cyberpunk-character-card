@@ -44,7 +44,7 @@ const PRESETS: Record<
   },
   vertex: {
     title: "Vertex AI（GCP 赠金）",
-    hint: "密钥栏贴 AI Studio key 或整段服务账号 JSON；区域默认 global，要换区域就改 baseUrl 域名",
+    hint: "密钥栏贴 AI Studio key 或整段服务账号 JSON；模型名手动填，点测试连接验证",
     type: "vertex",
     baseUrl: "https://aiplatform.googleapis.com/v1",
   },

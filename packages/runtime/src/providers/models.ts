@@ -251,7 +251,14 @@ export async function fetchProviderModels(
 
   if (input.type === "vertex") {
     if (!apiKey) throw new UpstreamError(`请先填写或保存 ${label} API 密钥再获取模型列表`);
-    return fetchVertexModels(label, rawBase, apiKey, signal);
+    try {
+      return await fetchVertexModels(label, rawBase, apiKey, signal);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new UpstreamError(
+        `获取 Vertex 模型列表失败：${detail}。Vertex 官方 /models 列表接口不支持网页跨域读取，这是正常限制——直接在「模型名」里填模型 ID（如 gemini-3-pro-preview），然后点「测试连接」即可`,
+      );
+    }
   }
 
   if (input.type === "anthropic") {
