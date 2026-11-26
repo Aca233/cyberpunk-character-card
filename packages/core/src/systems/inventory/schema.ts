@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { WeaponConcealment, WeaponNoise } from "../dice";
+import { type WeaponConcealment, WeaponConcealmentSchema, type WeaponNoise } from "../dice";
 import { MONEY_CAP, RaritySchema, ServiceSchema } from "../economy";
 
 export const ItemKindSchema = z.enum([
@@ -130,6 +130,10 @@ export const ItemDefSchema = z
     category: WeaponCategorySchema.optional(),
     /** 远程武器的类型；近战武器不写 */
     weaponType: WeaponTypeSchema.optional(),
+    /** 显式指定武器基础隐蔽度（紧凑/中型近战武器覆盖类别默认 open 档位） */
+    concealment: WeaponConcealmentSchema.optional(),
+    /** 是否属于赛博精神病神经压制剂（允许快捷注射与非战斗直接服用） */
+    suppressant: z.boolean().optional(),
     /** 显式覆盖该武器开放的改装槽位；未填写时由 defaultWeaponSlots 按类别与体系推导 */
     modSlots: z.array(ModSlotSchema).optional(),
     /** 出厂或剧情自带的预装改装件：槽位 -> 改装件 id */
@@ -259,6 +263,8 @@ export const ShopSchema = z.object({
   priceFactor: z.number().min(0.5).max(2).default(1),
   /** 黑市货：便宜，但可能来路不明，由叙事模型在剧情里兑现 */
   blackMarket: z.boolean().default(false),
+  /** 是否提供枪匠工坊服务（显式声明，未填时按商铺 POI 类型 gun/melee 推断） */
+  gunsmith: z.boolean().optional(),
   /** 开局货架上的物品 id；后续以实际库存为准 */
   shelf: z.array(z.string().min(1)).min(1),
   initialStock: z.record(z.string(), z.number().int().min(0)).optional(),
@@ -645,42 +651,18 @@ export type PartsCommand = z.infer<typeof PartsCommandSchema>;
 /** 默认从容携带的随身大件上限（长枪、重武器、大号砍刀/长钝器） */
 export const BASE_BULKY_LIMIT = 2;
 
-/** 未损坏时可额外多带 1 件大件的承重骨骼义体 */
-const LOAD_BEARING_CYBERWARE = new Set(["titanium-bones", "cargo-spine-frame"]);
-
 /**
  * 武器隐蔽度（Concealment）：
- * - pocket（贴身可藏）：手枪（可藏进西装/礼服内）
- * - coat（风衣遮蔽）：左轮、冲锋枪、短钝器（穿外套/夹克可藏匿）
- * - open（显眼长械）：突击步枪、霰弹枪、精准步枪、武士刀（无法藏进衣服，高安保区上街即被盘查）
+ * - pocket（贴身可藏）：手枪及显式标为 pocket 的小刀/指虎（可藏进西装/礼服内）
+ * - coat（风衣遮蔽）：左轮、冲锋枪及显式标为 coat 的中短兵刃（穿外套/夹克可藏匿）
+ * - open（显眼长械）：突击步枪、霰弹枪、精准步枪、武士刀等长兵器（无法藏进衣服，高安保区上街即被盘查）
  * - heavy（重型军火）：狙击步枪、轻机枪（平时放后备箱）
  */
-/** 可藏入袖口、靴筒或口袋里的紧凑武器（小刀与指虎），不算街头长枪也不算大件 */
-const POCKET_MELEE_WEAPONS = new Set([
-  "knife",
-  "kaiken",
-  "punknife",
-  "neurotoxin-knife",
-  "knuckles",
-]);
-
-/** 大衣或随身包可遮掩的中短兵刃与工具 */
-const COAT_MELEE_WEAPONS = new Set([
-  "butchers-cleaver",
-  "kukri",
-  "wakizashi",
-  "tire-iron",
-  "pipe-wrench",
-  "baton",
-  "sir-john",
-]);
-
 export function weaponConcealment(
   category: WeaponCategory | undefined,
-  id?: string,
-): "pocket" | "coat" | "open" | "heavy" {
-  if (id !== undefined && POCKET_MELEE_WEAPONS.has(id)) return "pocket";
-  if (id !== undefined && COAT_MELEE_WEAPONS.has(id)) return "coat";
+  explicit?: WeaponConcealment,
+): WeaponConcealment {
+  if (explicit !== undefined) return explicit;
   switch (category) {
     case "pistol":
       return "pocket";
@@ -793,29 +775,53 @@ export function canAttachMod(
 
 /** 是否属于沉重显眼的大件装备（长枪、重武器、大号砍刀/战斧/长钝器） */
 export function isBulkyItem(
-  def: Pick<ItemDef, "id" | "kind" | "category"> | undefined,
-  baseId?: string,
+  def: Pick<ItemDef, "kind" | "category" | "concealment"> | undefined,
 ): boolean {
   if (def?.kind !== "weapon") return false;
-  const c = weaponConcealment(def.category, baseId ?? def.id);
+  const c = weaponConcealment(def.category, def.concealment);
   return c === "open" || c === "heavy";
 }
 
-export function isHeavyWeapon(category: WeaponCategory | undefined, id?: string): boolean {
-  const c = weaponConcealment(category, id);
+export function isHeavyWeapon(
+  category: WeaponCategory | undefined,
+  concealment?: WeaponConcealment,
+): boolean {
+  const c = weaponConcealment(category, concealment);
   return c === "open" || c === "heavy";
 }
 
-/** 根据已安装且未损坏的承重骨骼义体计算从容携带大件上限 */
+/** 在背包里寻找第一件可用的神经压制剂 id（按 ItemDef.suppressant 识别，无目录时回落到 fallbackId） */
+export function findSuppressantId(
+  backpack: Readonly<Record<string, number>>,
+  catalog?: ReadonlyMap<string, Pick<ItemDef, "id" | "suppressant">>,
+  fallbackId?: string,
+): string | null {
+  if (catalog && catalog.size > 0) {
+    for (const [id, count] of Object.entries(backpack)) {
+      if (count > 0 && catalog.get(id)?.suppressant) return id;
+    }
+    return null;
+  }
+  if (fallbackId && (backpack[fallbackId] ?? 0) > 0) return fallbackId;
+  return null;
+}
+
+/** 根据已安装且未损坏的承重骨骼/外骨骼/FBC 义体（carryBonus）计算从容携带大件上限 */
 export function bulkyLimit(cyberware?: {
-  readonly installed?: readonly { readonly id: string }[];
+  readonly installed?: readonly {
+    readonly id: string;
+    readonly carryBonus?: number | undefined;
+  }[];
   readonly brokenChrome?: readonly string[];
+  readonly catalog?: ReadonlyMap<string, { readonly carryBonus?: number | undefined }>;
 }): number {
   if (!cyberware?.installed?.length) return BASE_BULKY_LIMIT;
   const broken = new Set(cyberware.brokenChrome ?? []);
-  const bonus = cyberware.installed.filter(
-    (c) => LOAD_BEARING_CYBERWARE.has(c.id) && !broken.has(c.id),
-  ).length;
+  let bonus = 0;
+  for (const c of cyberware.installed) {
+    if (broken.has(c.id)) continue;
+    bonus += c.carryBonus ?? cyberware.catalog?.get(c.id)?.carryBonus ?? 0;
+  }
   return BASE_BULKY_LIMIT + bonus;
 }
 
@@ -860,21 +866,21 @@ export function carriedHeldWeaponIds(
 }
 
 /** 普通持握条件：长枪与大号近战武器占双手；具体伤势仍由当前物理约束裁定。 */
-export function weaponHands(def: ItemDef, baseId = def.id): 1 | 2 {
+export function weaponHands(def: ItemDef): 1 | 2 {
   if (def.kind !== "weapon") return 1;
   if (def.category === "pistol" || def.category === "revolver") return 1;
   if (def.category === "blade" || def.category === "blunt") {
-    return isBulkyItem(def, baseId) ? 2 : 1;
+    return isBulkyItem(def) ? 2 : 1;
   }
   return 2;
 }
 
 /** 用固定粗单位描述体积与负担；不把证件、信物和普通穿着逐件称重。 */
-export function itemCarryUnits(def: ItemDef, baseId = def.id): number {
+export function itemCarryUnits(def: ItemDef): number {
   if (def.kind !== "weapon") return def.carryUnits ?? 0;
-  if (isBulkyItem(def, baseId)) return 4;
+  if (isBulkyItem(def)) return 4;
   return (def.category === "blade" || def.category === "blunt") &&
-    weaponConcealment(def.category, baseId) === "pocket"
+    weaponConcealment(def.category, def.concealment) === "pocket"
     ? 1
     : 2;
 }
@@ -889,20 +895,19 @@ const CONCEALMENT_RANK: Readonly<Record<WeaponConcealment, number>> = {
 
 /** 计算考虑改装件体积修正后的有效隐蔽度 */
 export function effectiveConcealment(
-  def: Pick<ItemDef, "id" | "kind" | "category" | "concealmentShift">,
+  def: Pick<ItemDef, "id" | "kind" | "category" | "concealment" | "concealmentShift">,
   weaponState: Pick<WeaponInstanceState, "baseId" | "mods"> | undefined,
-  catalog: ReadonlyMap<string, Pick<ItemDef, "id" | "concealmentShift">>,
+  catalog: ReadonlyMap<string, Pick<ItemDef, "id" | "concealment" | "concealmentShift">>,
 ): WeaponConcealment {
-  const base = weaponConcealment(def.category, weaponState?.baseId ?? def.id);
+  const baseDef = weaponState?.baseId ? catalog.get(weaponState.baseId) : undefined;
+  const base = weaponConcealment(def.category, def.concealment ?? baseDef?.concealment);
   if (def.kind !== "weapon") return base;
   let shift = def.concealmentShift ?? 0;
   if (weaponState) {
     for (const [slot, modId] of Object.entries(weaponState.mods)) {
       if (!modId) continue;
       const modDef = catalog.get(modId);
-      const modShift =
-        modDef?.concealmentShift ??
-        (slot === "muzzle" || modId === "saika-scope" || modId === "gaki-scope" ? 1 : 0);
+      const modShift = modDef?.concealmentShift ?? (slot === "muzzle" ? 1 : 0);
       shift += modShift;
     }
   }
@@ -946,8 +951,12 @@ export function loadoutSummary(
   state: Pick<InventoryState, "backpack" | "objects">,
   catalog: ReadonlyMap<string, ItemDef>,
   cyberware?: {
-    readonly installed?: readonly { readonly id: string }[];
+    readonly installed?: readonly {
+      readonly id: string;
+      readonly carryBonus?: number | undefined;
+    }[];
     readonly brokenChrome?: readonly string[];
+    readonly catalog?: ReadonlyMap<string, { readonly carryBonus?: number | undefined }>;
   },
 ) {
   let bulkyCount = 0;
@@ -960,16 +969,21 @@ export function loadoutSummary(
     const obj = state.objects[weaponId];
     const def = obj?.definition ?? catalog.get(weaponId);
     if (!def) continue;
-    const units = itemCarryUnits(def, obj?.weaponState?.baseId);
+    const baseDef = obj?.weaponState?.baseId ? catalog.get(obj.weaponState.baseId) : undefined;
+    const resolvedDef =
+      def.concealment === undefined && baseDef?.concealment !== undefined
+        ? { ...def, concealment: baseDef.concealment }
+        : def;
+    const units = itemCarryUnits(resolvedDef);
     carryUnits += units * count;
     if (units > 0) carryItems.push(count > 1 ? `${def.name}×${count}` : def.name);
     if (def.kind !== "weapon") continue;
-    const conc = effectiveConcealment(def, obj?.weaponState, catalog);
+    const conc = effectiveConcealment(resolvedDef, obj?.weaponState, catalog);
     if (conc === "heavy") hasHeavy = true;
     if (CONCEALMENT_RANK[conc] > CONCEALMENT_RANK[profile]) {
       profile = conc;
     }
-    if (isBulkyItem(def, obj?.weaponState?.baseId)) {
+    if (isBulkyItem(resolvedDef)) {
       bulkyCount += count;
       bulkyItems.push(count > 1 ? `${def.name}×${count}` : def.name);
     }

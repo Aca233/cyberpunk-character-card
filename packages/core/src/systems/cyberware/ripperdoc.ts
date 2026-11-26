@@ -5,10 +5,15 @@ import { formatGameTime, merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, repairCost, ripperdocList, ripperdocShelf, tradeInValue } from "./apply";
 import { clinicProvider, DoctorRosterSchema, quoteCyberware } from "./quote";
 import {
+  CYBERWARE_CATEGORY_LABELS,
   CyberwareStateSchema,
+  cyberwareCategoryOf,
   cyberwareExclusiveGroup,
+  cyberwareExtensionZone,
+  cyberwareSectionOf,
   DECK_TRAIT_LABELS,
   EXCLUSIVE_GROUP_LABELS,
+  SECTION_LABELS,
   SLOT_LABELS,
 } from "./schema";
 import { clinicState } from "./stock";
@@ -34,6 +39,7 @@ export function ripperdocView({ world, data }: ViewContext) {
   return {
     id: doc.id,
     name: doc.name,
+    keeperNpc: doc.keeperNpc ?? null,
     note: doc.note,
     blackMarket: doc.blackMarket,
     /** 最多肯赊多少；0 是不赊账 */
@@ -94,15 +100,29 @@ export function ripperdocView({ world, data }: ViewContext) {
             tradeIn: item.replaces ? true : undefined,
           });
       const quote = result?.ok ? result.quote : undefined;
+      const section = cyberwareSectionOf(item.def);
+      const category = cyberwareCategoryOf(item.def);
+      const extensionZone = cyberwareExtensionZone(item.def);
       return {
         id: item.def.id,
         name: item.def.name,
         slot: item.def.slot,
         slotLabel: SLOT_LABELS[item.def.slot],
+        section,
+        sectionLabel: SECTION_LABELS[section],
+        category,
+        categoryLabel: CYBERWARE_CATEGORY_LABELS[category],
+        extensionZone,
         rarity: item.def.rarity,
         rarityLabel: RARITY_LABELS[item.def.rarity],
         iconic: item.def.iconic,
         humanityCost: item.def.humanityCost,
+        defaultArmSide: item.def.defaultArmSide,
+        capacityBonus: item.def.capacityBonus,
+        safeLineBonus: item.def.safeLineBonus,
+        chassisProfile: item.def.chassisProfile,
+        variantGroup: item.def.variantGroup,
+        variantKey: item.def.variantKey,
         exclusiveGroup: cyberwareExclusiveGroup(item.def),
         exclusiveGroupLabel: (() => {
           const g = cyberwareExclusiveGroup(item.def);

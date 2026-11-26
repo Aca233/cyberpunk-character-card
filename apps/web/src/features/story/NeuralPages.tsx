@@ -1,11 +1,11 @@
 import { characterRules, cyberwareRules, type PlayerAction } from "@cp/core";
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
 import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
 import { BiomonitorPanel } from "./BiomonitorPanel";
 import { ContentMediaList, InlineContentText } from "./ContentMedia";
-import { CYBER_LABELS, CyberDoll, CyberItemCell, type CyberSlot } from "./CyberDoll";
+import { type BodyFocusKey, CyberBodySilhouette, CyberItemCell, NeuralLoadBar } from "./CyberDoll";
 import mediaStyles from "./content-media.module.css";
 import { rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import { type HabitAction, Habits } from "./Habits";
@@ -173,32 +173,17 @@ export function CharacterPage({
 
 type CyberPart = View["cyberware"][number];
 
-const CYBER_SLOT_ORDER: readonly CyberSlot[] = [
-  "frontalCortex",
-  "os",
-  "eyes",
-  "arms",
-  "hands",
-  "skeleton",
-  "nervous",
-  "circulatory",
-  "integumentary",
-  "legs",
-];
-
-const LOAD_GAUGE_SLOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
-
-type CyberInspectorMode = "slot" | "all";
-type CyberQuickFilter = "all" | "heavy" | "broken" | "zero";
-
-function cyberLoadTag(cost: number): { readonly label: string; readonly tone?: "ok" | "warn" } {
-  if (cost <= 0) return { label: "零负荷", tone: "ok" };
-  if (cost >= 10) return { label: "高压核心", tone: "warn" };
-  if (cost >= 5) return { label: "中负荷" };
-  return { label: "轻负荷" };
+interface CoreSlotEntry {
+  readonly id: cyberwareRules.CoreSlotId;
+  readonly label: string;
+  readonly ripperCategory: cyberwareRules.CyberwareCategoryId;
+  readonly part: CyberPart | null;
+  readonly mirrorOf?: CyberPart | null;
+  readonly emptyHint: string;
+  readonly lockedNote?: string | null;
 }
 
-/** 义体（2077 自由装配拓扑 + 遥测仪表 + 右侧交互检视与直达操作） */
+/** 义体 v2：顶部极简三段神经承载条 + 左 30% 纯净联动人体剪影 + 右 70%（上 4×2 核心主位 + 下 5 标签扩展区） */
 export function CyberwarePage({
   view,
   busy = false,
@@ -210,38 +195,21 @@ export function CyberwarePage({
   readonly view: View;
   readonly busy?: boolean | undefined;
   readonly onRipperdoc: (focus?: {
-    readonly slot?: CyberSlot | "installed";
+    readonly category?: cyberwareRules.CyberwareCategoryId | "installed";
     readonly installedId?: string;
   }) => void;
   readonly onOpenDeck?: (() => void) | undefined;
   readonly onActionDraft?: ((text: string) => void) | undefined;
   readonly onUseSuppressant?: (() => Promise<void>) | undefined;
 }) {
-  const bySlot = useMemo(() => {
-    const map = new Map<CyberSlot, CyberPart[]>();
-    for (const c of view.cyberware) {
-      const list = map.get(c.slot);
-      if (list) list.push(c);
-      else map.set(c.slot, [c]);
-    }
-    return map;
-  }, [view.cyberware]);
-
-  const initialSlot: CyberSlot = view.cyberware[0]?.slot ?? "os";
-  const [activeSlot, setActiveSlot] = useState<CyberSlot>(initialSlot);
-  const [focusedPartId, setFocusedPartId] = useState<string | null>(
-    () => view.cyberware.find((c) => c.slot === initialSlot)?.id ?? null,
-  );
-  const [inspectorMode, setInspectorMode] = useState<CyberInspectorMode>("slot");
-  const [quickFilter, setQuickFilter] = useState<CyberQuickFilter>("all");
-  const [query, setQuery] = useState("");
+  const [activeZone, setActiveZone] = useState<cyberwareRules.ExtensionZoneId>("neural");
+  const [expandedCore, setExpandedCore] = useState<cyberwareRules.CoreSlotId | null>(null);
+  const [hoveredFocus, setHoveredFocus] = useState<BodyFocusKey>(null);
   const [dosing, setDosing] = useState(false);
 
-  const cardRefs = useRef<Record<string, HTMLLIElement | null>>({});
-
   const brokenItems = useMemo(() => view.cyberware.filter((c) => c.broken), [view.cyberware]);
-  const brokenCount = brokenItems.length;
-  const suppressantCount = view.inventory.backpack["psycho-suppressant"] ?? 0;
+  const firstBroken = brokenItems[0];
+  const suppressantCount = view.inventory.suppressantCount;
 
   const load = useMemo(
     () =>
@@ -252,10 +220,16 @@ export function CyberwarePage({
             id: c.id,
             name: c.name,
             slot: c.slot,
+            category: c.category,
             humanityCost: c.humanityCost,
             iconic: c.iconic,
             armor: c.armor,
             accelerator: c.accelerator,
+            ...(c.armSide ? { armSide: c.armSide } : {}),
+            ...(c.defaultArmSide ? { defaultArmSide: c.defaultArmSide } : {}),
+            ...(c.capacityBonus !== undefined ? { capacityBonus: c.capacityBonus } : {}),
+            ...(c.safeLineBonus !== undefined ? { safeLineBonus: c.safeLineBonus } : {}),
+            ...(c.chassisProfile ? { chassisProfile: c.chassisProfile } : {}),
             ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
             ...(c.deckTraits ? { deckTraits: c.deckTraits } : {}),
             ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
@@ -264,104 +238,122 @@ export function CyberwarePage({
     [view.cyberware],
   );
 
-  const activeLoadCells = Math.max(
-    load.totalCount > 0 ? 1 : 0,
-    Math.min(
-      LOAD_GAUGE_SLOTS.length,
-      Math.round((load.activeLoadScore / 75) * LOAD_GAUGE_SLOTS.length),
-    ),
-  );
+  const { coreSlots, byZone } = useMemo(() => {
+    const zones: Record<cyberwareRules.ExtensionZoneId, CyberPart[]> = {
+      neural: [],
+      sensory: [],
+      torso: [],
+      extremities: [],
+      lifestyle: [],
+    };
+    let chassis: CyberPart | null = null;
+    let cyberdeck: CyberPart | null = null;
+    let spineDrive: CyberPart | null = null;
+    let capacityCore: CyberPart | null = null;
+    let optics: CyberPart | null = null;
+    let leftArm: CyberPart | null = null;
+    let rightArm: CyberPart | null = null;
+    let rightMirror: CyberPart | null = null;
+    let legDrive: CyberPart | null = null;
+    let skinArmor: CyberPart | null = null;
 
-  const slotItems = bySlot.get(activeSlot) ?? [];
+    for (const part of view.cyberware) {
+      const cat = part.category;
+      if (cat === "chassis") {
+        chassis = part;
+      } else if (cat === "cyberdeck") {
+        cyberdeck = part;
+      } else if (cat === "spineDrive") {
+        if (part.exclusiveGroup === "capacityCore") capacityCore = part;
+        else spineDrive = part;
+      } else if (cat === "optics") {
+        optics = part;
+      } else if (cat === "arms") {
+        const side = part.armSide ?? cyberwareRules.defaultArmSideFor(part);
+        if (side === "both") {
+          leftArm = part;
+          rightMirror = part;
+        } else if (side === "left") {
+          leftArm = part;
+        } else {
+          rightArm = part;
+        }
+      } else if (cat === "legDrive") {
+        legDrive = part;
+      } else if (cat === "skinArmor") {
+        skinArmor = part;
+      } else {
+        zones[cat].push(part);
+      }
+    }
+
+    const slots: readonly CoreSlotEntry[] = [
+      {
+        id: "chassis",
+        label: cyberwareRules.CORE_SLOT_LABELS.chassis,
+        ripperCategory: "chassis",
+        part: chassis,
+        emptyHint: "原生血肉",
+      },
+      {
+        id: "cyberdeck",
+        label: cyberwareRules.CORE_SLOT_LABELS.cyberdeck,
+        ripperCategory: "cyberdeck",
+        part: cyberdeck,
+        emptyHint: "未安装",
+        lockedNote: capacityCore ? `由「${capacityCore.name}」接管` : null,
+      },
+      {
+        id: "spineDrive",
+        label: cyberwareRules.CORE_SLOT_LABELS.spineDrive,
+        ripperCategory: "spineDrive",
+        part: spineDrive ?? capacityCore,
+        emptyHint: "未安装",
+      },
+      {
+        id: "optics",
+        label: cyberwareRules.CORE_SLOT_LABELS.optics,
+        ripperCategory: "optics",
+        part: optics,
+        emptyHint: "原生双眼",
+      },
+      {
+        id: "leftArm",
+        label: cyberwareRules.CORE_SLOT_LABELS.leftArm,
+        ripperCategory: "arms",
+        part: leftArm,
+        emptyHint: "原生左臂",
+      },
+      {
+        id: "rightArm",
+        label: cyberwareRules.CORE_SLOT_LABELS.rightArm,
+        ripperCategory: "arms",
+        part: rightArm,
+        mirrorOf: rightArm ? null : rightMirror,
+        emptyHint: "原生右臂",
+      },
+      {
+        id: "legDrive",
+        label: cyberwareRules.CORE_SLOT_LABELS.legDrive,
+        ripperCategory: "legDrive",
+        part: legDrive,
+        emptyHint: "原生双腿",
+      },
+      {
+        id: "skinArmor",
+        label: cyberwareRules.CORE_SLOT_LABELS.skinArmor,
+        ripperCategory: "skinArmor",
+        part: skinArmor,
+        emptyHint: "无表皮主甲",
+      },
+    ];
+    return { coreSlots: slots, byZone: zones };
+  }, [view.cyberware]);
+
   const neuralBad = !view.humanity.suppressed && view.humanity.stage !== "stable";
-
-  const effectiveFocusedId = useMemo(() => {
-    if (focusedPartId && view.cyberware.some((c) => c.id === focusedPartId)) return focusedPartId;
-    return slotItems[0]?.id ?? null;
-  }, [focusedPartId, slotItems, view.cyberware]);
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const isGlobalView = inspectorMode === "all" || normalizedQuery !== "";
-  const displayedItems = useMemo(() => {
-    const source = isGlobalView ? view.cyberware : slotItems;
-    return source.filter((part) => {
-      if (quickFilter === "heavy" && !(part.humanityCost >= 8 || part.iconic)) return false;
-      if (quickFilter === "broken" && !part.broken) return false;
-      if (quickFilter === "zero" && part.humanityCost > 0) return false;
-      if (normalizedQuery) {
-        const hay =
-          `${part.name} ${part.slotLabel} ${part.ability ?? ""} ${part.exclusiveGroupLabel ?? ""}`.toLowerCase();
-        if (!hay.includes(normalizedQuery)) return false;
-      }
-      return true;
-    });
-  }, [isGlobalView, normalizedQuery, quickFilter, slotItems, view.cyberware]);
-
-  const scrollNonceRef = useRef(0);
-  const [scrollTick, setScrollTick] = useState(0);
-  const focusAndScroll = (partId: string | null) => {
-    setFocusedPartId(partId);
-    if (partId) {
-      scrollNonceRef.current += 1;
-      setScrollTick(scrollNonceRef.current);
-    }
-  };
-
-  // 主动点击拓扑格/快捷键/状态胶囊时平滑滚入右侧检视区
-  useEffect(() => {
-    if (scrollTick === 0 || !effectiveFocusedId) return;
-    const el = cardRefs.current[effectiveFocusedId];
-    if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [effectiveFocusedId, scrollTick]);
-
-  const jumpToPart = (slot: CyberSlot, partId: string | null) => {
-    setActiveSlot(slot);
-    setInspectorMode("slot");
-    setQuickFilter("all");
-    setQuery("");
-    focusAndScroll(partId);
-  };
-
-  const slotNote = (() => {
-    if (inspectorMode === "all" || normalizedQuery !== "") {
-      return `全局检视 · 命中 ${displayedItems.length} / ${view.cyberware.length} 件（点击卡片可反向定位到人体部位）`;
-    }
-    if (activeSlot === "arms" && slotItems.length > 0) {
-      if (slotItems.length >= 2) return "左右臂混搭（2/2）· 双臂各自搭载一套义臂";
-      return slotItems[0] && cyberwareRules.isSingleArmCyberware(slotItems[0].id)
-        ? "单臂装配 · 另一只手臂空闲，可再混搭 1 件"
-        : "双臂成对生效 · 再装第 2 件臂部义体自动改左右混搭";
-    }
-    if (activeSlot === "eyes") {
-      const mainOptic = slotItems.find(
-        (p) =>
-          cyberwareRules.cyberwareExclusiveGroup({
-            id: p.id,
-            name: p.name,
-            slot: "eyes",
-            ...(p.exclusiveGroup ? { exclusiveGroup: p.exclusiveGroup } : {}),
-          }) === "optics",
-      );
-      if (mainOptic) {
-        return `主义眼「${mainOptic.name}」双眼成对 · 耳/鼻/虹膜/面甲等感官件可自由叠加`;
-      }
-    }
-    if (activeSlot === "legs") {
-      const mainLeg = slotItems.find(
-        (p) =>
-          cyberwareRules.cyberwareExclusiveGroup({
-            id: p.id,
-            name: p.name,
-            slot: "legs",
-            ...(p.exclusiveGroup ? { exclusiveGroup: p.exclusiveGroup } : {}),
-          }) === "legDrive",
-      );
-      if (mainLeg) {
-        return `「${mainLeg.name}」双腿成对驱动 · 猫爪/磁吸/暗格等附挂件可自由叠加`;
-      }
-    }
-    return "不限部位格数 · 仅按物理互斥";
-  })();
+  const zoneItems = byZone[activeZone];
+  const expandedSlot = expandedCore ? (coreSlots.find((s) => s.id === expandedCore) ?? null) : null;
+  const expandedPart = expandedSlot ? (expandedSlot.part ?? expandedSlot.mirrorOf ?? null) : null;
 
   const handleSuppressant = async () => {
     if (!onUseSuppressant || busy || dosing) return;
@@ -383,148 +375,65 @@ export function CyberwarePage({
         draft: `启动${part.name}进入神经加速时间，抢占先手观察周围局势并采取行动。`,
       };
     }
-    if (part.slot === "eyes" && part.exclusiveGroup === "optics") {
+    if (part.exclusiveGroup === "optics") {
       return {
         label: "光学扫描",
         draft: `启动${part.name}扫描周围环境与目标，排查义体配置、弱点、监控探头与潜在埋伏。`,
       };
     }
-    if (part.id === "optical-camo" || part.name.includes("光学迷彩")) {
+    if (part.exclusiveGroup === "skinStealth") {
       return {
         label: "开启迷彩",
         draft: `启动${part.name}隐去身形轮廓，借掩体与视线死角悄然移动。`,
       };
     }
     if (part.slot === "arms") {
+      const sidePrefix = part.armSideLabel ? `${part.armSideLabel}` : "";
       return {
         label: "展开武装",
-        draft: `亮出${part.name}做好近身压制与破防准备。`,
+        draft: `亮出${sidePrefix}${part.name}做好近身压制与破防准备。`,
       };
     }
     return null;
   };
 
+  const silhouetteFocus: BodyFocusKey = hoveredFocus ?? expandedCore ?? activeZone;
+
+  const subline =
+    view.humanity.symptoms.length > 0 || firstBroken || view.health.lostLimbs.length > 0 ? (
+      <div className={neural.loadAlertStrip}>
+        {firstBroken && (
+          <button
+            type="button"
+            className={neural.cyberPillBtn}
+            data-tone="bad"
+            onClick={() => onRipperdoc({ category: "installed", installedId: firstBroken.id })}
+          >
+            损毁待修 {brokenItems.length} 件 →
+          </button>
+        )}
+        {view.health.lostLimbs.length > 0 && (
+          <span className={neural.cyberStatusFlag} data-tone="bad">
+            断肢：{view.health.lostLimbs.map((l) => l.label).join("、")}
+          </span>
+        )}
+        {view.humanity.symptoms.length > 0 && (
+          <span className={neural.loadSymptomText}>
+            活跃症状：
+            {view.humanity.symptoms.map((s) => `${s.description}（${s.cause}）`).join("；")}
+          </span>
+        )}
+      </div>
+    ) : null;
+
   return (
     <div className={neural.cyberPage} data-tone={load.tone}>
-      {/* 顶部：赛博遥测仪控条（负荷刻度槽 + 神经态 + 核心标识 + 快捷处理） */}
-      <section
-        className={neural.cyberTelemetry}
-        data-tone={load.tone}
-        aria-label="全身义体负荷与神经状态"
-      >
-        <div className={neural.cyberTelemetryMain}>
-          <div className={neural.cyberMetrics}>
-            <span className={neural.cyberMetric} data-tone={load.tone}>
-              <small>负荷</small>
-              <b>{load.label}</b>
-              <em className={neural.cyberScoreCode}>{load.activeLoadScore}</em>
-            </span>
-            <span
-              className={neural.cyberLoadGauge}
-              data-tone={load.tone}
-              title={`当前神经负荷指数 ${load.activeLoadScore}（轻度 <16 / 常规 16–39 / 高压 40–64 / 极限 ≥65）`}
-              aria-hidden
-            >
-              {LOAD_GAUGE_SLOTS.map((slotIndex) => (
-                <span
-                  key={`load-cell-${slotIndex}`}
-                  className={neural.cyberLoadCell}
-                  data-on={slotIndex < activeLoadCells || undefined}
-                />
-              ))}
-            </span>
-            <span className={neural.cyberMetricSep} aria-hidden />
-            <span className={neural.cyberMetric} data-tone={neuralBad ? "bad" : "ok"}>
-              <small>神经</small>
-              <b>
-                {view.humanity.stageLabel}
-                {view.humanity.suppressed ? "·压制" : ""}
-              </b>
-            </span>
-            <span className={neural.cyberMetricSep} aria-hidden />
-            <span className={neural.cyberMetric}>
-              <small>已装</small>
-              <b>{view.cyberware.length} 件</b>
-            </span>
-            {load.zeroLoadCount > 0 && (
-              <>
-                <span className={neural.cyberMetricSep} aria-hidden />
-                <button
-                  type="button"
-                  className={neural.cyberMetricBtn}
-                  data-tone="ok"
-                  data-active={(isGlobalView && quickFilter === "zero") || undefined}
-                  onClick={() => {
-                    setInspectorMode("all");
-                    setQuickFilter((f) => (f === "zero" ? "all" : "zero"));
-                  }}
-                  title="筛选查看全部零神经负荷义体"
-                >
-                  <small>零负荷</small>
-                  <b>{load.zeroLoadCount}</b>
-                </button>
-              </>
-            )}
-            {load.dualCore && (
-              <button
-                type="button"
-                className={neural.cyberPillBtn}
-                data-tone="warn"
-                onClick={() => jumpToPart("os", bySlot.get("os")?.[0]?.id ?? null)}
-                title="点击定位至操作系统双中枢"
-              >
-                双中枢并行
-              </button>
-            )}
-            {load.fullBorg && (
-              <button
-                type="button"
-                className={neural.cyberPillBtn}
-                data-tone="bad"
-                onClick={() => {
-                  const fbc = view.cyberware.find((c) => c.exclusiveGroup === "fullBorg");
-                  if (fbc) jumpToPart(fbc.slot, fbc.id);
-                }}
-                title={`点击定位至全身义体框架：${load.fullBorg}`}
-              >
-                全身义体化
-              </button>
-            )}
-            {brokenCount > 0 && (
-              <button
-                type="button"
-                className={neural.cyberPillBtn}
-                data-tone="bad"
-                onClick={() => {
-                  setInspectorMode("all");
-                  setQuickFilter("broken");
-                  if (brokenItems[0]) {
-                    setActiveSlot(brokenItems[0].slot);
-                    focusAndScroll(brokenItems[0].id);
-                  }
-                }}
-              >
-                损毁待修 {brokenCount} →
-              </button>
-            )}
-            {view.health.lostLimbs.length > 0 && (
-              <span className={neural.cyberStatusFlag} data-tone="bad">
-                断肢：{view.health.lostLimbs.map((l) => l.label).join("、")}
-              </span>
-            )}
-          </div>
-          <p className={neural.cyberTelemetrySummary}>{load.summary}</p>
-          {view.humanity.symptoms.length > 0 && (
-            <p className={neural.cyberSymptomLine}>
-              活跃症状：
-              {view.humanity.symptoms.map((s) => `${s.description}（${s.cause}）`).join("；")}
-            </p>
-          )}
-        </div>
-        <div className={neural.cyberTelemetryAct}>
-          {suppressantCount > 0 &&
-            (load.tier === "heavy" || load.tier === "extreme" || neuralBad) &&
-            onUseSuppressant && (
+      <NeuralLoadBar
+        load={load}
+        subline={subline}
+        extra={
+          <>
+            {suppressantCount > 0 && (load.overloaded || neuralBad) && onUseSuppressant && (
               <Button
                 small
                 disabled={busy || dosing || view.humanity.suppressed}
@@ -538,342 +447,355 @@ export function CyberwarePage({
                     : `压制剂 (${suppressantCount})`}
               </Button>
             )}
-          {view.ripperdoc && (
-            <Button small primary onClick={() => onRipperdoc({ slot: activeSlot })}>
-              诊所 · {view.ripperdoc.name}
-            </Button>
-          )}
-        </div>
-      </section>
+            {view.ripperdoc && (
+              <Button small primary onClick={() => onRipperdoc({ category: activeZone })}>
+                诊所 · {view.ripperdoc.name}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {/* 主双栏：左开放式人体扫描拓扑 + 右交互式检视台 */}
-      <div className={neural.cyberLayout}>
-        <section className={neural.cyberDollPane} aria-label="人体解剖拓扑">
-          <div className={neural.cyberDollStage}>
-            <CyberDoll
-              parts={bySlot}
-              selected={activeSlot}
-              selectedPartId={effectiveFocusedId}
-              onCell={(slot, part) => {
-                jumpToPart(slot, part?.id ?? bySlot.get(slot)?.[0]?.id ?? null);
-              }}
-            />
-          </div>
-          {/* 底部快速部位导航条：方便键鼠直接跳切 10 部位并一眼看清各部位件数 */}
-          <nav className={neural.cyberSlotRail} aria-label="快速切换解剖部位">
-            {CYBER_SLOT_ORDER.map((slot) => {
-              const items = bySlot.get(slot) ?? [];
-              const hasBroken = items.some((p) => p.broken);
-              const isActive = !isGlobalView && activeSlot === slot;
-              return (
-                <button
-                  key={slot}
-                  type="button"
-                  className={neural.cyberRailBtn}
-                  data-active={isActive || undefined}
-                  data-equipped={items.length > 0 || undefined}
-                  data-broken={hasBroken || undefined}
-                  onClick={() => jumpToPart(slot, items[0]?.id ?? null)}
-                >
-                  <span>{CYBER_LABELS[slot]}</span>
-                  {items.length > 0 && (
-                    <span className={neural.cyberRailCount}>{items.length}</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+      <div className={neural.v2Split}>
+        <section className={neural.v2Left} aria-label="人体改造联动剪影">
+          <CyberBodySilhouette
+            focus={silhouetteFocus}
+            chassisLabel={load.chassisLabel}
+            hasFbc={load.fullBorg !== null}
+            installedCount={view.cyberware.length}
+            tone={load.tone}
+          />
         </section>
 
-        <aside className={neural.cyberInspector} aria-label="已装义体详情与操作">
-          <header className={neural.cyberInspectorHead}>
-            <div className={neural.cyberInspectorTitleRow}>
-              <span className={neural.cyberInspectorTitle}>
-                {isGlobalView ? "全身义体清单" : CYBER_LABELS[activeSlot]}
-              </span>
-              <div className={neural.cyberModeSwitch} role="tablist" aria-label="检视范围">
-                <button
-                  type="button"
-                  role="tab"
-                  className={neural.cyberModeBtn}
-                  aria-selected={!isGlobalView}
-                  onClick={() => {
-                    setInspectorMode("slot");
-                    setQuery("");
-                    setQuickFilter("all");
-                  }}
-                >
-                  当前部位
-                  <span className={neural.cyberModeCount}>
-                    {String(slotItems.length).padStart(2, "0")}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  className={neural.cyberModeBtn}
-                  aria-selected={isGlobalView}
-                  onClick={() => setInspectorMode("all")}
-                >
-                  全部
-                  <span className={neural.cyberModeCount}>
-                    {String(view.cyberware.length).padStart(2, "0")}
-                  </span>
-                </button>
+        <section className={neural.v2Right} aria-label="核心主位与扩展插件">
+          <CellFrame />
+          {/* 上区：2×4 宽裕核心主位网格（全名完整展示，绝不截断） */}
+          <div className={neural.v2Block}>
+            <div className={neural.v2BlockHead}>
+              <div className={neural.v2BlockTitleWrap}>
+                <span className={neural.v2BlockCode}>{"CORE // 08"}</span>
+                <span className={neural.v2BlockTitle}>核心主位</span>
               </div>
-            </div>
-
-            <div className={neural.cyberSearchRow}>
-              <input
-                type="search"
-                className={neural.cyberSearchInput}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape" && query) {
-                    e.stopPropagation();
-                    setQuery("");
-                  }
-                }}
-                placeholder="检索已装义体名、部位或能力…"
-                aria-label="检索已装义体"
-              />
-              {query && (
-                <button
-                  type="button"
-                  className={neural.cyberSearchClear}
-                  onClick={() => setQuery("")}
-                  aria-label="清空检索"
-                >
-                  ×
-                </button>
+              {load.dualCore && (
+                <span className={neural.v2HeadWarn}>
+                  双中枢并行 · 额外 +{load.dualCorePenalty} 承载
+                </span>
               )}
             </div>
-
-            <div className={neural.cyberFilterBar}>
-              {(
-                [
-                  ["all", "全部"],
-                  ["heavy", "高压/不朽"],
-                  ["zero", "零负荷"],
-                  ...(brokenCount > 0 ? ([["broken", `损毁 (${brokenCount})`]] as const) : []),
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={neural.cyberFilterChip}
-                  data-tone={key === "broken" ? "bad" : key === "heavy" ? "warn" : undefined}
-                  aria-pressed={quickFilter === key}
-                  onClick={() => {
-                    const next = quickFilter === key ? "all" : key;
-                    setQuickFilter(next);
-                    if (next !== "all") setInspectorMode("all");
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <p className={neural.cyberInspectorNote}>{slotNote}</p>
-          </header>
-
-          <div className={neural.cyberInspectorScroll}>
-            {displayedItems.length === 0 ? (
-              <div className={neural.cyberEmptyBox}>
-                <strong>
-                  {isGlobalView || quickFilter !== "all"
-                    ? "没有符合筛选条件的已装义体"
-                    : `尚未装配${CYBER_LABELS[activeSlot]}义体`}
-                </strong>
-                <p>
-                  {isGlobalView || quickFilter !== "all"
-                    ? "可清空关键词或切回「全部」查看完整已装清单。"
-                    : view.ripperdoc
-                      ? `可在「${view.ripperdoc.name}」的诊所自由加装；除物理互斥核心外，该部位不设固定格数上限。`
-                      : "前往任意义体医生诊所即可自由加装；感官、时尚、生活与暗格类义体零神经负荷。"}
-                </p>
-                {isGlobalView || quickFilter !== "all" ? (
-                  <Button
-                    small
+            <div className={neural.coreGrid}>
+              {coreSlots.map((entry) => {
+                const shown = entry.part ?? entry.mirrorOf ?? null;
+                const isMirror = entry.part === null && entry.mirrorOf != null;
+                const tint = shown
+                  ? shown.broken
+                    ? "var(--cp-danger)"
+                    : rarityTintOf(shown.rarity, shown.iconic)
+                  : undefined;
+                const rarityLabel = shown ? rarityLabelOf(shown.rarity, shown.iconic) : null;
+                const active = expandedCore === entry.id;
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className={neural.coreCard}
+                    data-filled={shown ? true : undefined}
+                    data-mirror={isMirror || undefined}
+                    data-broken={shown?.broken || undefined}
+                    data-active={active || undefined}
+                    style={tint ? ({ "--card-tint": tint } as CSSProperties) : undefined}
+                    onMouseEnter={() => setHoveredFocus(entry.id)}
+                    onMouseLeave={() => setHoveredFocus(null)}
+                    onFocus={() => setHoveredFocus(entry.id)}
+                    onBlur={() => setHoveredFocus(null)}
                     onClick={() => {
-                      setQuery("");
-                      setQuickFilter("all");
+                      if (shown) {
+                        setExpandedCore((prev) => (prev === entry.id ? null : entry.id));
+                      } else if (view.ripperdoc) {
+                        onRipperdoc({ category: entry.ripperCategory });
+                      }
                     }}
                   >
-                    重置筛选
-                  </Button>
-                ) : (
-                  view.ripperdoc && (
-                    <Button small primary onClick={() => onRipperdoc({ slot: activeSlot })}>
-                      前往 {view.ripperdoc.name} 选购{CYBER_LABELS[activeSlot]}
-                    </Button>
-                  )
-                )}
-              </div>
-            ) : (
-              <ul className={neural.cyberCardList}>
-                {displayedItems.map((part) => {
-                  const rarityLabel = rarityLabelOf(part.rarity, part.iconic);
-                  const tint = part.broken
-                    ? "var(--cp-danger)"
-                    : rarityTintOf(part.rarity, part.iconic);
-                  const loadTag = cyberLoadTag(part.humanityCost);
-                  const sameSlotCount = bySlot.get(part.slot)?.length ?? 0;
-                  const mountHint = cyberwareRules.cyberwareMountHint(
-                    {
-                      id: part.id,
-                      name: part.name,
-                      slot: part.slot,
-                      armor: part.armor,
-                      accelerator: part.accelerator,
-                      ...(part.deckProfile ? { deckProfile: part.deckProfile } : {}),
-                      ...(part.deckTraits ? { deckTraits: part.deckTraits } : {}),
-                      ...(part.exclusiveGroup ? { exclusiveGroup: part.exclusiveGroup } : {}),
-                    },
-                    part.slot === "arms" ? sameSlotCount : 0,
-                  );
-                  const isFocused = effectiveFocusedId === part.id;
-                  const quickUse = quickUseLabel(part);
-                  const isDeck = Boolean(
-                    !part.broken && (part.deckProfile || part.exclusiveGroup === "cyberdeck"),
-                  );
-                  return (
-                    <li
-                      key={part.id}
-                      ref={(node) => {
-                        cardRefs.current[part.id] = node;
-                      }}
-                      className={neural.cyberDetailCard}
-                      data-broken={part.broken || undefined}
-                      data-focused={isFocused || undefined}
-                      style={{ "--card-tint": tint } as CSSProperties}
-                    >
-                      <button
-                        type="button"
-                        className={neural.cyberDetailCardHit}
-                        onClick={() => {
-                          setActiveSlot(part.slot);
-                          setFocusedPartId(part.id);
-                        }}
-                      >
-                        <div className={neural.cyberDetailTop}>
-                          <CyberItemCell
-                            id={part.id}
-                            name={part.name}
-                            slot={part.slot}
-                            rarity={part.rarity ?? undefined}
-                            iconic={part.iconic}
-                            broken={part.broken}
-                            on={!part.broken}
-                            size={46}
-                          />
-                          <div className={neural.cyberDetailMeta}>
-                            <div className={neural.cyberDetailTitleRow}>
-                              <strong className={neural.cyberDetailName}>{part.name}</strong>
-                              {isGlobalView && (
-                                <span className={neural.cyberSlotPill}>{part.slotLabel}</span>
-                              )}
-                              {part.broken && (
-                                <span className={neural.cyberStatusFlag} data-tone="bad">
-                                  已损毁
-                                </span>
-                              )}
-                            </div>
-                            <div className={neural.cyberDetailSpecLine}>
-                              {rarityLabel && (
-                                <span className={neural.cyberSpecItem} style={{ color: tint }}>
+                    <div className={neural.coreCardBody}>
+                      {shown ? (
+                        <CyberItemCell
+                          id={shown.id}
+                          name={shown.name}
+                          slot={shown.slot}
+                          rarity={shown.rarity ?? undefined}
+                          iconic={shown.iconic}
+                          broken={shown.broken}
+                          on={!shown.broken}
+                          size={40}
+                        />
+                      ) : (
+                        <span className={neural.coreEmptyIcon} aria-hidden />
+                      )}
+                      <div className={neural.coreInfo}>
+                        <div className={neural.coreCardHead}>
+                          <span className={neural.coreSlotLabel}>{entry.label}</span>
+                          {shown && !isMirror && shown.effectiveLoad > 0 && (
+                            <span className={neural.loadNum} title="神经承载">
+                              {shown.effectiveLoad}
+                            </span>
+                          )}
+                          {isMirror && <span className={neural.coreMirrorTag}>双臂同款</span>}
+                        </div>
+                        {shown ? (
+                          <div className={neural.coreNameRow}>
+                            <strong className={neural.coreItemName}>{shown.name}</strong>
+                            {shown.broken ? (
+                              <span className={neural.coreBrokenTag}>受损</span>
+                            ) : (
+                              rarityLabel && (
+                                <span className={neural.coreRarityDot} style={{ color: tint }}>
                                   {rarityLabel}
                                 </span>
-                              )}
-                              <span className={neural.cyberSpecItem} data-tone={loadTag.tone}>
-                                {loadTag.label}
-                                {part.humanityCost > 0 ? ` (${part.humanityCost})` : ""}
-                              </span>
-                              <span
-                                className={neural.cyberSpecItem}
-                                data-tone={
-                                  mountHint ? "warn" : part.exclusiveGroupLabel ? undefined : "ok"
-                                }
-                              >
-                                {mountHint?.badge ?? part.exclusiveGroupLabel ?? "可自由叠加"}
-                              </span>
-                            </div>
+                              )
+                            )}
                           </div>
-                        </div>
-
-                        {part.ability && <p className={neural.cyberDetailDesc}>{part.ability}</p>}
-
-                        {!part.broken &&
-                          (part.deckProfile || (part.deckTraits && part.deckTraits.length > 0)) && (
-                            <p className={neural.cyberDetailSub}>
-                              接入仓特化：
-                              {[part.deckTraits?.join(" · "), part.deckProfile]
-                                .filter(Boolean)
-                                .join(" — ")}
-                            </p>
-                          )}
-
-                        {part.behaviorChip && (
-                          <p className={neural.cyberDetailSub}>
-                            {[
-                              `行为芯片：${part.behaviorChip.label}`,
-                              part.behaviorChip.protocol
-                                ? `协议：${part.behaviorChip.protocol}`
-                                : null,
-                              part.behaviorChip.memoryGap ? "存在托管记忆断层" : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
+                        ) : (
+                          <span className={neural.coreEmpty}>
+                            {entry.lockedNote ?? entry.emptyHint}
+                          </span>
                         )}
-                      </button>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-                      {(isDeck || quickUse || view.ripperdoc) && (
-                        <div className={neural.cyberCardActions}>
-                          {isDeck && onOpenDeck && (
-                            <button
-                              type="button"
-                              className={neural.cyberActBtn}
-                              data-tone="cyan"
-                              onClick={onOpenDeck}
-                            >
-                              管理接入仓插槽
-                            </button>
-                          )}
-                          {quickUse && onActionDraft && (
-                            <button
-                              type="button"
-                              className={neural.cyberActBtn}
-                              data-tone="warn"
-                              disabled={busy}
-                              onClick={() => onActionDraft(quickUse.draft)}
-                            >
-                              {quickUse.label}
-                            </button>
-                          )}
-                          {view.ripperdoc && (
-                            <button
-                              type="button"
-                              className={neural.cyberActBtn}
-                              data-tone={part.broken ? "bad" : undefined}
-                              onClick={() =>
-                                onRipperdoc({ slot: "installed", installedId: part.id })
-                              }
-                            >
-                              {part.broken ? "去诊所维修" : "诊所拆换"}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+            {expandedSlot && expandedPart && (
+              <div
+                className={neural.coreDrawer}
+                data-broken={expandedPart.broken || undefined}
+                style={
+                  {
+                    "--card-tint": expandedPart.broken
+                      ? "var(--cp-danger)"
+                      : rarityTintOf(expandedPart.rarity, expandedPart.iconic),
+                  } as CSSProperties
+                }
+              >
+                <div className={neural.coreDrawerHead}>
+                  <div className={neural.coreDrawerTitle}>
+                    <span className={neural.coreDrawerSlot}>{expandedSlot.label}</span>
+                    <strong>{expandedPart.name}</strong>
+                    {rarityLabelOf(expandedPart.rarity, expandedPart.iconic) && (
+                      <span
+                        className={neural.coreDrawerRarity}
+                        style={{
+                          color: rarityTintOf(expandedPart.rarity, expandedPart.iconic),
+                        }}
+                      >
+                        {rarityLabelOf(expandedPart.rarity, expandedPart.iconic)}
+                      </span>
+                    )}
+                    {expandedPart.armSideLabel && (
+                      <span className={neural.coreDrawerRarity}>{expandedPart.armSideLabel}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className={neural.coreDrawerClose}
+                    aria-label="收起详情"
+                    onClick={() => setExpandedCore(null)}
+                  >
+                    ×
+                  </button>
+                </div>
+                {expandedPart.ability && (
+                  <p className={neural.coreDrawerDesc}>{expandedPart.ability}</p>
+                )}
+                {!expandedPart.broken &&
+                  (expandedPart.deckProfile ||
+                    (expandedPart.deckTraits && expandedPart.deckTraits.length > 0)) && (
+                    <p className={neural.cyberDetailSub}>
+                      接入仓特化：
+                      {[expandedPart.deckTraits?.join(" · "), expandedPart.deckProfile]
+                        .filter(Boolean)
+                        .join(" — ")}
+                    </p>
+                  )}
+                <div className={neural.cyberCardActions}>
+                  {!expandedPart.broken &&
+                    (expandedPart.deckProfile || expandedPart.exclusiveGroup === "cyberdeck") &&
+                    onOpenDeck && (
+                      <button
+                        type="button"
+                        className={neural.cyberActBtn}
+                        data-tone="cyan"
+                        onClick={onOpenDeck}
+                      >
+                        管理接入仓插槽
+                      </button>
+                    )}
+                  {quickUseLabel(expandedPart) && onActionDraft && (
+                    <button
+                      type="button"
+                      className={neural.cyberActBtn}
+                      data-tone="warn"
+                      disabled={busy}
+                      onClick={() => {
+                        const q = quickUseLabel(expandedPart);
+                        if (q) onActionDraft(q.draft);
+                      }}
+                    >
+                      {quickUseLabel(expandedPart)?.label}
+                    </button>
+                  )}
+                  {view.ripperdoc && (
+                    <button
+                      type="button"
+                      className={neural.cyberActBtn}
+                      data-tone={expandedPart.broken ? "bad" : undefined}
+                      onClick={() =>
+                        onRipperdoc({ category: "installed", installedId: expandedPart.id })
+                      }
+                    >
+                      {expandedPart.broken ? "去诊所维修" : "诊所拆换"}
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-        </aside>
+
+          {/* 下区：5 标签扩展与外观区 */}
+          <div className={neural.v2ZoneBlock}>
+            <nav className={neural.zoneTabs} aria-label="扩展与外观分区">
+              {cyberwareRules.EXTENSION_ZONE_IDS.map((zone) => {
+                const count = byZone[zone].length;
+                const limit = load.zoneLimits[zone];
+                const active = activeZone === zone;
+                return (
+                  <button
+                    key={zone}
+                    type="button"
+                    className={neural.zoneTab}
+                    aria-pressed={active}
+                    onMouseEnter={() => setHoveredFocus(zone)}
+                    onMouseLeave={() => setHoveredFocus(null)}
+                    onClick={() => setActiveZone(zone)}
+                  >
+                    <span>{cyberwareRules.EXTENSION_ZONE_LABELS[zone]}</span>
+                    <span className={neural.zoneTabCount}>
+                      {limit === null ? count : `${count}/${limit}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className={neural.zoneScroll}>
+              {zoneItems.length === 0 ? (
+                <div className={neural.cyberEmptyBox}>
+                  <strong>尚未装配{cyberwareRules.EXTENSION_ZONE_LABELS[activeZone]}</strong>
+                  <p>
+                    {activeZone === "lifestyle"
+                      ? "变色皮肤、光纹纹身、变色虹膜与日常外观改造不占神经承载，也不占功能空间。"
+                      : view.ripperdoc
+                        ? `可在「${view.ripperdoc.name}」的诊所挑选加装。`
+                        : "前往任意义体医生诊所即可挑选加装。"}
+                  </p>
+                  {view.ripperdoc && (
+                    <Button small primary onClick={() => onRipperdoc({ category: activeZone })}>
+                      前往 {view.ripperdoc.name} 诊所
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <ul className={neural.v2List}>
+                  {zoneItems.map((part) => {
+                    const tint = part.broken
+                      ? "var(--cp-danger)"
+                      : rarityTintOf(part.rarity, part.iconic);
+                    const rarityLabel = rarityLabelOf(part.rarity, part.iconic);
+                    const quickUse = quickUseLabel(part);
+                    return (
+                      <li
+                        key={part.id}
+                        className={neural.v2Row}
+                        data-broken={part.broken || undefined}
+                        style={{ "--card-tint": tint } as CSSProperties}
+                        onMouseEnter={() => setHoveredFocus(activeZone)}
+                        onMouseLeave={() => setHoveredFocus(null)}
+                      >
+                        <CyberItemCell
+                          id={part.id}
+                          name={part.name}
+                          slot={part.slot}
+                          rarity={part.rarity ?? undefined}
+                          iconic={part.iconic}
+                          broken={part.broken}
+                          on={!part.broken}
+                          size={38}
+                        />
+                        <div className={neural.v2RowMain}>
+                          <div className={neural.v2RowTop}>
+                            <strong className={neural.v2RowName}>{part.name}</strong>
+                            {rarityLabel && (
+                              <span className={neural.v2RowRarity} style={{ color: tint }}>
+                                {rarityLabel}
+                              </span>
+                            )}
+                            {part.broken && <span className={neural.coreBrokenTag}>受损</span>}
+                            {part.effectiveLoad > 0 && (
+                              <span className={neural.v2RowLoad} title="神经承载">
+                                {part.effectiveLoad}
+                              </span>
+                            )}
+                          </div>
+                          {part.ability && <p className={neural.v2RowDesc}>{part.ability}</p>}
+                          {part.behaviorChip && (
+                            <p className={neural.cyberDetailSub}>
+                              {[
+                                `行为芯片：${part.behaviorChip.label}`,
+                                part.behaviorChip.protocol
+                                  ? `协议：${part.behaviorChip.protocol}`
+                                  : null,
+                                part.behaviorChip.memoryGap ? "存在托管记忆断层" : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                          )}
+                          {(quickUse || view.ripperdoc) && (
+                            <div className={neural.cyberCardActions}>
+                              {quickUse && onActionDraft && (
+                                <button
+                                  type="button"
+                                  className={neural.cyberActBtn}
+                                  data-tone="warn"
+                                  disabled={busy}
+                                  onClick={() => onActionDraft(quickUse.draft)}
+                                >
+                                  {quickUse.label}
+                                </button>
+                              )}
+                              {view.ripperdoc && (
+                                <button
+                                  type="button"
+                                  className={neural.cyberActBtn}
+                                  data-tone={part.broken ? "bad" : undefined}
+                                  onClick={() =>
+                                    onRipperdoc({ category: "installed", installedId: part.id })
+                                  }
+                                >
+                                  {part.broken ? "去诊所维修" : "诊所拆换"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

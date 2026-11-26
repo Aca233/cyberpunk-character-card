@@ -119,6 +119,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
     keeper: "威尔逊",
     keeperNpc: "wilson",
     location: "megabuilding-h10",
+    gunsmith: true,
     note: "H10 巨型公寓里的枪店兼靶场，店主是退伍兵，卖出去的枪都亲手调过",
     shelf: [
       "dying-night",
@@ -177,6 +178,7 @@ export const shops = inventoryRules.ShopListSchema.parse([
     name: "歌舞伎黑市武器摊",
     keeper: "歌舞伎黑市摊主",
     location: "kabuki-market",
+    gunsmith: true,
     note: "歌舞伎市场里卖刀卖枪的黑市摊位，货不问来路，有的枪号码锉掉了",
     priceFactor: 0.7,
     blackMarket: true,

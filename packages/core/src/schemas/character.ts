@@ -219,13 +219,18 @@ export function acquaintanceSeed(a: Acquaintance): StartAcquaintance {
   };
 }
 
-/** 建档时从主板带进存档的东西：开局义体、自定义义体快照、开局行装定制、模块带出的人物和原作人物旧识 */
+/** 建档时从主板带进存档的东西：开局义体、自定义义体快照、手臂侧别、开局行装定制、模块带出的人物和原作人物旧识 */
 export function boardStart(card: CharacterCard): BoardStart | undefined {
   if (!card.board) return undefined;
   const people = boardPeople(card.board);
   const customCyberware = card.board.cyberware.filter((c) => Boolean(c.custom && c.slot));
+  const armSideEntries = card.board.cyberware.flatMap((c) =>
+    c.armSide ? ([[c.id, c.armSide]] as const) : [],
+  );
+  const cyberwareSides = armSideEntries.length > 0 ? Object.fromEntries(armSideEntries) : undefined;
   return {
     cyberware: card.board.cyberware.map((c) => c.id),
+    ...(cyberwareSides ? { cyberwareSides } : {}),
     customCyberware,
     ...(card.board.origin ? { origin: card.board.origin.id } : {}),
     ...(card.board.kit ? { kit: card.board.kit } : {}),

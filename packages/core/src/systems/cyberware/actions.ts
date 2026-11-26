@@ -3,14 +3,16 @@ import { type Command, defineAction } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { cyberwareCatalog, ripperdocList, ripperdocShelf } from "./apply";
 import { quoteCyberware } from "./quote";
-import { type CyberwareCommand, CyberwareStateSchema } from "./schema";
+import { ArmSideSchema, type CyberwareCommand, CyberwareStateSchema } from "./schema";
 import { clinicState } from "./stock";
 
-/** 在义体医生那里买一件装上；部位装满了（SLOT_CAPACITY）才换下最早装的那件折价；credit 是钱不够时赊账 */
+/** 在义体医生那里买一件装上；物理互斥时替换指定或冲突旧件；credit 是钱不够时赊账 */
 export const BuyCyberwareActionSchema = z.strictObject({
   type: z.literal("buyCyberware"),
   doc: z.string().min(1).max(100),
   id: z.string().min(1).max(64),
+  armSide: ArmSideSchema.optional(),
+  replace: z.string().min(1).max(64).optional(),
   credit: z.boolean().optional(),
 });
 
@@ -66,13 +68,14 @@ function ripperdocCommands(
       (i) => i.def.id === action.id,
     );
     if (!item) return `${doc.name}的货架上没有这件`;
+    const replaceId = action.replace ?? item.replaces?.id;
     command = {
       type: "cyberware",
       action: "install",
       doc: action.doc,
       id: action.id,
-      replace: item.replaces?.id,
-      tradeIn: item.replaces ? true : undefined,
+      ...(action.armSide ? { armSide: action.armSide } : {}),
+      ...(replaceId ? { replace: replaceId, tradeIn: true } : {}),
       credit: action.credit,
       reason: "玩家确认诊所货架的安装条件",
     };

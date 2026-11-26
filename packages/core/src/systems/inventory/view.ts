@@ -43,6 +43,26 @@ const BrokenChromeSliceSchema = z
   .object({ brokenChrome: z.array(z.string()).default([]) })
   .catch({ brokenChrome: [] });
 
+function carryBonusCatalog(
+  data: Readonly<Record<string, unknown>>,
+): ReadonlyMap<string, { readonly carryBonus?: number | undefined }> {
+  const map = new Map<string, { readonly carryBonus?: number | undefined }>();
+  if (!Array.isArray(data.cyberware)) return map;
+  for (const raw of data.cyberware) {
+    if (
+      typeof raw === "object" &&
+      raw !== null &&
+      typeof (raw as { id?: unknown }).id === "string" &&
+      typeof (raw as { carryBonus?: unknown }).carryBonus === "number"
+    ) {
+      map.set((raw as { id: string }).id, {
+        carryBonus: (raw as { carryBonus: number }).carryBonus,
+      });
+    }
+  }
+  return map;
+}
+
 const ChipCategoryIndexSchema = z
   .array(
     z.object({
@@ -120,8 +140,14 @@ export function inventoryView({ world, data }: ViewContext) {
   const loadout = loadoutSummary(inventory, items, {
     installed: cyber.installed,
     brokenChrome: health.brokenChrome,
+    catalog: carryBonusCatalog(data),
   });
   const bdChipIds = buildChipBraindanceIds(world, data);
+  let suppressantCount = 0;
+  for (const [id, count] of counts) {
+    const def = items.get(id) ?? inventory.objects[id]?.definition;
+    if (def?.suppressant) suppressantCount += count;
+  }
 
   return {
     healing: inventory.healing,
@@ -132,12 +158,19 @@ export function inventoryView({ world, data }: ViewContext) {
     },
     /** 统一后的随身背包，数量均在此展示 */
     backpack: Object.fromEntries(counts) as Readonly<Record<string, number>>,
+    /** 随身可用的神经压制剂总数（按 ItemDef.suppressant 汇总） */
+    suppressantCount,
     heldWeapons: carriedHeldWeaponIds(inventory, items),
     /** 随身携带的武器列表（含基础模板 ID、改装态、有效隐蔽度与声学标签），用于 HUD 展示与模型状态 */
     carriedWeapons: weaponIds.map((id) => {
       const obj = inventory.objects[id];
       const def = items.get(id) ?? obj?.definition;
       const baseId = obj?.weaponState?.baseId ?? id;
+      const baseDef = baseId !== id ? items.get(baseId) : undefined;
+      const resolvedDef =
+        def && def.concealment === undefined && baseDef?.concealment !== undefined
+          ? { ...def, concealment: baseDef.concealment }
+          : def;
       const ws = obj?.weaponState;
       return {
         id,
@@ -152,8 +185,10 @@ export function inventoryView({ world, data }: ViewContext) {
           def.category !== undefined &&
           def.category !== "blade" &&
           def.category !== "blunt",
-        bulky: isBulkyItem(def, baseId),
-        concealment: def ? effectiveConcealment(def, ws, items) : ("pocket" as const),
+        bulky: isBulkyItem(resolvedDef),
+        concealment: resolvedDef
+          ? effectiveConcealment(resolvedDef, ws, items)
+          : ("pocket" as const),
         noise: def ? effectiveWeaponNoise(def, ws, items) : ("loud" as const),
         grantsSmartLink: def ? weaponGrantsSmartLink(def, ws, items) : false,
         weaponState: projectWeaponState(ws),
@@ -181,6 +216,11 @@ export function inventoryView({ world, data }: ViewContext) {
         if (!def) return [];
         const ws = obj?.weaponState;
         const baseId = ws?.baseId ?? obj?.baseId ?? id;
+        const baseDef = baseId !== id ? items.get(baseId) : undefined;
+        const resolvedDef =
+          def.concealment === undefined && baseDef?.concealment !== undefined
+            ? { ...def, concealment: baseDef.concealment }
+            : def;
         const rar = def.rarity || def.kind === "weapon" ? rarityOf(def) : null;
         const neuralGroup = neuralGroupOf(def, bdChipIds);
         return [
@@ -189,6 +229,7 @@ export function inventoryView({ world, data }: ViewContext) {
             {
               baseId,
               kind: def.kind,
+              suppressant: Boolean(def.suppressant),
               clothingSlot: def.kind === "clothing" ? (def.clothingSlot ?? null) : null,
               subLabel: itemSubLabel(def, neuralGroup),
               neuralGroup,
@@ -199,9 +240,10 @@ export function inventoryView({ world, data }: ViewContext) {
               rarity: rar,
               rarityLabel: def.iconic ? "不朽" : rar ? RARITY_LABELS[rar] : null,
               iconic: Boolean(def.iconic),
-              bulky: isBulkyItem(def, baseId),
-              carryUnits: itemCarryUnits(def, baseId),
-              concealment: def.kind === "weapon" ? effectiveConcealment(def, ws, items) : null,
+              bulky: isBulkyItem(resolvedDef),
+              carryUnits: itemCarryUnits(resolvedDef),
+              concealment:
+                def.kind === "weapon" ? effectiveConcealment(resolvedDef, ws, items) : null,
               noise: def.kind === "weapon" ? effectiveWeaponNoise(def, ws, items) : null,
               grantsSmartLink:
                 def.kind === "weapon" ? weaponGrantsSmartLink(def, ws, items) : false,

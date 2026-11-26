@@ -298,6 +298,8 @@ export function inherentCyberware(
         id: c.id,
         name: c.name,
         slot,
+        ...(def?.category || c.category ? { category: def?.category ?? c.category } : {}),
+        ...(c.armSide ? { armSide: c.armSide } : {}),
         ...(def?.armor || c.armor ? { armor: true } : {}),
         ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
         ...(def?.deckProfile || c.deckProfile
@@ -319,6 +321,7 @@ export function inherentCyberware(
         id: def.id,
         name: def.name,
         slot: def.slot as cyberwareRules.CyberwareSlot,
+        ...(def.category ? { category: def.category } : {}),
         ...(def.armor ? { armor: true } : {}),
         ...(def.accelerator ? { accelerator: true } : {}),
         ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
@@ -339,7 +342,7 @@ export function inherentCyberware(
   return out;
 }
 
-/** 汇总角色当前已装配义体（含未被顶替的出身标配）的纯事实神经负荷 */
+/** 汇总角色当前已装配义体（含未被顶替的出身标配）的纯事实三段式神经承载 */
 export function boardLoadProfile(
   card: CharacterCard,
   data?: Pick<BoardData, "cyberware" | "loadouts" | "names">,
@@ -356,6 +359,20 @@ export function boardLoadProfile(
       name: c.name,
       slot,
       humanityCost: def?.humanityCost ?? c.humanityCost,
+      ...(def?.category || c.category ? { category: def?.category ?? c.category } : {}),
+      ...(c.armSide ? { armSide: c.armSide } : {}),
+      ...(def?.defaultArmSide || c.defaultArmSide
+        ? { defaultArmSide: def?.defaultArmSide ?? c.defaultArmSide }
+        : {}),
+      ...(def?.capacityBonus !== undefined || c.capacityBonus !== undefined
+        ? { capacityBonus: def?.capacityBonus ?? c.capacityBonus }
+        : {}),
+      ...(def?.safeLineBonus !== undefined || c.safeLineBonus !== undefined
+        ? { safeLineBonus: def?.safeLineBonus ?? c.safeLineBonus }
+        : {}),
+      ...(def?.chassisProfile || c.chassisProfile
+        ? { chassisProfile: def?.chassisProfile ?? c.chassisProfile }
+        : {}),
       ...(def?.armor || c.armor ? { armor: true } : {}),
       ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
       ...(def?.deckProfile || c.deckProfile
@@ -375,6 +392,11 @@ export function boardLoadProfile(
       name: item.name,
       slot: item.slot as cyberwareRules.CyberwareSlot,
       humanityCost: item.humanityCost,
+      ...(def?.category ? { category: def.category } : {}),
+      ...(def?.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+      ...(def?.capacityBonus !== undefined ? { capacityBonus: def.capacityBonus } : {}),
+      ...(def?.safeLineBonus !== undefined ? { safeLineBonus: def.safeLineBonus } : {}),
+      ...(def?.chassisProfile ? { chassisProfile: def.chassisProfile } : {}),
       ...(def?.armor ? { armor: true } : {}),
       ...(def?.accelerator ? { accelerator: true } : {}),
       ...(def?.deckProfile ? { deckProfile: def.deckProfile } : {}),
@@ -517,17 +539,37 @@ export function mergeCreatorCatalog(
   for (const item of extraCyberware) {
     if (!item.slot || seenChrome.has(item.id)) continue;
     seenChrome.add(item.id);
+    const cat =
+      item.category ??
+      cyberwareRules.cyberwareCategoryOf({
+        id: item.id,
+        name: item.name,
+        slot: item.slot,
+        ...(item.armor ? { armor: true } : {}),
+        ...(item.accelerator ? { accelerator: true } : {}),
+        ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
+        ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
+      });
     mergedCyberware.unshift({
       id: item.id,
       name: item.name,
       slot: item.slot,
       slotLabel: cyberwareRules.SLOT_LABELS[item.slot],
+      category: cat,
+      categoryLabel: cyberwareRules.CYBERWARE_CATEGORY_LABELS[cat],
       rarity: item.rarity ?? "rare",
-      humanityCost: item.humanityCost,
+      humanityCost: cat === "lifestyle" ? 0 : item.humanityCost,
       ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
       ...(item.armor ? { armor: true } : {}),
       ...(item.accelerator ? { accelerator: true } : {}),
       ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
+      ...(item.defaultArmSide ? { defaultArmSide: item.defaultArmSide } : {}),
+      ...(item.capacityBonus !== undefined ? { capacityBonus: item.capacityBonus } : {}),
+      ...(item.safeLineBonus !== undefined ? { safeLineBonus: item.safeLineBonus } : {}),
+      ...(item.chassisProfile ? { chassisProfile: item.chassisProfile } : {}),
+      ...(item.smartLink ? { smartLink: true } : {}),
+      ...(item.carryBonus !== undefined ? { carryBonus: item.carryBonus } : {}),
+      ...(item.defenses ? { defenses: item.defenses } : {}),
       custom: true,
       packId: item.packId ?? "local",
       ability: item.ability || item.summary || "自定义义体模块",
@@ -562,13 +604,21 @@ export function exportLocalWorkshopPack(
                     : c.rarity === "legendary"
                       ? 72000
                       : 18000,
-            humanityCost: c.humanityCost,
+            humanityCost: c.category === "lifestyle" ? 0 : c.humanityCost,
             ability: c.ability || c.summary || "自定义义体模块",
             armor: Boolean(c.armor),
             accelerator: Boolean(c.accelerator),
             iconic: false,
             ...(c.deckProfile ? { deckProfile: c.deckProfile, deckTraits: [] } : {}),
             ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
+            ...(c.category ? { category: c.category } : {}),
+            ...(c.defaultArmSide ? { defaultArmSide: c.defaultArmSide } : {}),
+            ...(c.capacityBonus !== undefined ? { capacityBonus: c.capacityBonus } : {}),
+            ...(c.safeLineBonus !== undefined ? { safeLineBonus: c.safeLineBonus } : {}),
+            ...(c.chassisProfile ? { chassisProfile: c.chassisProfile } : {}),
+            ...(c.smartLink ? { smartLink: true } : {}),
+            ...(c.carryBonus !== undefined ? { carryBonus: c.carryBonus } : {}),
+            ...(c.defenses ? { defenses: c.defenses } : {}),
           },
         ]
       : [],

@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { defineAction } from "../../kernel/system";
 import { HealthStateSchema } from "../health";
-import { InventoryStateSchema } from "../inventory";
+import {
+  findSuppressantId,
+  InventoryStateSchema,
+  itemCatalog,
+  withWorldObjects,
+} from "../inventory";
 import { formatGameTime } from "../world";
 import { suppressantStatus } from "./apply";
 import { PsychosisStateSchema, SUPPRESSANT_ID } from "./schema";
@@ -15,14 +20,20 @@ export const UseSuppressantActionSchema = z.strictObject({
 export const psychosisActions = {
   useSuppressant: defineAction({
     schema: UseSuppressantActionSchema,
-    commands: (_action, { world }) => {
+    commands: (_action, { world, data }) => {
       if ((world.slices.combat as { active?: unknown } | undefined)?.active) {
         return "战斗中注射压制剂要花一个动作，在行动里写";
       }
       const health = HealthStateSchema.parse(world.slices.health);
       if (health.condition !== "up") return "当前无法自行注射，需要别人救治";
       const inventory = InventoryStateSchema.parse(world.slices.inventory);
-      if ((inventory.backpack[SUPPRESSANT_ID] ?? 0) < 1) return "背包里没有神经压制剂";
+      const catalog =
+        data.items !== undefined
+          ? itemCatalog(withWorldObjects(data, inventory.objects))
+          : undefined;
+      if (!findSuppressantId(inventory.backpack, catalog, SUPPRESSANT_ID)) {
+        return "背包里没有神经压制剂";
+      }
       const psychosis = PsychosisStateSchema.parse(world.slices.psychosis);
       const status = suppressantStatus(psychosis.doses, world.time);
       if (status.until !== null) {

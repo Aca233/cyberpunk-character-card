@@ -132,7 +132,7 @@ export const cyberware = defineSystem<
       return applyBoost(draft, command.id, catalog, ctx.now, broken);
     }
     return command.type === "cyberware.install"
-      ? install(draft, command.id, catalog, ctx.now)
+      ? install(draft, command.id, catalog, ctx.now, undefined, command.armSide)
       : command.type === "cyberware"
         ? applyCyberware(draft, command, ctx)
         : applyWorkshop(draft, command, ctx);

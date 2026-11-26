@@ -8,7 +8,7 @@ import { cyberwareCatalog, repairCost, ripperdocList, tradeInValue } from "./app
 import {
   CyberwareStateSchema,
   type CyberwareTerms,
-  cyberwareConflicts,
+  checkCyberwareInstall,
   cyberwareExclusiveGroup,
   type Ripperdoc,
 } from "./schema";
@@ -210,39 +210,38 @@ export function quoteCyberware(
       return { ok: false, reason: `${def.name}已经装着了` };
     if (owned?.condition === "damaged")
       return { ok: false, reason: "自带件已损坏，需先维修再安装" };
-    const installedDefs = state.installed.flatMap((c) => {
+    const installedProbes = state.installed.flatMap((c) => {
       const d = catalog.get(c.id);
-      return d ? [d] : [];
+      return d ? [c.armSide ? { ...d, armSide: c.armSide } : d] : [];
     });
     const targetGroup = cyberwareExclusiveGroup(def);
+    const candidate =
+      request.armSide && targetGroup === "armMount" ? { ...def, armSide: request.armSide } : def;
     if (request.replace) {
-      const old = installedDefs.find(
-        (d) =>
-          d.id === request.replace &&
-          (d.slot === def.slot ||
-            (targetGroup !== null && cyberwareExclusiveGroup(d) === targetGroup)),
-      );
+      const old = installedProbes.find((d) => {
+        if (d.id !== request.replace) return false;
+        const prevGroup = cyberwareExclusiveGroup(d);
+        return (
+          d.slot === def.slot ||
+          (targetGroup !== null && prevGroup === targetGroup) ||
+          (targetGroup === "capacityCore" &&
+            (prevGroup === "cyberdeck" || prevGroup === "spineDrive")) ||
+          ((targetGroup === "cyberdeck" || targetGroup === "spineDrive") &&
+            prevGroup === "capacityCore")
+        );
+      });
       if (!old) return { ok: false, reason: "指定换下的义体没有装在对应部位或互斥组，不能替换" };
       if (!disposition) return { ok: false, reason: `尚未授权${old.name}的保留、出售或报废去向` };
-      const after = cyberwareConflicts(
-        def,
-        installedDefs.filter((d) => d.id !== old.id),
-      );
+      const after = checkCyberwareInstall(candidate, installedProbes, { ignoreIds: [old.id] });
       if (!after.ok) {
-        return {
-          ok: false,
-          reason: `换下${old.name}后仍与「${after.label}」冲突（${after.blockers.map((b) => b.name).join("、")}）`,
-        };
+        return { ok: false, reason: `换下${old.name}后仍无法安装：${after.reason}` };
       }
       replaces = { id: old.id, name: old.name };
       tradeIn = disposition === "sell" ? tradeInValue(old) : 0;
     } else if (request.action === "install") {
-      const conflict = cyberwareConflicts(def, installedDefs);
-      if (!conflict.ok) {
-        return {
-          ok: false,
-          reason: `「${conflict.label}」最多装 ${conflict.limit} 件（已装 ${conflict.blockers.map((b) => b.name).join("、")}）；请先明确要换下哪件义体以及旧件去向`,
-        };
+      const check = checkCyberwareInstall(candidate, installedProbes);
+      if (!check.ok) {
+        return { ok: false, reason: check.reason };
       }
       if (disposition) {
         return { ok: false, reason: "折抵旧件需要指定实际换下的义体" };

@@ -820,7 +820,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: ["corpo-suit", "silk-shirt", "tailored-slacks", "dress-shoes", "holo-phone"],
-      cyberware: ["biometric-polygraph-optics", "mood-stabilizer", "self-ice"],
+      cyberware: [
+        "zetatech-net-optics",
+        "biometric-polygraph-optics",
+        "mood-stabilizer",
+        "self-ice",
+      ],
     },
   },
   {
@@ -897,7 +902,13 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: ["knuckles", "street-tee", "cargo-pants", "combat-boots", "holo-phone"],
-      cyberware: ["gorilla-arms", "bionic-joints", "syn-lungs"],
+      cyberware: [
+        "chrome-compressor",
+        "gorilla-arms",
+        "subdermal-armor",
+        "bionic-joints",
+        "syn-lungs",
+      ],
     },
   },
   {

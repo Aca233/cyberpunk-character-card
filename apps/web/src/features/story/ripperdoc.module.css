@@ -606,3 +606,130 @@
     transition: none;
   }
 }
+
+/* ==================== 诊所 v2：与创角/局内完全统一的 2077 暖暗细线页签 + 变体胶囊 ==================== */
+
+.catRows {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--cp-line-faint);
+}
+
+.catGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.catGroupLabel {
+  flex: none;
+  min-width: 64px;
+  color: var(--cp-text-faint);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.catTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+}
+
+.catTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash) ease-out,
+    border-color var(--dur-flash) ease-out,
+    background-color var(--dur-flash) ease-out;
+}
+
+.catTab:hover {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 6%);
+}
+
+.catTab[aria-pressed="true"] {
+  color: var(--cp-yellow);
+  border-bottom-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 8%);
+}
+
+.catCount {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--cp-cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.catTab[aria-pressed="true"] .catCount {
+  color: var(--cp-yellow);
+}
+
+.armChoiceBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
+  font-size: 11.5px;
+  color: var(--cp-text-dim);
+}
+
+.variantRow {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 5px 10px 8px;
+  border: 0;
+  border-top: 1px solid var(--cp-line-faint);
+}
+
+.variantPill {
+  padding: 2px 8px;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+  transition:
+    border-color var(--dur-flash) ease-out,
+    background-color var(--dur-flash) ease-out,
+    color var(--dur-flash) ease-out;
+}
+
+.variantPill:hover {
+  border-color: rgb(94 246 255 / 55%);
+  background: var(--cp-surface-hover);
+  color: var(--cp-text);
+}
+
+.variantPill[data-active] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 14%);
+  color: var(--cp-cyan);
+}

@@ -184,7 +184,7 @@ function storageGroups({ world, data }: Pick<ViewContext, "world" | "data">): St
       rarity,
       rarityLabel: def?.iconic ? "不朽" : rarity ? RARITY_LABELS[rarity] : null,
       iconic: Boolean(def?.iconic),
-      carryUnits: def ? itemCarryUnits(def, baseId ?? def.id) : 0,
+      carryUnits: def ? itemCarryUnits(def) : 0,
       ability: def?.ability ?? null,
       remaining: object?.remaining ?? def?.charges ?? null,
       charges: def?.charges ?? null,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SetCharacterSchema } from "../systems/character/schema";
+import { ArmSideSchema } from "../systems/cyberware/schema";
 import { SeedNpcSchema } from "../systems/npc/schema";
 import { START_CYBERWARE_MAX, StartCyberwareSchema, StartKitSchema } from "./board";
 import { WorkshopPackSchema } from "./workshop";
@@ -11,6 +12,8 @@ export type SaveCharacter = z.infer<typeof SaveCharacterSchema>;
 /** 建档时从角色主板带进来的：开局义体 id、开局行装定制和模块/自定义带出的人物卡 */
 export const BoardStartSchema = z.object({
   cyberware: z.array(z.string().min(1)).default([]),
+  /** 手臂义体的左右侧别记录（key 为义体 id，value 为 left/right/both） */
+  cyberwareSides: z.record(z.string(), ArmSideSchema).optional(),
   /** 自定义/本地义体的自包含快照：不依赖官方义体目录也能正常装入新档与投影显示 */
   customCyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
   /** 出身模块 id：按它给开局住所；旧存档没有 */

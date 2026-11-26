@@ -4,10 +4,13 @@ import { checkNarratedPurchase } from "../commerce";
 import type { WorldClockState } from "../world";
 import { quoteCyberware } from "./quote";
 import {
+  ARM_SIDE_LABELS,
+  type ArmSide,
   CyberwareCatalogSchema,
   type CyberwareCommand,
   type CyberwareDef,
   type CyberwareState,
+  checkCyberwareInstall,
   cyberwareConflicts,
   cyberwareExclusiveGroup,
   REPAIR_RATE,
@@ -86,19 +89,28 @@ export interface ShelfItem {
 export function ripperdocShelf(
   doc: Ripperdoc,
   catalog: ReadonlyMap<string, CyberwareDef>,
-  installed: readonly { readonly id: string; readonly slot: string }[],
+  installed: readonly {
+    readonly id: string;
+    readonly slot: string;
+    readonly armSide?: ArmSide | undefined;
+  }[],
 ): ShelfItem[] {
-  const installedDefs = installed.flatMap((c) => {
+  const installedProbes = installed.flatMap((c) => {
     const d = catalog.get(c.id);
-    return d ? [d] : [];
+    return d ? [c.armSide ? { ...d, armSide: c.armSide } : d] : [];
   });
   return doc.shelf.flatMap((id) => {
     const def = catalog.get(id);
     if (!def) return [];
-    const locked = null;
-    // 只有发生物理互斥冲突时才提出替换候选（同互斥组最早装的）；非互斥义体直接加装。
-    const conflict = cyberwareConflicts(def, installedDefs);
+    const alreadyInstalled = installed.some((c) => c.id === id);
+    const conflict = cyberwareConflicts(def, installedProbes);
     const replaces = conflict.ok ? null : (conflict.blockers[0] ?? null);
+    const check = alreadyInstalled
+      ? { ok: true as const }
+      : checkCyberwareInstall(def, installedProbes, {
+          ignoreIds: replaces ? [replaces.id] : [],
+        });
+    const locked = check.ok ? null : check.reason;
     const price = Math.round((def.price * doc.priceFactor) / 100) * 100;
     const tradeIn = replaces ? Math.min(price, tradeInValue(replaces)) : 0;
     return [
@@ -108,7 +120,7 @@ export function ripperdocShelf(
         tradeIn,
         net: price - tradeIn,
         locked,
-        installed: installed.some((c) => c.id === id),
+        installed: alreadyInstalled,
         replaces,
       },
     ];
@@ -122,18 +134,22 @@ export interface Purchase {
   readonly event?: string | undefined;
   readonly replace?: string | undefined;
   readonly part?: string | undefined;
+  readonly armSide?: ArmSide | undefined;
 }
 
-/** 装上一件义体；满位必须明确指定替换目标，结算层不得自行出售旧件。 */
+/** 装上一件义体；受物理互斥、分区空间上限与神经承载硬顶三道校验约束。 */
 export function install(
   draft: Draft<CyberwareState>,
   id: string,
   catalog: ReadonlyMap<string, CyberwareDef>,
   now: number,
   purchase?: Purchase,
+  explicitArmSide?: ArmSide,
 ): ApplyOutcome {
   const def = catalog.get(id);
   if (!def) return { ok: false, reason: `义体表里没有 ${id}` };
+  const targetGroup = cyberwareExclusiveGroup(def);
+  const armSide = targetGroup === "armMount" ? (explicitArmSide ?? purchase?.armSide) : undefined;
   if (draft.installed.some((c) => c.id === id)) {
     return { ok: false, reason: `${def.name}已经装着了` };
   }
@@ -144,33 +160,33 @@ export function install(
     };
   }
   const notes: string[] = [];
-  const targetGroup = cyberwareExclusiveGroup(def);
   const old = purchase?.replace
     ? draft.installed.findIndex((c) => {
         if (c.id !== purchase.replace) return false;
         const prevDef = catalog.get(c.id);
+        const prevGroup = prevDef ? cyberwareExclusiveGroup(prevDef) : null;
         return (
           c.slot === def.slot ||
-          (targetGroup !== null &&
-            prevDef !== undefined &&
-            cyberwareExclusiveGroup(prevDef) === targetGroup)
+          (targetGroup !== null && prevGroup === targetGroup) ||
+          (targetGroup === "capacityCore" &&
+            (prevGroup === "cyberdeck" || prevGroup === "spineDrive")) ||
+          ((targetGroup === "cyberdeck" || targetGroup === "spineDrive") &&
+            prevGroup === "capacityCore")
         );
       })
     : -1;
   if (purchase?.replace && old < 0)
     return { ok: false, reason: "指定换下的义体与目标义体不在同一部位或互斥组" };
-  const remainingDefs = draft.installed
+  const remainingProbes = draft.installed
     .filter((_, index) => index !== old)
     .flatMap((c) => {
       const d = catalog.get(c.id);
-      return d ? [d] : [];
+      return d ? [c.armSide ? { ...d, armSide: c.armSide } : d] : [];
     });
-  const conflict = cyberwareConflicts(def, remainingDefs);
-  if (!conflict.ok) {
-    return {
-      ok: false,
-      reason: `物理互斥：「${conflict.label}」最多装 ${conflict.limit} 件（当前已装 ${conflict.blockers.map((b) => b.name).join("、")}），尚未授权替换具体旧件`,
-    };
+  const candidate = armSide ? { ...def, armSide } : def;
+  const check = checkCyberwareInstall(candidate, remainingProbes);
+  if (!check.ok) {
+    return { ok: false, reason: check.reason };
   }
   const emit: Command[] = [];
   if (old >= 0) {
@@ -191,7 +207,12 @@ export function install(
       emit.push({ type: "health.limb", action: "clear", id: prev.id });
     }
   }
-  draft.installed.push({ id, slot: def.slot, installedAt: now });
+  draft.installed.push({
+    id,
+    slot: def.slot,
+    ...(armSide ? { armSide } : {}),
+    installedAt: now,
+  });
   const physical = purchase?.part ? draft.parts[purchase.part] : undefined;
   if (physical) {
     physical.holder = "installed";
@@ -208,7 +229,8 @@ export function install(
       at: now,
     };
   }
-  notes.push(`${SLOT_LABELS[def.slot]}装上${def.name}`);
+  const sideNote = armSide ? `（${ARM_SIDE_LABELS[armSide]}）` : "";
+  notes.push(`${SLOT_LABELS[def.slot]}装上${def.name}${sideNote}`);
   if (def.slot === "arms" || def.slot === "legs") {
     emit.push({ type: "health.limb", action: "fit", slot: def.slot, name: def.name });
   }

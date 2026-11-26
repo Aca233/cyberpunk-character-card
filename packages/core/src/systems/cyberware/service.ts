@@ -241,11 +241,19 @@ export function finishService(
     const physical = service.part ? draft.parts[service.part] : undefined;
     if (!physical || physical.holder !== `service:${id}`)
       return { ok: false, reason: "手术所需实物已不在当前订单中" };
-    const result = install(draft, physical.model, cyberwareCatalog(ctx.data), service.endsAt, {
-      price: 0,
-      eddies: 0,
-      part: physical.id,
-    });
+    const result = install(
+      draft,
+      physical.model,
+      cyberwareCatalog(ctx.data),
+      service.endsAt,
+      {
+        price: 0,
+        eddies: 0,
+        part: physical.id,
+        ...(service.terms.armSide ? { armSide: service.terms.armSide } : {}),
+      },
+      service.terms.armSide,
+    );
     if (!result.ok) return result;
     emit.push(...(result.emit ?? []));
     finishNotes.push(...(result.notes ?? []));

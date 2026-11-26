@@ -89,9 +89,31 @@ export function extractEdgeLedgerState(
     data.items === undefined
       ? new Map<string, ItemDef>()
       : itemCatalog(withWorldObjects(data, inventory.objects));
+  const installed = Array.isArray(
+    (world.slices.cyberware as { installed?: unknown } | undefined)?.installed,
+  )
+    ? ((world.slices.cyberware as { installed: readonly { readonly id: string }[] }).installed ??
+      [])
+    : [];
+  const chromeCarryMap = new Map<string, { readonly carryBonus?: number | undefined }>();
+  if (Array.isArray(data.cyberware)) {
+    for (const raw of data.cyberware) {
+      if (
+        typeof raw === "object" &&
+        raw !== null &&
+        typeof (raw as { id?: unknown }).id === "string" &&
+        typeof (raw as { carryBonus?: unknown }).carryBonus === "number"
+      ) {
+        chromeCarryMap.set((raw as { id: string }).id, {
+          carryBonus: (raw as { carryBonus: number }).carryBonus,
+        });
+      }
+    }
+  }
   const loadout = loadoutSummary(
     { backpack: inventory.backpack, objects: inventory.objects },
     catalog,
+    { installed, brokenChrome: health.brokenChrome, catalog: chromeCarryMap },
   );
   const wounds = woundSlotOf(health);
   const phase = phaseClockOf(world.time, clock.startedAt ?? clock.sceneStartedAt);

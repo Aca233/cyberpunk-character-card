@@ -437,7 +437,7 @@ export function applyWeaponHold(
       return fail(`随身没有足够的${def.name}，不能记录为正在持用`);
     }
     used.set(id, count);
-    hands += weaponHands(def, obj?.weaponState?.baseId);
+    hands += weaponHands(def);
     names.push(def.name);
   }
   if (hands > 2) return fail("这些武器无法同时正常持握，请按正文记录最终实际持用的武器");

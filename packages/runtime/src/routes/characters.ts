@@ -124,6 +124,9 @@ export function characterRoutes(
                 name: def.name,
                 slot: def.slot,
                 slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
+                category: cyberwareRules.cyberwareCategoryOf(def),
+                categoryLabel:
+                  cyberwareRules.CYBERWARE_CATEGORY_LABELS[cyberwareRules.cyberwareCategoryOf(def)],
                 rarity: def.rarity,
                 humanityCost: def.humanityCost,
                 ...(def.deckProfile !== undefined ? { deckProfile: def.deckProfile } : {}),
@@ -134,6 +137,15 @@ export function characterRoutes(
                   : {}),
                 ...(def.armor ? { armor: true } : {}),
                 ...(def.accelerator ? { accelerator: true } : {}),
+                ...(def.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+                ...(def.capacityBonus !== undefined ? { capacityBonus: def.capacityBonus } : {}),
+                ...(def.safeLineBonus !== undefined ? { safeLineBonus: def.safeLineBonus } : {}),
+                ...(def.chassisProfile ? { chassisProfile: def.chassisProfile } : {}),
+                ...(def.variantGroup ? { variantGroup: def.variantGroup } : {}),
+                ...(def.variantKey ? { variantKey: def.variantKey } : {}),
+                ...(def.smartLink ? { smartLink: true } : {}),
+                ...(def.carryBonus !== undefined ? { carryBonus: def.carryBonus } : {}),
+                ...(def.defenses ? { defenses: def.defenses } : {}),
                 ...(cyberwareRules.cyberwareExclusiveGroup(def)
                   ? { exclusiveGroup: cyberwareRules.cyberwareExclusiveGroup(def) }
                   : {}),

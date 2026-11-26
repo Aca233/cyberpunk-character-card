@@ -34,10 +34,8 @@ export const inventoryStatus: readonly SystemStatus[] = [
       const inv = ctx.views.inventory as InventoryView;
       const names = (ctx.views.names as NamesView | undefined)?.items ?? {};
       const cyber = (ctx.views.cyberware as CyberwareView | undefined) ?? [];
-      const isSmartLinkChrome = (id: string) => id === "smart-link" || id === "tyger-claws-tattoo";
-      const hasHandSmartLink = cyber.some((c) => isSmartLinkChrome(c.id) && !c.broken);
-      const brokenHandSmartLink =
-        !hasHandSmartLink && cyber.some((c) => isSmartLinkChrome(c.id) && c.broken);
+      const hasHandSmartLink = cyber.some((c) => c.smartLink && !c.broken);
+      const brokenHandSmartLink = !hasHandSmartLink && cyber.some((c) => c.smartLink && c.broken);
 
       const lines: string[] = [];
       const formatWeapon = (w: InventoryView["carriedWeapons"][number]) => {

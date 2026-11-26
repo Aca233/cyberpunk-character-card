@@ -22,9 +22,10 @@ import type { chronicleView, endedView } from "./systems/chronicle";
 import type { bulletinsView } from "./systems/city";
 import type { combatView } from "./systems/combat";
 import {
+  type ArmSide,
   type CyberwareDef,
   CyberwareStateSchema,
-  cyberwareConflicts,
+  checkCyberwareInstall,
   type cyberwarePartsView,
   type cyberwareView,
   type Ripperdoc,
@@ -295,18 +296,22 @@ function mergeKits(loadouts: readonly Loadout[]): Kit {
   };
 }
 
-/** 结合玩家自选义体结算行装自带义体：避免同部位满槽冲突 */
+/** 结合玩家自选义体结算行装自带义体：避免同部位互斥、空间超限或承载越顶 */
 function resolveStartKit(
   kit: Kit,
   boardCyberware: readonly string[],
+  cyberwareSides: Readonly<Record<string, ArmSide>> | undefined,
   cyberwareCatalog: readonly CyberwareDef[] | undefined,
 ): Kit {
   if (!cyberwareCatalog || cyberwareCatalog.length === 0) return kit;
   const byId = new Map(cyberwareCatalog.map((c) => [c.id, c]));
-  const placed = boardCyberware.flatMap((id) => {
-    const def = byId.get(id);
-    return def ? [def] : [];
-  });
+  const placed: (CyberwareDef & { readonly armSide?: ArmSide | undefined })[] =
+    boardCyberware.flatMap((id) => {
+      const def = byId.get(id);
+      if (!def) return [];
+      const side = cyberwareSides?.[id];
+      return [side ? { ...def, armSide: side } : def];
+    });
   const cyberware: string[] = [];
   for (const id of kit.cyberware ?? []) {
     const def = byId.get(id);
@@ -315,7 +320,7 @@ function resolveStartKit(
       continue;
     }
     if (placed.some((p) => p.id === def.id)) continue;
-    if (!cyberwareConflicts(def, placed).ok) continue;
+    if (!checkCyberwareInstall(def, placed).ok) continue;
     placed.push(def);
     cyberware.push(id);
   }
@@ -453,7 +458,9 @@ export function newGameWorld(
     (id) =>
       !(adjustedKit?.cyberware ?? []).includes(id) && (!validCyberware || validCyberware.has(id)),
   );
-  const kit = adjustedKit && resolveStartKit(adjustedKit, boardCyberware, effectiveCyberware);
+  const boardSides = meta.board?.cyberwareSides;
+  const kit =
+    adjustedKit && resolveStartKit(adjustedKit, boardCyberware, boardSides, effectiveCyberware);
   const boardPeople = (meta.board?.people ?? []).filter(
     (p) => !cast.some((c) => c.id === p.id || c.name === p.name),
   );
@@ -479,7 +486,11 @@ export function newGameWorld(
       source: "opening" as const,
     })),
     ...(opening && kit ? openingCommands(opening, meta.startTime, kit) : []),
-    ...boardCyberware.map((id) => ({ type: "cyberware.install", id })),
+    ...boardCyberware.map((id) => ({
+      type: "cyberware.install",
+      id,
+      ...(boardSides?.[id] ? { armSide: boardSides[id] } : {}),
+    })),
     ...homeSeed(content, meta.board?.origin),
     ...factionSeed(content, meta.board?.origin),
     // 开局地点“在地图上选择”（用户定的，2026-10-30）：沿用 world 的解析登记原作地点，不写 time，不推进时间

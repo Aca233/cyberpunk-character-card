@@ -18,23 +18,27 @@ const library = (id: string) => {
   return found;
 };
 
-const chrome = (id: string): StartCyberware => {
+const chrome = (id: string, armSide?: cyberwareRules.ArmSide): StartCyberware => {
   const def = cyberware.find((c) => c.id === id);
   if (!def) throw new Error(`义体表里没有 ${id}`);
   if (def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity)) {
     throw new Error(`开局预设义体不能使用 ${id}`);
   }
   const group = cyberwareRules.cyberwareExclusiveGroup(def);
+  const category = cyberwareRules.cyberwareCategoryOf(def);
   return {
     id: def.id,
     name: def.name,
     humanityCost: def.humanityCost,
     slot: def.slot,
+    rarity: def.rarity,
+    category,
     ...(def.ability ? { ability: def.ability } : {}),
     ...(def.armor ? { armor: true } : {}),
     ...(def.accelerator ? { accelerator: true } : {}),
     ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
     ...(group ? { exclusiveGroup: group } : {}),
+    ...(armSide && group === "armMount" ? { armSide } : {}),
   };
 };
 
@@ -78,6 +82,7 @@ const loBoard: Board = BoardSchema.parse({
     },
   ],
   cyberware: [
+    chrome("tech-utility-arm", "left"),
     chrome("ballistic-coprocessor"),
     chrome("tool-hand-fingers"),
     chrome("chemo-olfactory-filter"),
@@ -121,6 +126,7 @@ const qingyiBoard: Board = BoardSchema.parse({
   ],
   flaws: [library("silenced-witness"), library("insomnia-static")],
   cyberware: [
+    chrome("kiroshi-mk2"),
     chrome("visual-cortex-support"),
     chrome("audio-suite"),
     chrome("chroma-iris-overlay"),
@@ -157,12 +163,13 @@ const linlingBoard: Board = BoardSchema.parse({
   flaws: [library("corpo-blacklist"), library("memory-gaps")],
   cyberware: [
     chrome("arasaka-deck"),
+    chrome("zetatech-net-optics"),
     chrome("ex-disk"),
     chrome("self-ice"),
     chrome("audio-suite"),
     chrome("thermo-comfort-weave"),
     chrome("hidden-personal-link"),
-    chrome("monowire"),
+    chrome("monowire", "both"),
   ],
   kit: {
     cashTier: "standard",
@@ -191,9 +198,10 @@ const alexeiBoard: Board = BoardSchema.parse({
   flaws: [library("old-wound"), library("no-one-left-behind")],
   cyberware: [
     chrome("zetatech-sandevistan"),
-    chrome("gorilla-arms"),
+    chrome("gorilla-arms", "both"),
     chrome("titanium-bones"),
     chrome("linear-frame-sigma"),
+    chrome("auto-suppressant-injector"),
     chrome("neural-sync-bridge"),
     chrome("chemo-olfactory-filter"),
     chrome("blood-pump"),
@@ -224,8 +232,9 @@ const carmenBoard: Board = BoardSchema.parse({
   ],
   flaws: [library("enemy")],
   cyberware: [
+    chrome("kiroshi-stalker"),
     chrome("kerenzikov"),
-    chrome("mantis-blades"),
+    chrome("mantis-blades", "both"),
     chrome("reinforced-tendons"),
     chrome("lynx-paws"),
     chrome("light-tattoo-circuit"),
@@ -258,6 +267,7 @@ const mingyuanBoard: Board = BoardSchema.parse({
   ],
   flaws: [library("turf-ban")],
   cyberware: [
+    chrome("kiroshi-oracle"),
     chrome("braindance-recorder"),
     chrome("visual-cortex-support"),
     chrome("audio-suite"),
@@ -286,7 +296,7 @@ export const sampleCharacters = CharacterCardSchema.array().parse([
     alias: "扳手",
     pronoun: "他",
     origin: "街头小子",
-    look: "二十出头，身形精瘦挺拔、肩背紧实，留着利落的贴皮黑色平头。肤色偏深带拉丁裔轮廓，眉骨微凸、眼神警觉，双瞳装有基础岐路司光学义眼，暗光下偶有极淡的淡蓝反光。指节粗大，手背与小臂留有多处焊枪烫伤和扳手崩裂的旧疤，颈侧可见两处磨损略显发灰的标准个人链路插口。",
+    look: "二十出头，身形精瘦挺拔、肩背紧实，留着利落的贴皮黑色平头。肤色偏深带拉丁裔轮廓，眉骨微凸、眼神警觉，双瞳装有基础岐路司光学义眼，暗光下偶有极淡的淡蓝反光。左前臂换装了一支耐造的二手技师工程义臂，右臂保留原生血肉，手背与指节留有多处焊枪烫伤和扳手崩裂的旧疤，颈侧可见两处磨损略显发灰的标准个人链路插口。",
     past: "在沃森区斑驳破败的筒子楼里挣扎长大，母亲死于帮派争夺地盘的流弹火并。十五岁起跟着地下车行老板老韩学修车、跑隔离墙暗货路线，却被老韩拿电子签名顶了帮派黑账。为替家里还急债又背上漩涡帮头目铁钳的三千欧高利贷，眼看清算死线逼近，只能靠手艺和那辆自己拼出来的加利纳在夜之城杀出一条活路。",
     personality:
       "沉默寡言，恩怨分明，对任何帮派势力抱有本能的戒备；习惯用嘴硬掩饰内心的波澜，唯独见不得街头恶徒对弱者和孩子肆意践踏。",

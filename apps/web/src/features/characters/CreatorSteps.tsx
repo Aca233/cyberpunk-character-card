@@ -21,7 +21,7 @@ import { Asset } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { itemArtOf } from "../story/art";
-import { CYBER_LABELS, CyberItemCell, type CyberSlot } from "../story/CyberDoll";
+import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
 import { vehicleArtOf } from "../story/vehicle-art";
 import { CustomCyberwareForm } from "./CustomCyberwareForm";
 import { CustomModuleForm } from "./CustomModuleForm";
@@ -74,8 +74,10 @@ type FlawPickerProps = Omit<PickerProps, "card" | "change"> &
 type LoadoutPickerProps = Omit<PickerProps, "change"> & Partial<Pick<PickerProps, "change">>;
 type CyberwareShelfProps = Omit<PickerProps, "change"> &
   Partial<Pick<PickerProps, "change">> & {
-    readonly slot: CyberSlot;
-    readonly onSlotChange?: (slot: CyberSlot) => void;
+    readonly category: cyberwareRules.CyberwareCategoryId;
+    readonly armTarget?: cyberwareRules.ArmSide;
+    readonly onArmTargetChange?: (side: cyberwareRules.ArmSide) => void;
+    readonly onCategoryChange?: (category: cyberwareRules.CyberwareCategoryId) => void;
   };
 
 const isWorkshopEntry = (packId?: string): boolean => Boolean(packId && packId !== "local");
@@ -1163,7 +1165,7 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
   );
 }
 
-// ———— 义体货架：无固定部位上限，按物理互斥组自由装配 + 支持本地自创义体 ————
+// ———— 义体货架：按统一直觉分区自由装配 + 支持本地自创义体 ————
 
 const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"] as const;
 
@@ -1172,91 +1174,79 @@ type CyberEditorState =
   | { readonly mode: "create" }
   | { readonly mode: "edit"; readonly item: StartCyberware };
 
-function chromeLoadTag(cost: number): { readonly label: string; readonly tone?: "ok" | "warn" } {
-  if (cost <= 0) return { label: "零负荷", tone: "ok" };
-  if (cost >= 10) return { label: "高压核心", tone: "warn" };
-  if (cost >= 5) return { label: "中负荷" };
-  return { label: "轻负荷" };
-}
-
-type KindFilter = "all" | "zero" | "combat" | "custom";
+type KindFilter = "all" | "custom";
 
 export function CyberwareShelf({
   card,
   board,
   data,
   commit,
-  slot,
-  onSlotChange,
+  category,
+  armTarget = "both",
+  onArmTargetChange,
+  onCategoryChange,
 }: CyberwareShelfProps) {
   type Offer = BoardData["cyberware"][number];
   const [shelfState, setShelfState] = useState<{
-    readonly slot: CyberSlot;
+    readonly category: cyberwareRules.CyberwareCategoryId;
     readonly rarity: string | null;
     readonly kind: KindFilter;
     readonly query: string;
-  }>({ slot, rarity: null, kind: "all", query: "" });
+  }>({ category, rarity: null, kind: "all", query: "" });
   const [editor, setEditor] = useState<{
-    readonly slot: CyberSlot;
+    readonly category: cyberwareRules.CyberwareCategoryId;
     readonly state: CyberEditorState;
   }>({
-    slot,
+    category,
     state: null,
   });
-  const [customScope, setCustomScope] = useState<"slot" | "all">("all");
+  const [customScope, setCustomScope] = useState<"section" | "all">("all");
   const [editorNotice, setEditorNotice] = useState<string | null>(null);
-  const rarity = shelfState.slot === slot ? shelfState.rarity : null;
-  const kind = shelfState.slot === slot ? shelfState.kind : "all";
-  const query = shelfState.slot === slot ? shelfState.query : "";
-  const activeEditor = editor.slot === slot ? editor.state : null;
-  const setRarity = (next: string | null) => setShelfState({ slot, rarity: next, kind, query });
+  const [variantChoice, setVariantChoice] = useState<
+    Readonly<Record<string, cyberwareRules.ElementVariantKey>>
+  >({});
+
+  const rarity = shelfState.category === category ? shelfState.rarity : null;
+  const kind = shelfState.category === category ? shelfState.kind : "all";
+  const query = shelfState.category === category ? shelfState.query : "";
+  const activeEditor = editor.category === category ? editor.state : null;
+  const setRarity = (next: string | null) => setShelfState({ category, rarity: next, kind, query });
   const setKind = (next: KindFilter) => {
     setEditorNotice(null);
-    setShelfState({ slot, rarity, kind: next, query });
+    setShelfState({ category, rarity, kind: next, query });
   };
-  const setQuery = (next: string) => setShelfState({ slot, rarity, kind, query: next });
+  const setQuery = (next: string) => setShelfState({ category, rarity, kind, query: next });
   const setActiveEditor = (next: CyberEditorState) => {
     setEditorNotice(null);
-    setEditor({ slot, state: next });
+    setEditor({ category, state: next });
   };
-
-  const options = data.cyberware.filter((o) => o.slot === slot);
-  const allCustomOptions = data.cyberware.filter((o) => o.custom || isWorkshopEntry(o.packId));
-  const slotCustomCount = options.filter((o) => o.custom || isWorkshopEntry(o.packId)).length;
-  const zeroCount = options.filter((o) => o.humanityCost <= 0).length;
-  const sourceOptions =
-    kind === "custom"
-      ? customScope === "all"
-        ? allCustomOptions
-        : options.filter((o) => o.custom || isWorkshopEntry(o.packId))
-      : options;
-  const rarities = RARITY_ORDER.filter((r) => sourceOptions.some((o) => o.rarity === r));
-  const normalizedQuery = query.trim().toLowerCase();
-  const shown = sourceOptions.filter((o) => {
-    if (kind === "zero" && o.humanityCost > 0) return false;
-    if (kind === "combat" && o.humanityCost <= 0) return false;
-    if (rarity && o.rarity !== rarity) return false;
-    if (!normalizedQuery) return true;
-    const hay = [o.name, o.slotLabel, o.ability, o.deckProfile ?? "", ...(o.deckTraits ?? [])]
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(normalizedQuery);
-  });
 
   const offerMap = new Map(data.cyberware.map((o) => [o.id, o]));
   const slotOf = (c: Board["cyberware"][number]) =>
     (offerMap.get(c.id)?.slot ?? c.slot) as CyberSlot | undefined;
-  const probeOfOffer = (o: Offer): cyberwareRules.ExclusiveProbe => ({
+
+  const probeOfOffer = (o: Offer, side?: cyberwareRules.ArmSide): cyberwareRules.LoadProbe => ({
     id: o.id,
     name: o.name,
     slot: o.slot as CyberSlot,
+    humanityCost: o.humanityCost,
+    ...(o.category ? { category: o.category } : {}),
+    ...(side ? { armSide: side } : {}),
+    ...(o.defaultArmSide ? { defaultArmSide: o.defaultArmSide } : {}),
+    ...(o.capacityBonus !== undefined ? { capacityBonus: o.capacityBonus } : {}),
+    ...(o.safeLineBonus !== undefined ? { safeLineBonus: o.safeLineBonus } : {}),
+    ...(o.chassisProfile ? { chassisProfile: o.chassisProfile } : {}),
     ...(o.armor ? { armor: true } : {}),
     ...(o.accelerator ? { accelerator: true } : {}),
     ...(o.deckProfile ? { deckProfile: o.deckProfile } : {}),
     ...(o.deckTraits ? { deckTraits: o.deckTraits } : {}),
     ...(o.exclusiveGroup ? { exclusiveGroup: o.exclusiveGroup } : {}),
   });
-  const chosenProbes: cyberwareRules.ExclusiveProbe[] = board.cyberware.flatMap((c) => {
+
+  const categoryOfOffer = (o: Offer): cyberwareRules.CyberwareCategoryId =>
+    o.category ?? cyberwareRules.cyberwareCategoryOf(probeOfOffer(o));
+
+  const chosenProbes: cyberwareRules.LoadProbe[] = board.cyberware.flatMap((c) => {
     const def = offerMap.get(c.id);
     const resolvedSlot = slotOf(c);
     if (!resolvedSlot) return [];
@@ -1265,6 +1255,21 @@ export function CyberwareShelf({
         id: c.id,
         name: c.name,
         slot: resolvedSlot,
+        humanityCost: def?.humanityCost ?? c.humanityCost,
+        ...(def?.category || c.category ? { category: def?.category ?? c.category } : {}),
+        ...(c.armSide ? { armSide: c.armSide } : {}),
+        ...(def?.defaultArmSide || c.defaultArmSide
+          ? { defaultArmSide: def?.defaultArmSide ?? c.defaultArmSide }
+          : {}),
+        ...(def?.capacityBonus !== undefined || c.capacityBonus !== undefined
+          ? { capacityBonus: def?.capacityBonus ?? c.capacityBonus }
+          : {}),
+        ...(def?.safeLineBonus !== undefined || c.safeLineBonus !== undefined
+          ? { safeLineBonus: def?.safeLineBonus ?? c.safeLineBonus }
+          : {}),
+        ...(def?.chassisProfile || c.chassisProfile
+          ? { chassisProfile: def?.chassisProfile ?? c.chassisProfile }
+          : {}),
         ...(def?.armor || c.armor ? { armor: true } : {}),
         ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
         ...(def?.deckProfile || c.deckProfile
@@ -1278,48 +1283,161 @@ export function CyberwareShelf({
     ];
   });
 
-  const mountedInSlot = board.cyberware.filter((c) => slotOf(c) === slot);
-  const inherentInSlot = inherentCyberware(card, data).filter((i) => i.slot === slot);
+  const inherentActiveProbes: cyberwareRules.LoadProbe[] = inherentCyberware(card, data)
+    .filter((i) => !i.replaced)
+    .flatMap((i) => {
+      const def = offerMap.get(i.id);
+      return [
+        {
+          id: i.id,
+          name: i.name,
+          slot: i.slot as CyberSlot,
+          humanityCost: i.humanityCost,
+          ...(def?.category ? { category: def.category } : {}),
+          ...(def?.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+          ...(def?.capacityBonus !== undefined ? { capacityBonus: def.capacityBonus } : {}),
+          ...(def?.safeLineBonus !== undefined ? { safeLineBonus: def.safeLineBonus } : {}),
+          ...(def?.chassisProfile ? { chassisProfile: def.chassisProfile } : {}),
+          ...(def?.armor ? { armor: true } : {}),
+          ...(def?.accelerator ? { accelerator: true } : {}),
+          ...(def?.deckProfile ? { deckProfile: def.deckProfile } : {}),
+          ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+          ...(def?.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),
+        },
+      ];
+    });
+
+  const allActiveProbes: cyberwareRules.LoadProbe[] = [...chosenProbes, ...inherentActiveProbes];
+  const armSidesMap = cyberwareRules.resolveArmSides(chosenProbes);
+
+  const options = data.cyberware.filter((o) => categoryOfOffer(o) === category);
+  const allCustomOptions = data.cyberware.filter((o) => o.custom || isWorkshopEntry(o.packId));
+  const sectionCustomCount = options.filter((o) => o.custom || isWorkshopEntry(o.packId)).length;
+  const sourceOptions =
+    kind === "custom"
+      ? customScope === "all"
+        ? allCustomOptions
+        : options.filter((o) => o.custom || isWorkshopEntry(o.packId))
+      : options;
+  const rarities = RARITY_ORDER.filter((r) => sourceOptions.some((o) => o.rarity === r));
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOffers = sourceOptions.filter((o) => {
+    if (rarity && o.rarity !== rarity) return false;
+    if (!normalizedQuery) return true;
+    const hay = [o.name, o.slotLabel, o.ability, o.deckProfile ?? "", ...(o.deckTraits ?? [])]
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(normalizedQuery);
+  });
+
+  /** 将同款手臂武器元素变体按 variantGroup + variantKey 收拢为 1 张主卡（常规/热能/电磁/化学卡内切换） */
+  const displayEntries = cyberwareRules.foldCyberwareVariants(filteredOffers, {
+    disabled: normalizedQuery.length > 0,
+    chosen: variantChoice,
+    isPreferred: (offer) => board.cyberware.some((c) => c.id === offer.id),
+  });
+
+  const mountedInCategory = board.cyberware.filter((c) => {
+    const def = offerMap.get(c.id);
+    const resolvedSlot = slotOf(c);
+    if (!resolvedSlot) return false;
+    return (
+      cyberwareRules.cyberwareCategoryOf({
+        id: c.id,
+        name: c.name,
+        slot: resolvedSlot,
+        ...(def?.category || c.category ? { category: def?.category ?? c.category } : {}),
+        ...(def?.armor || c.armor ? { armor: true } : {}),
+        ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
+        ...(def?.deckProfile || c.deckProfile
+          ? { deckProfile: def?.deckProfile ?? c.deckProfile }
+          : {}),
+        ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+        ...(def?.exclusiveGroup || c.exclusiveGroup
+          ? { exclusiveGroup: def?.exclusiveGroup ?? c.exclusiveGroup }
+          : {}),
+      }) === category
+    );
+  });
+
+  const inherentInCategory = inherentCyberware(card, data).filter((i) => {
+    const def = offerMap.get(i.id);
+    return (
+      cyberwareRules.cyberwareCategoryOf({
+        id: i.id,
+        name: i.name,
+        slot: i.slot as CyberSlot,
+        ...(def?.category ? { category: def.category } : {}),
+        ...(def?.armor ? { armor: true } : {}),
+        ...(def?.accelerator ? { accelerator: true } : {}),
+        ...(def?.deckProfile ? { deckProfile: def.deckProfile } : {}),
+        ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+        ...(def?.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),
+      }) === category
+    );
+  });
+
   const isOn = (o: Offer) => board.cyberware.some((p) => p.id === o.id);
 
-  const conflictFor = (o: Offer) =>
-    isOn(o)
-      ? { ok: true as const }
-      : cyberwareRules.cyberwareConflicts(probeOfOffer(o), chosenProbes);
-
-  const nextCyberware = (o: Offer): Board["cyberware"] => {
-    if (isOn(o)) return board.cyberware.filter((c) => c.id !== o.id);
-    const conflict = conflictFor(o);
-    if (!conflict.ok && conflict.limit > 1) return board.cyberware;
-    const base =
-      !conflict.ok && conflict.limit === 1
-        ? board.cyberware.filter((c) => !conflict.blockers.some((b) => b.id === c.id))
-        : board.cyberware;
-    const group = cyberwareRules.cyberwareExclusiveGroup(probeOfOffer(o));
-    const parsedRarity = economyRules.RaritySchema.safeParse(o.rarity);
-    return [
-      ...base,
-      {
-        id: o.id,
-        name: o.name,
-        humanityCost: o.humanityCost,
-        slot: o.slot as CyberSlot,
-        ...(parsedRarity.success ? { rarity: parsedRarity.data } : {}),
-        ...(o.custom ? { custom: true } : {}),
-        ...(o.packId ? { packId: o.packId } : {}),
-        ...(o.custom && o.ability ? { ability: o.ability } : {}),
-        ...(o.custom && o.armor ? { armor: true } : {}),
-        ...(o.custom && o.accelerator ? { accelerator: true } : {}),
-        ...(o.custom && o.deckProfile ? { deckProfile: o.deckProfile } : {}),
-        ...(group ? { exclusiveGroup: group } : {}),
-      },
-    ];
+  /** 评估把 o（以可选 side）装入后的三道校验（自动换下互斥旧件后校验承载与空间） */
+  const evaluateInstall = (o: Offer, side?: cyberwareRules.ArmSide) => {
+    const probe = probeOfOffer(o, side);
+    const conflict = cyberwareRules.cyberwareConflicts(probe, chosenProbes);
+    const replaceIds = !conflict.ok ? conflict.blockers.map((b) => b.id) : [];
+    const check = cyberwareRules.checkCyberwareInstall(probe, allActiveProbes, {
+      ignoreIds: [o.id, ...replaceIds],
+    });
+    return {
+      conflict,
+      replaceIds,
+      replaceNames: !conflict.ok ? conflict.blockers.map((b) => b.name) : [],
+      check,
+    };
   };
 
-  const toggle = (o: Offer) => {
-    const conflict = conflictFor(o);
-    if (!conflict.ok && conflict.limit > 1) return;
-    commit({ ...board, cyberware: nextCyberware(o) });
+  const toStartEntry = (o: Offer, side?: cyberwareRules.ArmSide): StartCyberware => {
+    const probe = probeOfOffer(o, side);
+    const group = cyberwareRules.cyberwareExclusiveGroup(probe);
+    const cat = categoryOfOffer(o);
+    const parsedRarity = economyRules.RaritySchema.safeParse(o.rarity);
+    return {
+      id: o.id,
+      name: o.name,
+      humanityCost: cat === "lifestyle" ? 0 : o.humanityCost,
+      slot: o.slot as CyberSlot,
+      category: cat,
+      ...(parsedRarity.success ? { rarity: parsedRarity.data } : {}),
+      ...(o.custom ? { custom: true } : {}),
+      ...(o.packId ? { packId: o.packId } : {}),
+      ...(o.custom && o.ability ? { ability: o.ability } : {}),
+      ...(o.custom && o.armor ? { armor: true } : {}),
+      ...(o.custom && o.accelerator ? { accelerator: true } : {}),
+      ...(o.custom && o.deckProfile ? { deckProfile: o.deckProfile } : {}),
+      ...(group ? { exclusiveGroup: group } : {}),
+      ...(side && group === "armMount" ? { armSide: side } : {}),
+    };
+  };
+
+  const equipOffer = (o: Offer, side?: cyberwareRules.ArmSide) => {
+    const effectiveSide = categoryOfOffer(o) === "arms" ? (side ?? armTarget) : undefined;
+    const currentlyOn = board.cyberware.find((c) => c.id === o.id);
+    if (currentlyOn && (!effectiveSide || armSidesMap.get(o.id) === effectiveSide)) {
+      commit({ ...board, cyberware: board.cyberware.filter((c) => c.id !== o.id) });
+      setEditorNotice(null);
+      return;
+    }
+    const { replaceIds, check } = evaluateInstall(o, effectiveSide);
+    if (!check.ok) {
+      setEditorNotice(check.reason);
+      return;
+    }
+    const replaceSet = new Set([o.id, ...replaceIds]);
+    const nextList = [
+      ...board.cyberware.filter((c) => !replaceSet.has(c.id)),
+      toStartEntry(o, effectiveSide),
+    ];
+    commit({ ...board, cyberware: nextList });
+    setEditorNotice(null);
   };
 
   const toEditableStartChrome = (o: Offer): StartCyberware => {
@@ -1328,6 +1446,7 @@ export function CyberwareShelf({
       id: o.id,
       name: o.name,
       slot: o.slot as CyberSlot,
+      category: categoryOfOffer(o),
       rarity: parsedRarity.success ? parsedRarity.data : "rare",
       humanityCost: o.humanityCost,
       ability: o.ability,
@@ -1341,13 +1460,26 @@ export function CyberwareShelf({
   };
 
   const handleCustomSave = (saved: StartCyberware, options: { readonly equip: boolean }) => {
-    const savedSlot = (saved.slot ?? slot) as CyberSlot;
+    const savedSlot = (saved.slot ?? "frontalCortex") as CyberSlot;
+    const savedCat =
+      saved.category ??
+      cyberwareRules.cyberwareCategoryOf({
+        id: saved.id,
+        name: saved.name,
+        slot: savedSlot,
+        ...(saved.armor ? { armor: true } : {}),
+        ...(saved.accelerator ? { accelerator: true } : {}),
+        ...(saved.deckProfile ? { deckProfile: saved.deckProfile } : {}),
+        ...(saved.exclusiveGroup ? { exclusiveGroup: saved.exclusiveGroup } : {}),
+      });
     const exists = board.cyberware.some((c) => c.id === saved.id);
-    const otherProbes = chosenProbes.filter((p) => p.id !== saved.id);
-    const savedProbe: cyberwareRules.ExclusiveProbe = {
+    const savedProbe: cyberwareRules.LoadProbe = {
       id: saved.id,
       name: saved.name,
       slot: savedSlot,
+      category: savedCat,
+      humanityCost: saved.humanityCost,
+      ...(saved.armSide ? { armSide: saved.armSide } : {}),
       ...(saved.armor ? { armor: true } : {}),
       ...(saved.accelerator ? { accelerator: true } : {}),
       ...(saved.deckProfile ? { deckProfile: saved.deckProfile } : {}),
@@ -1355,52 +1487,60 @@ export function CyberwareShelf({
     };
 
     let notice: string | null = null;
-    if (activeEditor?.mode === "edit") {
-      if (exists) {
-        const conflict = cyberwareRules.cyberwareConflicts(savedProbe, otherProbes);
-        if (conflict.ok) {
-          commit({
-            ...board,
-            cyberware: board.cyberware.map((c) => (c.id === saved.id ? saved : c)),
-          });
-        } else if (conflict.limit === 1) {
-          commit({
-            ...board,
-            cyberware: board.cyberware
-              .filter((c) => !conflict.blockers.some((b) => b.id === c.id))
-              .map((c) => (c.id === saved.id ? saved : c)),
-          });
-          notice = `已更新「${saved.name}」，并替换了互斥件 ${conflict.blockers.map((b) => b.name).join("、")}`;
-        } else {
-          commit({
-            ...board,
-            cyberware: board.cyberware.filter((c) => c.id !== saved.id),
-          });
-          notice = `已更新「${saved.name}」，因「${conflict.label}」互斥上限已满，暂从当前角色卸下`;
-        }
-      }
-    } else if (options.equip) {
-      const conflict = cyberwareRules.cyberwareConflicts(savedProbe, otherProbes);
-      if (conflict.ok) {
-        commit({ ...board, cyberware: [...board.cyberware, saved] });
-      } else if (conflict.limit === 1) {
+    if (activeEditor?.mode === "edit" && exists) {
+      const conflict = cyberwareRules.cyberwareConflicts(
+        savedProbe,
+        chosenProbes.filter((p) => p.id !== saved.id),
+      );
+      const replaceIds = !conflict.ok ? conflict.blockers.map((b) => b.id) : [];
+      const check = cyberwareRules.checkCyberwareInstall(savedProbe, allActiveProbes, {
+        ignoreIds: [saved.id, ...replaceIds],
+      });
+      if (check.ok) {
+        const drop = new Set(replaceIds);
         commit({
           ...board,
-          cyberware: [
-            ...board.cyberware.filter((c) => !conflict.blockers.some((b) => b.id === c.id)),
-            saved,
-          ],
+          cyberware: board.cyberware
+            .filter((c) => !drop.has(c.id))
+            .map((c) => (c.id === saved.id ? saved : c)),
         });
-        notice = `已保存并装上「${saved.name}」，同时替换了互斥件 ${conflict.blockers.map((b) => b.name).join("、")}`;
+        if (replaceIds.length > 0 && !conflict.ok) {
+          notice = `已更新「${saved.name}」，并换下 ${conflict.blockers.map((b) => b.name).join("、")}`;
+        }
       } else {
-        notice = `已存入自创库，但「${conflict.label}」最多装 ${conflict.limit} 件（已满），请先卸下一件后再装配`;
+        commit({
+          ...board,
+          cyberware: board.cyberware.filter((c) => c.id !== saved.id),
+        });
+        notice = `已更新「${saved.name}」，但因「${check.reason}」暂已卸下`;
+      }
+    } else if (options.equip) {
+      const conflict = cyberwareRules.cyberwareConflicts(
+        savedProbe,
+        chosenProbes.filter((p) => p.id !== saved.id),
+      );
+      const replaceIds = !conflict.ok ? conflict.blockers.map((b) => b.id) : [];
+      const check = cyberwareRules.checkCyberwareInstall(savedProbe, allActiveProbes, {
+        ignoreIds: [saved.id, ...replaceIds],
+      });
+      if (check.ok) {
+        const drop = new Set([saved.id, ...replaceIds]);
+        commit({
+          ...board,
+          cyberware: [...board.cyberware.filter((c) => !drop.has(c.id)), saved],
+        });
+        if (replaceIds.length > 0 && !conflict.ok) {
+          notice = `已保存并装上「${saved.name}」，同时换下 ${conflict.blockers.map((b) => b.name).join("、")}`;
+        }
+      } else {
+        notice = `已存入自创库，但未能直接装上：${check.reason}`;
       }
     } else {
-      notice = `已将「${saved.name}」存入自创义体库（${CYBER_LABELS[savedSlot]}）`;
+      notice = `已将「${saved.name}」存入自创义体库（${cyberwareRules.CYBERWARE_CATEGORY_LABELS[savedCat]}）`;
     }
 
-    if (savedSlot !== slot) {
-      onSlotChange?.(savedSlot);
+    if (savedCat !== category) {
+      onCategoryChange?.(savedCat);
     }
     setActiveEditor(null);
     setEditorNotice(notice);
@@ -1411,8 +1551,8 @@ export function CyberwareShelf({
       <div className={`${styles.pickerBody} ${styles.cyberShelfBody}`}>
         <div className={styles.cyberEditorScroll}>
           <CustomCyberwareForm
-            key={activeEditor.mode === "edit" ? activeEditor.item.id : `new-${slot}`}
-            slot={slot}
+            key={activeEditor.mode === "edit" ? activeEditor.item.id : `new-${category}`}
+            category={category}
             {...(activeEditor.mode === "edit" ? { initial: activeEditor.item } : {})}
             onCancel={() => setActiveEditor(null)}
             onAccept={handleCustomSave}
@@ -1431,8 +1571,8 @@ export function CyberwareShelf({
             value={query}
             placeholder={
               kind === "custom" && customScope === "all"
-                ? "搜索全部自创/工坊义体名称、部位或能力…"
-                : "搜索该部位义体名称或能力…"
+                ? "搜索全部自创/工坊义体…"
+                : `搜索「${cyberwareRules.CYBERWARE_CATEGORY_LABELS[category]}」…`
             }
             aria-label="搜索义体"
             onChange={(e) => setQuery(e.target.value)}
@@ -1442,48 +1582,81 @@ export function CyberwareShelf({
           ＋ 自创义体
         </Button>
       </div>
+
+      {category === "arms" && (
+        <fieldset className={styles.armSideBar} aria-label="默认手臂装配侧别">
+          <span className={styles.equippedLabel}>装配侧别</span>
+          {(["left", "right", "both"] as const).map((side) => (
+            <Button
+              key={side}
+              small
+              pressed={armTarget === side}
+              onClick={() => onArmTargetChange?.(side)}
+            >
+              {cyberwareRules.ARM_SIDE_LABELS[side]}
+              {side === "both" ? " (100%)" : " (60%)"}
+            </Button>
+          ))}
+        </fieldset>
+      )}
+
       {editorNotice && <p className={styles.editorNotice}>{editorNotice}</p>}
-      {mountedInSlot.length > 0 && (
-        <section className={styles.equippedStrip} aria-label="该部位已装自选义体">
-          <span className={styles.equippedLabel}>已装 ({mountedInSlot.length})</span>
+
+      {mountedInCategory.length > 0 && (
+        <section className={styles.equippedStrip} aria-label="该分区已装自选义体">
+          <span className={styles.equippedLabel}>已装 ({mountedInCategory.length})</span>
           <div className={styles.equippedChips}>
-            {mountedInSlot.map((item) => (
-              <span key={item.id} className={styles.equippedChip}>
-                <span>{item.name}</span>
-                <button
-                  type="button"
-                  className={styles.equippedChipDel}
-                  title={`卸下 ${item.name}`}
-                  aria-label={`卸下 ${item.name}`}
-                  onClick={() =>
-                    commit({
-                      ...board,
-                      cyberware: board.cyberware.filter((c) => c.id !== item.id),
-                    })
-                  }
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+            {mountedInCategory.map((item) => {
+              const side =
+                category === "arms"
+                  ? (armSidesMap.get(item.id) ??
+                    cyberwareRules.defaultArmSideFor(offerMap.get(item.id) ?? item))
+                  : null;
+              return (
+                <span key={item.id} className={styles.equippedChip}>
+                  <span>
+                    {item.name}
+                    {side ? ` · ${cyberwareRules.ARM_SIDE_LABELS[side]}` : ""}
+                  </span>
+                  {side && side !== "both" && (
+                    <button
+                      type="button"
+                      className={styles.equippedSyncBtn}
+                      title="改为左右双臂同款（按 100% 承载计）"
+                      onClick={() => {
+                        const def = offerMap.get(item.id);
+                        if (def) equipOffer(def, "both");
+                      }}
+                    >
+                      双臂同款
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.equippedChipDel}
+                    title={`卸下 ${item.name}`}
+                    aria-label={`卸下 ${item.name}`}
+                    onClick={() =>
+                      commit({
+                        ...board,
+                        cyberware: board.cyberware.filter((c) => c.id !== item.id),
+                      })
+                    }
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
           </div>
         </section>
       )}
+
       <div className={styles.shelfHead}>
-        <fieldset className={styles.shelfFilter} aria-label="按义体类别快筛">
+        <fieldset className={styles.shelfFilter} aria-label="按来源筛选">
           <Button small pressed={kind === "all"} onClick={() => setKind("all")}>
             全部 ({options.length})
           </Button>
-          {zeroCount > 0 && (
-            <Button small pressed={kind === "zero"} onClick={() => setKind("zero")}>
-              零负荷生活/感官 ({zeroCount})
-            </Button>
-          )}
-          {zeroCount > 0 && zeroCount < options.length && (
-            <Button small pressed={kind === "combat"} onClick={() => setKind("combat")}>
-              实战与重装 ({options.length - zeroCount})
-            </Button>
-          )}
           <Button small pressed={kind === "custom"} onClick={() => setKind("custom")}>
             自创/工坊 ({allCustomOptions.length})
           </Button>
@@ -1491,10 +1664,14 @@ export function CyberwareShelf({
         {kind === "custom" && allCustomOptions.length > 0 && (
           <fieldset className={styles.shelfFilter} aria-label="自创义体查看范围">
             <Button small pressed={customScope === "all"} onClick={() => setCustomScope("all")}>
-              全部部位 ({allCustomOptions.length})
+              全部分区 ({allCustomOptions.length})
             </Button>
-            <Button small pressed={customScope === "slot"} onClick={() => setCustomScope("slot")}>
-              仅当前部位 ({slotCustomCount})
+            <Button
+              small
+              pressed={customScope === "section"}
+              onClick={() => setCustomScope("section")}
+            >
+              仅当前分区 ({sectionCustomCount})
             </Button>
           </fieldset>
         )}
@@ -1511,196 +1688,158 @@ export function CyberwareShelf({
           </fieldset>
         )}
       </div>
-      {slot === "arms" && (
-        <p className={styles.note}>
-          {mountedInSlot.length >= 2
-            ? `当前「左右臂混搭」（2/2）：${mountedInSlot.map((c) => c.name).join(" + ")}。如需更换，先点上方胶囊卸下一件。`
-            : mountedInSlot.length === 1 && mountedInSlot[0]
-              ? cyberwareRules.isSingleArmCyberware(mountedInSlot[0].id)
-                ? `当前「单臂装配」：${mountedInSlot[0].name}（另一只手臂空闲，可再点 1 件臂部义体混搭）。`
-                : `当前「双臂成对」生效：${mountedInSlot[0].name}（双手同步可用；若再选第 2 件臂部义体，自动改为左右臂混搭）。`
-              : "双臂挂载规则：单装成对件（猩猩手臂 / 螳螂刀 / 单分子线等）默认双臂成对生效；选 2 件不同臂部义体即可左右臂混搭。"}
-        </p>
-      )}
-      {slot === "eyes" && (
-        <p className={styles.note}>
-          {(() => {
-            const mainOptic = [
-              ...mountedInSlot.map((c) => ({ id: c.id, name: c.name })),
-              ...inherentInSlot.filter((i) => !i.replaced).map((i) => ({ id: i.id, name: i.name })),
-            ].find(
-              (item) =>
-                cyberwareRules.cyberwareExclusiveGroup({
-                  id: item.id,
-                  name: item.name,
-                  slot: "eyes",
-                }) === "optics",
-            );
-            return mainOptic
-              ? `当前主义眼「${mainOptic.name}」为双眼成对生效（选另一款主义眼将直接替换）；音频、嗅觉、虹膜、声带、行为面甲与颌骨暗格可自由叠加。`
-              : "主义眼（岐路司 / 荒坂 / 军用科技等）为双眼成对生效，限 1 套；音频、嗅觉、变色虹膜、声带、面甲与暗格类可自由叠加。";
-          })()}
-        </p>
-      )}
-      {slot === "legs" && (
-        <p className={styles.note}>
-          {(() => {
-            const mainLeg = [
-              ...mountedInSlot.map((c) => ({ id: c.id, name: c.name })),
-              ...inherentInSlot.filter((i) => !i.replaced).map((i) => ({ id: i.id, name: i.name })),
-            ].find(
-              (item) =>
-                cyberwareRules.cyberwareExclusiveGroup({
-                  id: item.id,
-                  name: item.name,
-                  slot: "legs",
-                }) === "legDrive",
-            );
-            return mainLeg
-              ? `当前腿部主驱「${mainLeg.name}」为双腿成对生效（选另一套腿部主驱将直接替换）；猫爪静音、磁吸脚底、小腿暗格等附挂件可自由叠加。`
-              : "腿部肌腱/骨架主驱为双腿成对生效，限 1 套；猫爪静音、磁吸脚底、小腿暗格等附挂件可自由叠加。";
-          })()}
-        </p>
-      )}
-      {inherentInSlot.length > 0 && (
+
+      {inherentInCategory.length > 0 && (
         <p className={styles.note}>
           自带标配：
-          {inherentInSlot
+          {inherentInCategory
             .map(
-              (i) =>
-                `${i.name}（${i.source}${i.replaced ? "，已被互斥自选件顶替" : "，免费预装"}）`,
+              (i) => `${i.name}（${i.source}${i.replaced ? "，已被同类主件顶替" : "，免费预装"}）`,
             )
             .join("、")}
         </p>
       )}
-      {shown.length === 0 ? (
+
+      {displayEntries.length === 0 ? (
         <div className={styles.emptyShelfNote}>
           <p className={styles.note}>
             {kind === "custom"
-              ? customScope === "slot" && allCustomOptions.length > 0
-                ? `「${CYBER_LABELS[slot]}」部位暂无自创义体，可切换查看「全部部位」或直接新建。`
-                : "还没有自创或工坊义体，点上方「＋ 自创义体」即可手写创建并设置稀有度。"
+              ? customScope === "section" && allCustomOptions.length > 0
+                ? `「${cyberwareRules.CYBERWARE_CATEGORY_LABELS[category]}」暂无自创义体，可切换查看「全部分区」或新建。`
+                : "还没有自创或工坊义体，点上方「＋ 自创义体」即可创建。"
               : "当前筛选下没有可用义体。"}
           </p>
         </div>
       ) : (
         <div className={styles.cyberListScroll}>
           <ul className={styles.cyberGrid}>
-            {shown.map((o) => {
+            {displayEntries.map(({ active: o, groupId, variants }) => {
+              const isArmOffer = categoryOfOffer(o) === "arms";
               const on = isOn(o);
-              const conflict = conflictFor(o);
-              const isBlocked = !conflict.ok && conflict.limit > 1;
-              const isSwap = !conflict.ok && conflict.limit === 1;
-              const group = cyberwareRules.cyberwareExclusiveGroup(probeOfOffer(o));
-              const groupLabel = group ? cyberwareRules.EXCLUSIVE_GROUP_LABELS[group] : null;
-              const armEquippedCount =
-                o.slot === "arms"
-                  ? board.cyberware.filter((c) => slotOf(c) === "arms").length +
-                    inherentCyberware(card, data).filter((i) => i.slot === "arms" && !i.replaced)
-                      .length
-                  : 0;
-              const mountHint = cyberwareRules.cyberwareMountHint(
-                probeOfOffer(o),
-                on ? armEquippedCount : 0,
+              const currentSide = on ? armSidesMap.get(o.id) : undefined;
+              const targetSide = isArmOffer ? armTarget : undefined;
+              const { replaceNames, check } = evaluateInstall(o, targetSide);
+              const blocked = !on && !check.ok;
+              const blockedLabel = !check.ok
+                ? check.kind === "capacityFull"
+                  ? `承载不足（差 ${check.shortfall ?? 1}）`
+                  : check.kind === "zoneFull"
+                    ? "本区空间已满"
+                    : "冲突"
+                : null;
+              const entersOverload = !on && check.ok && check.entersOverload;
+              const effectiveLoad = cyberwareRules.effectiveCyberwareLoad(
+                probeOfOffer(o, currentSide ?? targetSide),
+                currentSide ?? targetSide,
               );
-              const loadTag = chromeLoadTag(o.humanityCost);
               const editable = Boolean(o.custom && (!o.packId || o.packId === "local"));
-              const hwSpecs = [
-                mountHint
-                  ? mountHint.badge
-                  : groupLabel
-                    ? `${groupLabel}${group && cyberwareRules.EXCLUSIVE_GROUP_LIMIT[group] > 1 ? ` · 限${cyberwareRules.EXCLUSIVE_GROUP_LIMIT[group]}` : ""}`
-                    : "可自由叠加",
-                o.deckProfile ? `接入仓：${o.deckProfile}` : "",
-                ...(o.deckTraits ?? []),
-                o.armor ? "护甲增强" : "",
-                o.accelerator ? "神经反应加速" : "",
-              ].filter(Boolean);
-              const tooltip = isBlocked
-                ? `${conflict.label}最多装 ${conflict.limit} 件（已装 ${conflict.blockers.map((b) => b.name).join("、")}），先点卸下一件`
-                : isSwap
-                  ? `点击替换同互斥组：${conflict.blockers.map((b) => b.name).join("、")}`
-                  : on
-                    ? "已装 · 点击卸下"
-                    : "点击装上";
-              const tileContent = (
-                <>
-                  <div className={styles.cyberTileTop}>
-                    <CyberItemCell
-                      id={o.id}
-                      name={o.name}
-                      slot={o.slot as CyberSlot}
-                      on={on}
-                      rarity={o.rarity}
-                      size={42}
-                    />
-                    <div className={styles.cyberTileBody}>
-                      <div className={styles.cyberTileHead}>
-                        <span className={styles.cyberTileName} data-rarity={o.rarity}>
-                          {o.name}
-                        </span>
-                        <span className={styles.moduleBadges}>
-                          {isWorkshopEntry(o.packId) && (
-                            <span className={styles.moduleBadge} data-tone="workshop">
-                              工坊
-                            </span>
-                          )}
-                          {editable && <span className={styles.moduleBadge}>自创</span>}
-                          <span
-                            className={styles.moduleBadge}
-                            data-tone={on ? "active" : undefined}
-                          >
-                            {on
-                              ? "已装"
-                              : isSwap
-                                ? "替换互斥件"
-                                : isBlocked
-                                  ? "互斥已满"
-                                  : "点击装上"}
-                          </span>
-                        </span>
-                      </div>
-                      <div className={styles.cyberTileMeta}>
-                        {kind === "custom" && customScope === "all" && (
-                          <span className={styles.metaChip}>{o.slotLabel}</span>
-                        )}
-                        {o.rarity && (
-                          <span className={styles.shelfRarity} data-rarity={o.rarity}>
-                            {RARITY_LABELS[o.rarity]}
-                          </span>
-                        )}
-                        <span className={styles.shelfTileCost} data-tone={loadTag.tone}>
-                          {loadTag.label}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <p className={styles.cyberTileAbility}>{o.ability}</p>
-                  {hwSpecs.length > 0 && (
-                    <p className={styles.cyberTileSpecs}>{hwSpecs.join(" · ")}</p>
-                  )}
-                </>
-              );
+
+              const actionLabel = on
+                ? currentSide
+                  ? `已装 · ${cyberwareRules.ARM_SIDE_LABELS[currentSide]}`
+                  : "已装"
+                : blockedLabel
+                  ? blockedLabel
+                  : replaceNames.length > 0
+                    ? `替换 ${replaceNames[0]}`
+                    : entersOverload
+                      ? "装上（进红线）"
+                      : isArmOffer
+                        ? `装${cyberwareRules.ARM_SIDE_LABELS[armTarget]}`
+                        : "装上";
+
               return (
-                <li key={o.id}>
-                  {editable ? (
-                    <div
-                      className={styles.cyberCard}
-                      data-rarity={o.rarity}
-                      data-on={on || undefined}
-                      data-disabled={isBlocked || undefined}
+                <li key={groupId ?? o.id}>
+                  <div
+                    className={styles.cyberCard}
+                    data-rarity={o.rarity}
+                    data-on={on || undefined}
+                    data-disabled={blocked || undefined}
+                  >
+                    <CellFrame />
+                    <button
+                      type="button"
+                      className={styles.cyberCardMain}
+                      aria-pressed={on}
+                      disabled={blocked}
+                      title={!check.ok ? check.reason : undefined}
+                      onClick={() => equipOffer(o, targetSide)}
                     >
-                      <CellFrame />
-                      <button
-                        type="button"
-                        className={styles.cyberCardMain}
-                        aria-pressed={on}
-                        disabled={isBlocked}
-                        title={tooltip}
-                        onClick={() => toggle(o)}
-                      >
-                        {tileContent}
-                      </button>
+                      <div className={styles.cyberTileTop}>
+                        <CyberItemCell
+                          id={o.id}
+                          name={o.name}
+                          slot={o.slot as CyberSlot}
+                          on={on}
+                          rarity={o.rarity}
+                          size={42}
+                        />
+                        <div className={styles.cyberTileBody}>
+                          <div className={styles.cyberTileHead}>
+                            <span className={styles.cyberTileName} data-rarity={o.rarity}>
+                              {o.name}
+                            </span>
+                            <span className={styles.moduleBadges}>
+                              {isWorkshopEntry(o.packId) && (
+                                <span className={styles.moduleBadge} data-tone="workshop">
+                                  工坊
+                                </span>
+                              )}
+                              {editable && <span className={styles.moduleBadge}>自创</span>}
+                              <span
+                                className={styles.moduleBadge}
+                                data-tone={on ? "active" : entersOverload ? "warn" : undefined}
+                              >
+                                {actionLabel}
+                              </span>
+                            </span>
+                          </div>
+                          <div className={styles.cyberTileMeta}>
+                            {kind === "custom" && customScope === "all" && (
+                              <span className={styles.metaChip}>
+                                {cyberwareRules.CYBERWARE_CATEGORY_LABELS[categoryOfOffer(o)]}
+                              </span>
+                            )}
+                            {o.rarity && (
+                              <span className={styles.shelfRarity} data-rarity={o.rarity}>
+                                {RARITY_LABELS[o.rarity]}
+                              </span>
+                            )}
+                            {effectiveLoad > 0 && (
+                              <span className={styles.shelfTileCost}>承载 {effectiveLoad}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <p className={styles.cyberTileAbility}>{o.ability}</p>
+                    </button>
+
+                    {groupId && variants && (
+                      <fieldset className={styles.variantBar} aria-label="元素变体切换">
+                        {variants.map((v) => {
+                          const vMounted = board.cyberware.some((c) => c.id === v.item.id);
+                          return (
+                            <button
+                              key={v.key}
+                              type="button"
+                              className={styles.variantPill}
+                              data-active={v.item.id === o.id || undefined}
+                              data-mounted={vMounted || undefined}
+                              onClick={() =>
+                                setVariantChoice((prev) => ({
+                                  ...prev,
+                                  [groupId]: v.key,
+                                }))
+                              }
+                            >
+                              {cyberwareRules.ELEMENT_VARIANT_LABELS[v.key]}
+                            </button>
+                          );
+                        })}
+                      </fieldset>
+                    )}
+
+                    {editable && (
                       <div className={styles.pickCardFoot}>
                         <button
                           type="button"
@@ -1730,21 +1869,8 @@ export function CyberwareShelf({
                           删除
                         </button>
                       </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.cyberTile}
-                      data-rarity={o.rarity}
-                      aria-pressed={on}
-                      disabled={isBlocked}
-                      title={tooltip}
-                      onClick={() => toggle(o)}
-                    >
-                      <CellFrame />
-                      {tileContent}
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </li>
               );
             })}

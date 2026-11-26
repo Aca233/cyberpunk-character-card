@@ -1471,8 +1471,8 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(390px, 0.96fr) minmax(350px, 1.04fr);
-  gap: 12px;
+  grid-template-columns: minmax(220px, 0.3fr) minmax(0, 0.7fr);
+  gap: 10px;
   align-items: stretch;
   animation: wbSubPaneIn 220ms var(--ease-snap) both;
 }
@@ -1486,33 +1486,24 @@
   min-height: 0;
 }
 
-.dollCard {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 15px 12px;
-  min-width: 0;
-  border: 1px solid rgb(255 97 88 / 22%);
-  border-left: 3px solid var(--cp-red);
-  background: rgb(16 11 20 / 82%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
-}
-
 .shelfPanel {
+  position: relative;
+  isolation: isolate;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 15px 12px;
+  padding: 12px 14px;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgb(255 97 88 / 22%);
-  border-left: 3px solid var(--cp-red);
-  background: rgb(16 11 20 / 82%);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  --box-fill: var(--cp-surface-strong);
+  --box-line: var(--cp-red-dim);
+}
+
+.shelfPanel > :not([data-frame]) {
+  position: relative;
+  z-index: 1;
 }
 
 .humanityConsole {
@@ -1557,6 +1548,64 @@
 
 .dollStage > * {
   width: 100%;
+}
+
+.dollExtraDock {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgb(255 97 88 / 18%);
+}
+
+.dollExtraBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: rgb(14 14 23 / 74%);
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+  transition:
+    border-color var(--dur-flash),
+    color var(--dur-flash),
+    background-color var(--dur-flash);
+}
+
+.dollExtraBtn:hover {
+  border-color: rgb(94 246 255 / 55%);
+  color: var(--cp-cyan);
+}
+
+.dollExtraBtn[data-active] {
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 13%);
+  color: var(--cp-yellow);
+}
+
+.dollExtraBtn[data-tone="warn"]:not([data-active]) {
+  border-color: rgb(252 238 10 / 35%);
+  color: var(--cp-yellow);
+}
+
+.dollExtraCount {
+  color: var(--cp-cyan);
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dollExtraBtn[data-active] .dollExtraCount {
+  color: var(--cp-yellow);
 }
 
 .stageBadge {
@@ -2485,4 +2534,106 @@
   .dossierPortraitEmpty:focus-visible .portraitCornerBR {
     transform: none;
   }
+}
+
+/* ==================== 创角义体 v2：统一暖暗紫黑 + 2077 细线切角页签 ==================== */
+
+.v2ChromeStack {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.catNav {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cp-line-subtle);
+}
+
+.catGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.catGroupLabel {
+  flex: none;
+  min-width: 64px;
+  color: var(--cp-text-faint);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.catRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+}
+
+.catTab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px 7px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash) ease-out,
+    border-color var(--dur-flash) ease-out,
+    background-color var(--dur-flash) ease-out;
+}
+
+.catTab[data-filled] {
+  color: var(--cp-text);
+}
+
+.catTab:hover {
+  color: var(--cp-cyan);
+  background: rgb(94 246 255 / 6%);
+}
+
+.catTab[aria-pressed="true"] {
+  color: var(--cp-yellow);
+  border-bottom-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 8%);
+}
+
+.catDot {
+  width: 5px;
+  height: 5px;
+  background: var(--cp-cyan);
+  box-shadow: 0 0 6px rgb(94 246 255 / 70%);
+  transform: rotate(45deg);
+}
+
+.catTab[aria-pressed="true"] .catDot {
+  background: var(--cp-yellow);
+  box-shadow: 0 0 6px rgb(252 238 10 / 70%);
+}
+
+.catCount {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cp-cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.catTab[aria-pressed="true"] .catCount {
+  color: var(--cp-yellow);
 }

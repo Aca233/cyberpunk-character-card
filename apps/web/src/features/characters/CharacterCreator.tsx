@@ -3,6 +3,7 @@ import {
   type Board,
   CASH_TIER_INFO,
   type CharacterCard,
+  cyberwareRules,
   FLAW_MAX,
   type ImagePromptRequest,
   PAST_MAX,
@@ -19,11 +20,16 @@ import type { AssetId } from "../../assets";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
-import { FrameBox } from "../../ui/FrameBox";
+import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage, ImageLightbox } from "../images/GeneratedImage";
 import { ImageGenModal } from "../images/ImageGenModal";
-import { CYBER_LABELS, CyberDoll, type CyberSlot, type DollPart } from "../story/CyberDoll";
+import {
+  type BodyFocusKey,
+  CyberBodySilhouette,
+  type CyberSlot,
+  NeuralLoadBar,
+} from "../story/CyberDoll";
 import { PeoplePicker } from "./CreatorLife";
 import {
   CyberwareShelf,
@@ -154,7 +160,10 @@ export function CharacterCreator({
   const [traitsTab, setTraitsTab] = useState<TraitsTab>("past");
   const [cyberTab, setCyberTab] = useState<CyberTab>("topology");
   const [connectionsTab, setConnectionsTab] = useState<ConnectionsTab>("people");
-  const [activeSlot, setActiveSlot] = useState<CyberSlot>("os");
+  const [activeCategory, setActiveCategory] =
+    useState<cyberwareRules.CyberwareCategoryId>("cyberdeck");
+  const [armTarget, setArmTarget] = useState<cyberwareRules.ArmSide>("both");
+  const [hoveredBodyFocus, setHoveredBodyFocus] = useState<BodyFocusKey>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tarotExpanded, setTarotExpanded] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
@@ -296,33 +305,98 @@ export function CharacterCreator({
     }
   };
 
-  // ———— 义体与纯事实神经负荷 ————
+  // ———— 义体与三段式神经承载 ————
   const inherent = inherentCyberware(card, data);
   const activeInherentCount = inherent.filter((i) => !i.replaced).length;
   const loadInfo = boardLoadProfile(card, data);
-  const slotOf = new Map(data?.cyberware.map((o) => [o.id, o.slot]) ?? []);
-  const rarityOf = new Map(data?.cyberware.map((o) => [o.id, o.rarity]) ?? []);
 
-  const dollParts = new Map<CyberSlot, DollPart[]>();
-  for (const c of board.cyberware) {
-    const slot = (slotOf.get(c.id) ?? c.slot) as CyberSlot | undefined;
-    if (!slot) continue;
-    const list = dollParts.get(slot) ?? [];
-    list.push({ id: c.id, name: c.name, rarity: c.rarity ?? rarityOf.get(c.id) });
-    dollParts.set(slot, list);
-  }
-  for (const i of inherent) {
-    if (i.replaced) continue;
-    const slot = i.slot as CyberSlot;
-    const list = dollParts.get(slot) ?? [];
-    list.push({ id: i.id, name: `${i.name}（标配）`, rarity: rarityOf.get(i.id) });
-    dollParts.set(slot, list);
-  }
+  const mountedByCore = useMemo(() => {
+    const defOfChrome = (id: string) => data?.cyberware.find((o) => o.id === id);
+    const allProbes: (cyberwareRules.ExclusiveProbe & { readonly isInherent?: boolean })[] = [];
+    for (const c of board.cyberware) {
+      const def = defOfChrome(c.id);
+      const slot = (def?.slot ?? c.slot) as CyberSlot | undefined;
+      if (!slot) continue;
+      allProbes.push({
+        id: c.id,
+        name: c.name,
+        slot,
+        ...(def?.category || c.category ? { category: def?.category ?? c.category } : {}),
+        ...(c.armSide ? { armSide: c.armSide } : {}),
+        ...(def?.defaultArmSide || c.defaultArmSide
+          ? { defaultArmSide: def?.defaultArmSide ?? c.defaultArmSide }
+          : {}),
+        ...(def?.armor || c.armor ? { armor: true } : {}),
+        ...(def?.accelerator || c.accelerator ? { accelerator: true } : {}),
+        ...(def?.deckProfile || c.deckProfile
+          ? { deckProfile: def?.deckProfile ?? c.deckProfile }
+          : {}),
+        ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+        ...(def?.exclusiveGroup || c.exclusiveGroup
+          ? { exclusiveGroup: def?.exclusiveGroup ?? c.exclusiveGroup }
+          : {}),
+      });
+    }
+    for (const i of inherent) {
+      if (i.replaced) continue;
+      const def = defOfChrome(i.id);
+      allProbes.push({
+        id: i.id,
+        name: `${i.name}（标配）`,
+        slot: i.slot as CyberSlot,
+        isInherent: true,
+        ...(def?.category ? { category: def.category } : {}),
+        ...(def?.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+        ...(def?.armor ? { armor: true } : {}),
+        ...(def?.accelerator ? { accelerator: true } : {}),
+        ...(def?.deckProfile ? { deckProfile: def.deckProfile } : {}),
+        ...(def?.deckTraits ? { deckTraits: def.deckTraits } : {}),
+        ...(def?.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),
+      });
+    }
+    const armSides = cyberwareRules.resolveArmSides(allProbes);
+    const out: Record<cyberwareRules.CoreSlotId, string | null> = {
+      chassis: null,
+      cyberdeck: null,
+      spineDrive: null,
+      optics: null,
+      leftArm: null,
+      rightArm: null,
+      legDrive: null,
+      skinArmor: null,
+    };
+    for (const p of allProbes) {
+      const cat = cyberwareRules.cyberwareCategoryOf(p);
+      if (cat === "chassis") out.chassis = p.name;
+      else if (cat === "cyberdeck") out.cyberdeck = p.name;
+      else if (cat === "spineDrive") out.spineDrive = p.name;
+      else if (cat === "optics") out.optics = p.name;
+      else if (cat === "legDrive") out.legDrive = p.name;
+      else if (cat === "skinArmor") out.skinArmor = p.name;
+      else if (cat === "arms") {
+        const side = armSides.get(p.id) ?? cyberwareRules.defaultArmSideFor(p);
+        if (side === "both") {
+          out.leftArm = p.name;
+          out.rightArm = `${p.name}（同款）`;
+        } else if (side === "left") {
+          out.leftArm = p.name;
+        } else {
+          out.rightArm = p.name;
+        }
+      }
+    }
+    return out;
+  }, [board.cyberware, inherent, data]);
 
-  // 点击人体拓扑槽位仅聚焦切换对应部位，绝不在二次点击时误触卸载义体
-  const handleDollCell = (slot: CyberSlot) => {
-    setActiveSlot(slot);
-  };
+  const silhouetteFocus: BodyFocusKey =
+    hoveredBodyFocus ??
+    (activeCategory === "arms"
+      ? armTarget === "left"
+        ? "leftArm"
+        : armTarget === "right"
+          ? "rightArm"
+          : "arms"
+      : activeCategory);
 
   // ———— 摘要数据 ————
   const anchor = startAnchor(startLoc);
@@ -851,62 +925,108 @@ export function CharacterCreator({
                 </div>
 
                 {cyberTab === "topology" && (
-                  <div className={wb.chromeWorkspace}>
-                    <div className={wb.chromeLeft}>
-                      <div className={wb.dollCard}>
-                        <div className={wb.dollHeader}>
-                          <span className={wb.cardTitle}>义体拓扑 · BODY TOPOLOGY</span>
-                          <span className={wb.note}>点击任一部位切换右侧装配清单</span>
-                        </div>
-                        <div className={wb.dollStage}>
-                          <CyberDoll
-                            parts={dollParts}
-                            selected={activeSlot}
-                            showAddSlots
-                            onCell={handleDollCell}
-                          />
-                        </div>
+                  <div className={wb.v2ChromeStack}>
+                    <NeuralLoadBar
+                      load={loadInfo}
+                      extra={
+                        board.cyberware.length > 0 ? (
+                          <ActionButton onClick={() => commit({ ...board, cyberware: [] })}>
+                            卸除全部自选
+                          </ActionButton>
+                        ) : undefined
+                      }
+                    />
+                    <div className={wb.chromeWorkspace}>
+                      <div className={wb.chromeLeft}>
+                        <CyberBodySilhouette
+                          focus={silhouetteFocus}
+                          chassisLabel={loadInfo.chassisLabel}
+                          hasFbc={loadInfo.fullBorg !== null}
+                          installedCount={mountedChromeNames.length}
+                          tone={loadInfo.tone}
+                        />
                       </div>
 
-                      <section className={wb.humanityConsole} aria-label="全身义体神经负荷">
-                        <div className={wb.toleranceRow}>
-                          <span className={wb.toleranceLabel}>神经负荷</span>
-                          <span className={wb.stageBadge} data-tone={loadInfo.tone}>
-                            {loadInfo.label} · {mountedChromeNames.length} 件义体
-                            {loadInfo.dualCore ? " · 双中枢并行" : ""}
-                            {loadInfo.fullBorg ? " · 全身义体化" : ""}
-                          </span>
-                        </div>
-                        <p className={wb.humanityNote} data-tone={loadInfo.tone}>
-                          {loadInfo.summary}{" "}
-                          （生活/时尚/感官/亲密件不占负荷；想演排异敏感或抗压异类体质，可在「履历与特质
-                          / 缺陷」中设定。）
-                        </p>
-                      </section>
-                    </div>
+                      <div className={wb.chromeRight}>
+                        <div className={wb.shelfPanel}>
+                          <CellFrame />
+                          <nav className={wb.catNav} aria-label="义体分类切换">
+                            <div className={wb.catGroup}>
+                              <span className={wb.catGroupLabel}>核心主位</span>
+                              <div className={wb.catRow}>
+                                {(
+                                  [
+                                    "chassis",
+                                    "cyberdeck",
+                                    "spineDrive",
+                                    "optics",
+                                    "arms",
+                                    "legDrive",
+                                    "skinArmor",
+                                  ] as const
+                                ).map((cat) => {
+                                  const mounted =
+                                    cat === "arms"
+                                      ? Boolean(mountedByCore.leftArm || mountedByCore.rightArm)
+                                      : Boolean(mountedByCore[cat]);
+                                  return (
+                                    <button
+                                      key={cat}
+                                      type="button"
+                                      className={wb.catTab}
+                                      data-filled={mounted || undefined}
+                                      aria-pressed={activeCategory === cat}
+                                      onMouseEnter={() => setHoveredBodyFocus(cat)}
+                                      onMouseLeave={() => setHoveredBodyFocus(null)}
+                                      onClick={() => setActiveCategory(cat)}
+                                    >
+                                      <span>{cyberwareRules.CYBERWARE_CATEGORY_LABELS[cat]}</span>
+                                      {mounted && <i className={wb.catDot} aria-hidden />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className={wb.catGroup}>
+                              <span className={wb.catGroupLabel}>扩展与外观</span>
+                              <div className={wb.catRow}>
+                                {cyberwareRules.EXTENSION_ZONE_IDS.map((zone) => {
+                                  const count = loadInfo.zoneCounts[zone];
+                                  const limit = loadInfo.zoneLimits[zone];
+                                  return (
+                                    <button
+                                      key={zone}
+                                      type="button"
+                                      className={wb.catTab}
+                                      data-filled={count > 0 || undefined}
+                                      aria-pressed={activeCategory === zone}
+                                      onMouseEnter={() => setHoveredBodyFocus(zone)}
+                                      onMouseLeave={() => setHoveredBodyFocus(null)}
+                                      onClick={() => setActiveCategory(zone)}
+                                    >
+                                      <span>{cyberwareRules.EXTENSION_ZONE_LABELS[zone]}</span>
+                                      <span className={wb.catCount}>
+                                        {limit === null ? count : `${count}/${limit}`}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </nav>
 
-                    <div className={wb.chromeRight}>
-                      <div className={wb.shelfPanel}>
-                        <div className={wb.shelfPanelHead}>
-                          <h3 className={wb.cardTitle}>
-                            当前部位：{CYBER_LABELS[activeSlot]}
-                            <small className={wb.note}> （不限格数 · 仅按物理互斥）</small>
-                          </h3>
-                          {board.cyberware.length > 0 && (
-                            <ActionButton onClick={() => commit({ ...board, cyberware: [] })}>
-                              一键卸除全部自选
-                            </ActionButton>
+                          {pickerProps ? (
+                            <CyberwareShelf
+                              {...pickerProps}
+                              category={activeCategory}
+                              armTarget={armTarget}
+                              onArmTargetChange={setArmTarget}
+                              onCategoryChange={setActiveCategory}
+                            />
+                          ) : (
+                            <p className={wb.note}>正在加载义体货架…</p>
                           )}
                         </div>
-                        {pickerProps ? (
-                          <CyberwareShelf
-                            {...pickerProps}
-                            slot={activeSlot}
-                            onSlotChange={setActiveSlot}
-                          />
-                        ) : (
-                          <p className={wb.note}>正在加载义体货架…</p>
-                        )}
                       </div>
                     </div>
                   </div>

@@ -19,6 +19,7 @@ export function looseCyberwareView(
     details[part.id] = {
       baseId: part.id,
       kind: "misc",
+      suppressant: false,
       clothingSlot: null,
       carryUnits: 0,
       subLabel: "义体实物",

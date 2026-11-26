@@ -77,7 +77,7 @@ function itemMeta(def: ItemDef, ws: WeaponInstanceState | undefined) {
     rarityLabel: def.iconic ? "不朽" : rar ? RARITY_LABELS[rar] : null,
     iconic: def.iconic ?? false,
     ability: def.ability ?? null,
-    bulky: isBulkyItem(def, baseId),
+    bulky: isBulkyItem(def),
     weaponState: projectWeaponState(ws),
   };
 }

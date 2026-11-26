@@ -71,7 +71,6 @@ const NO_DECK: DeckInfo = {
   traits: [],
   selfIce: false,
 };
-const SELF_ICE = "self-ice";
 
 /** 新装接入仓出厂预装的基础街头程序（避免有仓却完全放不了基础破解；高阶与终极程序仍需另行获取芯片） */
 export const STARTER_DECK_PROGRAMS: readonly string[] = [
@@ -95,7 +94,7 @@ function slotsForDeck(deck: CyberwareDef): number {
 }
 
 function deckFrom(defs: readonly CyberwareDef[]): DeckInfo {
-  const selfIce = defs.some((d) => d.id === SELF_ICE);
+  const selfIce = defs.some((d) => d.defenses?.includes("ice") === true);
   const deck = defs.find(
     (d) => d.slot === "os" && (d.deckTraits !== undefined || d.deckProfile !== undefined),
   );

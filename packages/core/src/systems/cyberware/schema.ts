@@ -19,35 +19,151 @@ export type CyberwareSlot = z.infer<typeof CyberwareSlotSchema>;
 
 export const SLOT_LABELS: Readonly<Record<CyberwareSlot, string>> = {
   frontalCortex: "额叶皮质",
-  eyes: "面部与感官",
+  eyes: "义眼与面甲",
   nervous: "神经系统",
   os: "操作系统",
   circulatory: "循环系统",
-  integumentary: "皮肤",
+  integumentary: "表皮防护",
   skeleton: "骨骼",
-  hands: "手部",
+  hands: "手掌",
   arms: "手臂",
   legs: "腿部",
 };
 
+/** 臂部安装侧别：左臂、右臂、双臂同款 */
+export const ARM_SIDES = ["left", "right", "both"] as const;
+export const ArmSideSchema = z.enum(ARM_SIDES);
+export type ArmSide = z.infer<typeof ArmSideSchema>;
+
+export const ARM_SIDE_LABELS: Readonly<Record<ArmSide, string>> = {
+  left: "左臂",
+  right: "右臂",
+  both: "双臂同款",
+};
+
+/** 上层 8 个核心物理主位（一坑一物） */
+export const CORE_SLOT_IDS = [
+  "chassis",
+  "cyberdeck",
+  "spineDrive",
+  "optics",
+  "leftArm",
+  "rightArm",
+  "legDrive",
+  "skinArmor",
+] as const;
+export const CoreSlotIdSchema = z.enum(CORE_SLOT_IDS);
+export type CoreSlotId = z.infer<typeof CoreSlotIdSchema>;
+
+export const CORE_SLOT_LABELS: Readonly<Record<CoreSlotId, string>> = {
+  chassis: "躯体底盘",
+  cyberdeck: "网络接入仓",
+  spineDrive: "脊柱主驱",
+  optics: "主义眼",
+  leftArm: "左臂",
+  rightArm: "右臂",
+  legDrive: "腿部驱动",
+  skinArmor: "表皮主甲",
+};
+
+/** 下层 5 个扩展与外观分区（4 个有限人体空间功能区 + 1 个零承载外观生活区） */
+export const EXTENSION_ZONE_IDS = [
+  "neural",
+  "sensory",
+  "torso",
+  "extremities",
+  "lifestyle",
+] as const;
+export const ExtensionZoneIdSchema = z.enum(EXTENSION_ZONE_IDS);
+export type ExtensionZoneId = z.infer<typeof ExtensionZoneIdSchema>;
+
+export const EXTENSION_ZONE_LABELS: Readonly<Record<ExtensionZoneId, string>> = {
+  neural: "脑机与神经",
+  sensory: "面容与感官",
+  torso: "躯干与防护",
+  extremities: "手掌与足部",
+  lifestyle: "外观与生活",
+};
+
+/** 货架/自建统一归类：7 类核心硬件 + 5 类扩展与外观 */
+export const CYBERWARE_CATEGORY_IDS = [
+  "chassis",
+  "cyberdeck",
+  "spineDrive",
+  "optics",
+  "arms",
+  "legDrive",
+  "skinArmor",
+  ...EXTENSION_ZONE_IDS,
+] as const;
+export const CyberwareCategoryIdSchema = z.enum(CYBERWARE_CATEGORY_IDS);
+export type CyberwareCategoryId = z.infer<typeof CyberwareCategoryIdSchema>;
+
+export const CYBERWARE_CATEGORY_LABELS: Readonly<Record<CyberwareCategoryId, string>> = {
+  chassis: "躯体底盘",
+  cyberdeck: "网络接入仓",
+  spineDrive: "脊柱主驱",
+  optics: "主义眼",
+  arms: "手臂义肢/武装",
+  legDrive: "腿部驱动",
+  skinArmor: "表皮主甲",
+  ...EXTENSION_ZONE_LABELS,
+};
+
+/** 兼容旧引用：保留 CyberwareSectionId 指向新版分区 */
+export const CYBERWARE_SECTION_IDS = [...CYBERWARE_SLOTS, "lifestyle", "fbc"] as const;
+export type CyberwareSectionId = (typeof CYBERWARE_SECTION_IDS)[number];
+
+export const SECTION_LABELS: Readonly<Record<CyberwareSectionId, string>> = {
+  ...SLOT_LABELS,
+  lifestyle: "外观与生活",
+  fbc: "躯体底盘",
+};
+
+/** 义体主动提供的专项防护能力（替代按固定 ID 判断的电磁/热能/防黑冰集合） */
+export const CYBERWARE_DEFENSES = ["surge", "thermal", "ice"] as const;
+export const CyberwareDefenseSchema = z.enum(CYBERWARE_DEFENSES);
+export type CyberwareDefense = z.infer<typeof CyberwareDefenseSchema>;
+
+/** 全身义体（FBC）底盘的承载与躯干/四肢扩容配置 */
+export const ChassisProfileSchema = z.object({
+  hardCap: z.number().int().min(30).max(150),
+  safeCap: z.number().int().min(0).max(120),
+  /** 是否属于高压重装战甲（常驻超载压迫状态） */
+  constantOverload: z.boolean().optional(),
+  /** 躯干与防护区额外格数（默认 +2） */
+  torsoBonus: z.number().int().min(0).max(6).optional(),
+  /** 手掌与足部区额外格数（默认 +1） */
+  extremityBonus: z.number().int().min(0).max(6).optional(),
+});
+export type ChassisProfile = z.infer<typeof ChassisProfileSchema>;
+
+const DEFAULT_FBC_CHASSIS_PROFILE: ChassisProfile = {
+  hardCap: 70,
+  safeCap: 48,
+  torsoBonus: 2,
+  extremityBonus: 1,
+};
+
 /**
- * 物理互斥组：只拦截现实人体解剖/接口层面真正无法并存的硬件，不再用固定部位总格数一刀切。
- * - cyberdeck（主网络接入仓，限 1）与 spineDrive（脊柱加速/狂暴主驱，限 1）互不互斥，允许双中枢并行（以高压神经负荷为代价）；
- * - armMount（重型臂部义肢/武装，限 2）支持左右双臂自由混搭；
- * - legDrive（腿部肌腱/骨架主驱，限 1）与脚掌/暗格等附挂件不互斥；
- * - optics（主义眼模组，限 1）与面部面板、音频、嗅觉、声带等感官义体不互斥；
- * - skinArmor（全覆式表皮主甲，限 1）与光学迷彩、涂层、时尚皮肤、走私腔不互斥；
- * - fullBorg（全身义体框架 FBC，限 1）与 intimateCore（核心亲密义体，限 1）各限 1 套。
+ * 物理互斥组：
+ * - 上层 8 核心主位（含装植减缩 capacityCore 与接入仓/脊柱主驱互斥）；
+ * - 扩展区仅保留 5 组直觉 100% 明确的同类器官互斥。
  */
 export const EXCLUSIVE_GROUPS = [
   "cyberdeck",
   "spineDrive",
+  "capacityCore",
   "optics",
   "armMount",
   "legDrive",
   "skinArmor",
   "fullBorg",
   "intimateCore",
+  "skinStealth",
+  "painOverride",
+  "footTread",
+  "exoskeletonFrame",
 ] as const;
 export const ExclusiveGroupSchema = z.enum(EXCLUSIVE_GROUPS);
 export type ExclusiveGroup = z.infer<typeof ExclusiveGroupSchema>;
@@ -55,78 +171,132 @@ export type ExclusiveGroup = z.infer<typeof ExclusiveGroupSchema>;
 export const EXCLUSIVE_GROUP_LIMIT: Readonly<Record<ExclusiveGroup, number>> = {
   cyberdeck: 1,
   spineDrive: 1,
+  capacityCore: 1,
   optics: 1,
   armMount: 2,
   legDrive: 1,
   skinArmor: 1,
   fullBorg: 1,
   intimateCore: 1,
+  skinStealth: 1,
+  painOverride: 1,
+  footTread: 1,
+  exoskeletonFrame: 1,
 };
 
 export const EXCLUSIVE_GROUP_LABELS: Readonly<Record<ExclusiveGroup, string>> = {
-  cyberdeck: "主网络接入仓",
-  spineDrive: "脊柱加速/狂暴主驱",
-  optics: "主义眼模组",
-  armMount: "重型臂部武装/义肢",
-  legDrive: "腿部肌腱/骨架主驱",
-  skinArmor: "全覆式表皮主甲",
-  fullBorg: "全身义体框架（FBC）",
+  cyberdeck: "网络接入仓",
+  spineDrive: "脊柱主驱",
+  capacityCore: "神经扩容主控",
+  optics: "主义眼",
+  armMount: "手臂义肢/武装",
+  legDrive: "腿部驱动",
+  skinArmor: "表皮主甲",
+  fullBorg: "躯体底盘（FBC）",
   intimateCore: "核心亲密义体",
+  skinStealth: "表皮隐匿层",
+  painOverride: "痛觉覆写",
+  footTread: "足底主改",
+  exoskeletonFrame: "承重外骨骼",
 };
 
-const LEG_DRIVE_IDS = new Set([
-  "prosthetic-legs",
-  "fortified-ankles",
-  "reinforced-tendons",
-  "jenkins-tendons",
-  "leeroy-ligament-system",
-  "badlands-runner-legs",
-  "anchor-hydraulic-legs",
-]);
+/** 5 组可供自建义体选择的明确同类器官互斥 */
+export const EXTENSION_EXCLUSIVE_GROUPS: readonly ExclusiveGroup[] = [
+  "skinStealth",
+  "painOverride",
+  "footTread",
+  "exoskeletonFrame",
+  "intimateCore",
+];
 
 export interface ExclusiveProbe {
   readonly id: string;
   readonly name: string;
   readonly slot: CyberwareSlot;
   readonly exclusiveGroup?: ExclusiveGroup | undefined;
+  readonly category?: CyberwareCategoryId | undefined;
+  readonly armSide?: ArmSide | undefined;
+  readonly defaultArmSide?: ArmSide | undefined;
   readonly armor?: boolean | undefined;
   readonly accelerator?: boolean | undefined;
   readonly deckTraits?: readonly string[] | undefined;
   readonly deckProfile?: string | undefined;
 }
 
-const MAIN_OPTICS_IDS = new Set([
-  "kiroshi-mk1",
-  "kiroshi-mk2",
-  "kiroshi-clairvoyant",
-  "kiroshi-doomsayer",
-  "kiroshi-stalker",
-  "kiroshi-oracle",
-  "kiroshi-sentry",
-  "kiroshi-cockatrice",
-  "arasaka-optics",
-  "militech-thermal-optics",
-  "zetatech-net-optics",
-  "street-mod-optics",
-]);
-
-/** 推断一件义体所属的物理互斥组；返回 null 表示不互斥、可自由叠加。 */
+/** 推断一件义体所属的物理互斥组；优先读声明字段，自定义件按分类/部位特征兜底。 */
 export function cyberwareExclusiveGroup(def: ExclusiveProbe): ExclusiveGroup | null {
   if (def.exclusiveGroup) return def.exclusiveGroup;
+  if (def.category === "chassis") return "fullBorg";
+  if (def.category === "cyberdeck") return "cyberdeck";
+  if (def.category === "optics") return "optics";
+  if (def.category === "arms") return "armMount";
+  if (def.category === "legDrive") return "legDrive";
+  if (def.category === "skinArmor") return "skinArmor";
   if (def.slot === "os") {
     if ((def.deckTraits && def.deckTraits.length > 0) || def.deckProfile) return "cyberdeck";
-    if (def.accelerator || def.id.includes("berserk") || def.id.includes("sandevistan")) {
-      return "spineDrive";
-    }
+    if (def.accelerator || def.category === "spineDrive") return "spineDrive";
     return null;
   }
-  if (def.slot === "eyes") {
-    return MAIN_OPTICS_IDS.has(def.id) || def.id.startsWith("kiroshi-") ? "optics" : null;
-  }
   if (def.slot === "arms") return "armMount";
-  if (def.slot === "legs") return LEG_DRIVE_IDS.has(def.id) ? "legDrive" : null;
   if (def.slot === "integumentary") return def.armor ? "skinArmor" : null;
   return null;
+}
+
+/** 归类一件义体在 v2 体系中的直觉分区（7 类核心硬件或 5 类扩展/外观） */
+export function cyberwareCategoryOf(def: ExclusiveProbe): CyberwareCategoryId {
+  if (def.category) return def.category;
+  const group = cyberwareExclusiveGroup(def);
+  if (group === "fullBorg") return "chassis";
+  if (group === "cyberdeck") return "cyberdeck";
+  if (group === "spineDrive" || group === "capacityCore") return "spineDrive";
+  if (group === "optics") return "optics";
+  if (group === "armMount") return "arms";
+  if (group === "legDrive") return "legDrive";
+  if (group === "skinArmor") return "skinArmor";
+  if (group === "intimateCore") return "lifestyle";
+  if (def.slot === "eyes") return "sensory";
+  if (def.slot === "frontalCortex" || def.slot === "nervous") return "neural";
+  if (def.slot === "hands" || def.slot === "legs") return "extremities";
+  return "torso";
+}
+
+export function cyberwareExtensionZone(def: ExclusiveProbe): ExtensionZoneId | null {
+  const cat = cyberwareCategoryOf(def);
+  return (EXTENSION_ZONE_IDS as readonly string[]).includes(cat) ? (cat as ExtensionZoneId) : null;
+}
+
+export function isLifestyleCyberware(def: ExclusiveProbe): boolean {
+  return cyberwareCategoryOf(def) === "lifestyle";
+}
+
+/** 4 个功能扩展区的真实人体空间上限；外观与生活不设格数上限（返回 null） */
+export function extensionZoneLimit(
+  zone: ExtensionZoneId,
+  fbc: boolean | ChassisProfile | null,
+): number | null {
+  const torsoBonus = typeof fbc === "boolean" ? (fbc ? 2 : 0) : fbc ? (fbc.torsoBonus ?? 2) : 0;
+  const extremityBonus =
+    typeof fbc === "boolean" ? (fbc ? 1 : 0) : fbc ? (fbc.extremityBonus ?? 1) : 0;
+  switch (zone) {
+    case "neural":
+      return 4;
+    case "sensory":
+      return 3;
+    case "torso":
+      return 5 + torsoBonus;
+    case "extremities":
+      return 4 + extremityBonus;
+    case "lifestyle":
+      return null;
+  }
+}
+
+/** 兼容旧调用：按旧分区 id 返回归属 */
+export function cyberwareSectionOf(def: ExclusiveProbe): CyberwareSectionId {
+  const group = cyberwareExclusiveGroup(def);
+  if (group === "fullBorg") return "fbc";
+  if (isLifestyleCyberware(def)) return "lifestyle";
+  return def.slot;
 }
 
 export type CyberwareConflictResult<T extends ExclusiveProbe = ExclusiveProbe> =
@@ -139,58 +309,180 @@ export type CyberwareConflictResult<T extends ExclusiveProbe = ExclusiveProbe> =
       readonly blockers: readonly T[];
     };
 
-const SINGLE_ARM_IDS = new Set([
-  "projectile-launch-system",
-  "thermal-projectile-launch",
-  "electric-projectile-launch",
-  "toxic-projectile-launch",
-  "tech-utility-arm",
-  "surgical-prosthetic-arm",
-]);
-
-/** 判断臂部义体默认是单臂装配（如射弹发射器、工程/医疗义臂）还是双臂成对（如猩猩手臂、螳螂刀、单分子线）。 */
-export function isSingleArmCyberware(id: string): boolean {
-  return SINGLE_ARM_IDS.has(id) || id.includes("projectile-launch");
+/** 判断臂部义体默认是单臂装配（如射弹发射器、工程/医疗义臂）还是双臂成对。 */
+export function isSingleArmCyberware(
+  def?: { readonly defaultArmSide?: ArmSide | undefined } | null,
+): boolean {
+  return def?.defaultArmSide === "left" || def?.defaultArmSide === "right";
 }
 
-/** 返回义体的成对/单双侧装配提示文案（用于创角、局内义体页与诊所明确告知玩家是单手还是双手生效）。 */
+/** 臂部义体默认装配侧别（无显式指定时）：优先读 defaultArmSide，否则默认双臂同款 */
+export function defaultArmSideFor(
+  def?: { readonly defaultArmSide?: ArmSide | undefined } | null,
+): ArmSide {
+  return def?.defaultArmSide ?? "both";
+}
+
+/**
+ * 为已安装列表中的臂部义体解析真实左/右/双臂归属：
+ * - 显式写了 armSide 时严格按 armSide；
+ * - 未写时：单件单臂型默认 defaultArmSide（左臂），单件成对型默认 both，两件无标记臂件按顺序分给 left / right。
+ */
+export function resolveArmSides<T extends ExclusiveProbe>(
+  installed: readonly T[],
+): ReadonlyMap<string, ArmSide> {
+  const arms = installed.filter((item) => cyberwareExclusiveGroup(item) === "armMount");
+  const out = new Map<string, ArmSide>();
+  if (arms.length === 0) return out;
+  if (arms.length === 1) {
+    const only = arms[0];
+    if (only) out.set(only.id, only.armSide ?? defaultArmSideFor(only));
+    return out;
+  }
+  let leftTaken = false;
+  let rightTaken = false;
+  for (const item of arms) {
+    if (item.armSide) {
+      out.set(item.id, item.armSide);
+      if (item.armSide === "left" || item.armSide === "both") leftTaken = true;
+      if (item.armSide === "right" || item.armSide === "both") rightTaken = true;
+    }
+  }
+  for (const item of arms) {
+    if (out.has(item.id)) continue;
+    if (!leftTaken) {
+      out.set(item.id, "left");
+      leftTaken = true;
+    } else if (!rightTaken) {
+      out.set(item.id, "right");
+      rightTaken = true;
+    } else {
+      out.set(item.id, "right");
+    }
+  }
+  return out;
+}
+
+/** 同款手臂武器元素变体分组（由数据字段 variantGroup + variantKey 驱动，工坊自建同样适用） */
+export const ELEMENT_VARIANT_KEYS = ["physical", "thermal", "electric", "toxic"] as const;
+export const ElementVariantKeySchema = z.enum(ELEMENT_VARIANT_KEYS);
+export type ElementVariantKey = z.infer<typeof ElementVariantKeySchema>;
+
+export const ELEMENT_VARIANT_LABELS: Readonly<Record<ElementVariantKey, string>> = {
+  physical: "常规",
+  thermal: "热能",
+  electric: "电磁",
+  toxic: "化学",
+};
+
+export interface VariantFoldEntry<T> {
+  readonly active: T;
+  readonly groupId?: string | undefined;
+  readonly variants?: readonly { readonly key: ElementVariantKey; readonly item: T }[] | undefined;
+}
+
+/** 按数据字段 variantGroup + variantKey 将同族元素变体折叠为单张主卡 */
+export function foldCyberwareVariants<
+  T extends {
+    readonly id: string;
+    readonly variantGroup?: string | undefined;
+    readonly variantKey?: ElementVariantKey | undefined;
+  },
+>(
+  items: readonly T[],
+  options?: {
+    readonly disabled?: boolean | undefined;
+    readonly chosen?: Readonly<Record<string, ElementVariantKey>> | undefined;
+    readonly isPreferred?: ((item: T) => boolean) | undefined;
+  },
+): VariantFoldEntry<T>[] {
+  if (options?.disabled) return items.map((active) => ({ active }));
+  const grouped = new Map<string, { readonly key: ElementVariantKey; readonly item: T }[]>();
+  for (const item of items) {
+    if (!item.variantGroup || !item.variantKey) continue;
+    const list = grouped.get(item.variantGroup) ?? [];
+    list.push({ key: item.variantKey, item });
+    grouped.set(item.variantGroup, list);
+  }
+  const out: VariantFoldEntry<T>[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const groupId = item.variantGroup;
+    if (!groupId || !item.variantKey) {
+      out.push({ active: item });
+      continue;
+    }
+    if (seen.has(groupId)) continue;
+    seen.add(groupId);
+    const variants = [...(grouped.get(groupId) ?? [])].sort(
+      (a, b) => ELEMENT_VARIANT_KEYS.indexOf(a.key) - ELEMENT_VARIANT_KEYS.indexOf(b.key),
+    );
+    if (variants.length <= 1) {
+      out.push({ active: item });
+      continue;
+    }
+    const preferred = options?.isPreferred
+      ? variants.find((v) => options.isPreferred?.(v.item))
+      : undefined;
+    const chosenKey = options?.chosen?.[groupId] ?? preferred?.key ?? "physical";
+    const active = variants.find((v) => v.key === chosenKey)?.item ?? variants[0]?.item ?? item;
+    out.push({ active, groupId, variants });
+  }
+  return out;
+}
+
+/** 返回义体的成对/单双侧装配提示文案 */
 export function cyberwareMountHint(
   def: ExclusiveProbe,
   installedArmCount = 0,
 ): { readonly badge: string; readonly detail: string } | null {
   const group = cyberwareExclusiveGroup(def);
   if (group === "armMount") {
-    const single = isSingleArmCyberware(def.id);
+    if (def.armSide) {
+      return {
+        badge: ARM_SIDE_LABELS[def.armSide],
+        detail:
+          def.armSide === "both"
+            ? "左右双臂成套装配（按 1 套承载计）"
+            : `仅装于${ARM_SIDE_LABELS[def.armSide]}（单臂按 60% 承载计）`,
+      };
+    }
+    const single = isSingleArmCyberware(def);
     if (installedArmCount >= 2) {
       return {
         badge: "左右臂混搭",
-        detail: "左右双臂各自搭载一套义臂（2/2）",
+        detail: "左右双臂各自搭载一套义臂",
       };
     }
     if (single) {
       return {
         badge: "单臂装配",
-        detail: "默认装于单侧手臂，另一只手臂仍可加装第 2 件混搭",
+        detail: "默认装于单侧手臂，另一只手臂仍可加装第 2 件",
       };
     }
     return {
-      badge: "双臂成对",
-      detail: "单装时默认双臂成对生效；再装第 2 件臂部义体时自动改为左右臂混搭",
+      badge: "双臂同款",
+      detail: "可装单臂（60% 承载）或双臂同款（100% 承载）",
     };
   }
   if (group === "optics") {
     return {
       badge: "双眼成对",
-      detail: "主视觉义眼模组（双目成对生效，不占用耳/鼻/虹膜等感官件）",
+      detail: "主视觉义眼模组（双目成对生效）",
     };
   }
   if (group === "legDrive") {
     return {
       badge: "双腿成对",
-      detail: "双腿成套驱动改造（不占用脚掌静音/腿侧暗格等附挂件）",
+      detail: "双腿成套驱动改造",
     };
   }
   return null;
+}
+
+function armSideOverlaps(a: ArmSide, b: ArmSide): boolean {
+  if (a === "both" || b === "both") return true;
+  return a === b;
 }
 
 /** 检查装入 candidate 是否与已装义体发生物理互斥冲突。 */
@@ -200,6 +492,60 @@ export function cyberwareConflicts<T extends ExclusiveProbe>(
 ): CyberwareConflictResult<T> {
   const group = cyberwareExclusiveGroup(candidate);
   if (!group) return { ok: true };
+
+  // 装植减缩器（capacityCore）与网络接入仓、脊柱主驱互相排斥
+  if (group === "capacityCore") {
+    const blockers = installed.filter((item) => {
+      if (item.id === candidate.id) return false;
+      const g = cyberwareExclusiveGroup(item);
+      return g === "capacityCore" || g === "cyberdeck" || g === "spineDrive";
+    });
+    if (blockers.length > 0) {
+      return {
+        ok: false,
+        group: "capacityCore",
+        limit: 1,
+        label: "主控总线（装植减缩器不可与接入仓或脊柱主驱并存）",
+        blockers,
+      };
+    }
+    return { ok: true };
+  }
+  if (group === "cyberdeck" || group === "spineDrive") {
+    const capBlockers = installed.filter(
+      (item) => item.id !== candidate.id && cyberwareExclusiveGroup(item) === "capacityCore",
+    );
+    if (capBlockers.length > 0) {
+      return {
+        ok: false,
+        group: "capacityCore",
+        limit: 1,
+        label: "神经扩容主控（装植减缩器占据主控总线，需先卸下才能装接入仓或脊柱主驱）",
+        blockers: capBlockers,
+      };
+    }
+  }
+
+  // 手臂左右侧真实独立判定
+  if (group === "armMount" && candidate.armSide) {
+    const sides = resolveArmSides(installed);
+    const blockers = installed.filter((item) => {
+      if (item.id === candidate.id || cyberwareExclusiveGroup(item) !== "armMount") return false;
+      const existingSide = sides.get(item.id) ?? defaultArmSideFor(item);
+      return armSideOverlaps(candidate.armSide as ArmSide, existingSide);
+    });
+    if (blockers.length > 0) {
+      return {
+        ok: false,
+        group: "armMount",
+        limit: 1,
+        label: ARM_SIDE_LABELS[candidate.armSide],
+        blockers,
+      };
+    }
+    return { ok: true };
+  }
+
   const blockers = installed.filter(
     (item) => item.id !== candidate.id && cyberwareExclusiveGroup(item) === group,
   );
@@ -219,55 +565,144 @@ export function cyberwareConflicts<T extends ExclusiveProbe>(
 export interface LoadProbe extends ExclusiveProbe {
   readonly humanityCost: number;
   readonly iconic?: boolean | undefined;
+  readonly capacityBonus?: number | undefined;
+  readonly safeLineBonus?: number | undefined;
+  readonly chassisProfile?: ChassisProfile | undefined;
 }
+
+/** 计算单件义体在当前装配侧别下的实际神经承载 */
+export function effectiveCyberwareLoad(
+  item: Pick<
+    LoadProbe,
+    "id" | "slot" | "humanityCost" | "exclusiveGroup" | "category" | "armSide" | "defaultArmSide"
+  >,
+  resolvedArmSide?: ArmSide,
+): number {
+  if (item.humanityCost <= 0 || isLifestyleCyberware({ ...item, name: item.id })) return 0;
+  const group = cyberwareExclusiveGroup({ ...item, name: item.id });
+  if (group === "armMount") {
+    const side = resolvedArmSide ?? item.armSide ?? defaultArmSideFor(item);
+    if (side === "left" || side === "right") {
+      return Math.max(1, Math.round(item.humanityCost * 0.6));
+    }
+  }
+  return item.humanityCost;
+}
+
+export const DUAL_CORE_LOAD_PENALTY = 12;
 
 export interface CyberwareLoadProfile {
   readonly totalCount: number;
   readonly zeroLoadCount: number;
   readonly activeLoadScore: number;
+  readonly safeCap: number;
+  readonly hardCap: number;
+  readonly overloaded: boolean;
   readonly dualCore: boolean;
+  readonly dualCorePenalty: number;
+  readonly hasCapacityCore: boolean;
+  readonly stabilizerBonus: number;
   readonly fullBorg: string | null;
+  readonly fullBorgId: string | null;
+  readonly chassisLabel: string;
+  readonly zoneCounts: Readonly<Record<ExtensionZoneId, number>>;
+  readonly zoneLimits: Readonly<Record<ExtensionZoneId, number | null>>;
   readonly heavyNames: readonly string[];
   readonly tier: "light" | "standard" | "heavy" | "extreme";
   readonly label: string;
   readonly tone: "ok" | "warn" | "bad";
+  /** 仅当存在高负荷/超载风险（双中枢 / FBC / 超安全线）时给出直白原因，平常为 null */
+  readonly alertReason: string | null;
   readonly summary: string;
 }
 
 /**
- * 纯事实神经负荷分析：只基于角色实际装在身上的完好义体，不依赖抽象的“低/中/高耐受”属性。
- * 零负荷生活/时尚/感官/亲密义体不增加神经压迫；双中枢并发、全身义体化（FBC）与高负荷军用重器会如实标出。
+ * 纯事实三段式神经承载分析（全数据驱动）：
+ * - 外观与生活件永远 0 承载、不占功能空间；
+ * - 单臂 60%、双臂同款 100%、左右异构混搭 120%；
+ * - 双中枢并行（接入仓 + 脊柱主驱）额外吃 +12 承载；
+ * - 神经扩容件由 capacityBonus / safeLineBonus 驱动；稳定件由 safeLineBonus 驱动；
+ * - FBC 全身躯壳由 chassisProfile 驱动（未填时采用标准双子星档位 48/70）。
  */
 export function cyberwareLoadProfile(installed: readonly LoadProbe[]): CyberwareLoadProfile {
   let zeroLoadCount = 0;
   let score = 0;
   let hasDeck = false;
   let hasSpine = false;
+  let hasCapacityCore = false;
+  let capacityBonus = 0;
+  let capacitySafeBonus = 0;
+  let stabilizerBonus = 0;
   let fullBorg: string | null = null;
+  let fullBorgId: string | null = null;
+  let fbcProfile: ChassisProfile | null = null;
   const heavyNames: string[] = [];
+  const armSides = resolveArmSides(installed);
+  const zoneCounts: Record<ExtensionZoneId, number> = {
+    neural: 0,
+    sensory: 0,
+    torso: 0,
+    extremities: 0,
+    lifestyle: 0,
+  };
 
   for (const item of installed) {
     const group = cyberwareExclusiveGroup(item);
     if (group === "cyberdeck") hasDeck = true;
     if (group === "spineDrive") hasSpine = true;
-    if (group === "fullBorg") fullBorg = item.name;
-    if (item.humanityCost <= 0) {
+    if (group === "capacityCore") {
+      hasCapacityCore = true;
+      capacityBonus += item.capacityBonus ?? 20;
+      capacitySafeBonus += item.safeLineBonus ?? 18;
+    } else {
+      if (item.capacityBonus) capacityBonus += item.capacityBonus;
+      if (item.safeLineBonus) stabilizerBonus += item.safeLineBonus;
+    }
+    if (group === "fullBorg") {
+      fullBorg = item.name;
+      fullBorgId = item.id;
+      fbcProfile = item.chassisProfile ?? DEFAULT_FBC_CHASSIS_PROFILE;
+    }
+    const zone = cyberwareExtensionZone(item);
+    if (zone) zoneCounts[zone] += 1;
+
+    const itemLoad = effectiveCyberwareLoad(item, armSides.get(item.id));
+    if (itemLoad <= 0) {
       zeroLoadCount += 1;
     } else {
-      score += item.humanityCost;
+      score += itemLoad;
     }
-    if (item.humanityCost >= 10 || item.iconic || group === "fullBorg") {
+    if (itemLoad >= 10 || item.iconic || group === "fullBorg") {
       heavyNames.push(item.name);
     }
   }
 
   const dualCore = hasDeck && hasSpine;
-  const effectiveScore = score + (dualCore ? 14 : 0);
+  const dualCorePenalty = dualCore ? DUAL_CORE_LOAD_PENALTY : 0;
+  const effectiveScore = score + dualCorePenalty;
+
+  const constantOverload = Boolean(fbcProfile?.constantOverload);
+  const hardCap = fbcProfile ? fbcProfile.hardCap : 50 + capacityBonus;
+  const baseSafe = fbcProfile ? fbcProfile.safeCap : 38 + capacitySafeBonus;
+  const safeCap = Math.min(hardCap, baseSafe + stabilizerBonus);
+  const overloaded = effectiveScore > safeCap || constantOverload;
+
+  const hasFbc = fbcProfile !== null;
+  const zoneLimits: Record<ExtensionZoneId, number | null> = {
+    neural: extensionZoneLimit("neural", fbcProfile),
+    sensory: extensionZoneLimit("sensory", fbcProfile),
+    torso: extensionZoneLimit("torso", fbcProfile),
+    extremities: extensionZoneLimit("extremities", fbcProfile),
+    lifestyle: null,
+  };
 
   const tier: CyberwareLoadProfile["tier"] =
-    fullBorg !== null || effectiveScore >= 65 || (dualCore && effectiveScore >= 48)
+    constantOverload ||
+    effectiveScore >= hardCap ||
+    (hasFbc && effectiveScore > safeCap) ||
+    (dualCore && effectiveScore > safeCap)
       ? "extreme"
-      : dualCore || effectiveScore >= 40 || heavyNames.length >= 3
+      : overloaded || dualCore || hasFbc
         ? "heavy"
         : effectiveScore >= 16
           ? "standard"
@@ -275,49 +710,143 @@ export function cyberwareLoadProfile(installed: readonly LoadProbe[]): Cyberware
 
   const label =
     tier === "extreme"
-      ? "极限超载"
+      ? "极限红线"
       : tier === "heavy"
-        ? "高压重改"
+        ? "超载红线"
         : tier === "standard"
-          ? "常规镀铬"
-          : "轻度负荷";
+          ? "平稳"
+          : "轻载";
 
   const tone: CyberwareLoadProfile["tone"] =
     tier === "extreme" ? "bad" : tier === "heavy" ? "warn" : "ok";
 
-  const facts: string[] = [];
-  if (fullBorg) facts.push(`全身义体化「${fullBorg}」`);
-  if (dualCore) facts.push("双中枢并行（接入仓 + 脊柱加速/狂暴）");
-  if (heavyNames.length > 0) {
-    const shown = heavyNames.filter((n) => n !== fullBorg).slice(0, 4);
-    if (shown.length > 0) facts.push(`高压重器：${shown.join("、")}`);
+  const reasons: string[] = [];
+  if (fullBorg) reasons.push(`全身义体化「${fullBorg}」`);
+  if (dualCore) reasons.push("双中枢并行");
+  if (effectiveScore > safeCap && !constantOverload) {
+    reasons.push(`超出安全线（${effectiveScore}/${safeCap}）`);
   }
-  if (zeroLoadCount > 0 && facts.length === 0) {
-    facts.push(`含 ${zeroLoadCount} 件零神经负荷生活/感官改造`);
+  const shownHeavy = heavyNames.filter((n) => n !== fullBorg).slice(0, 2);
+  if (shownHeavy.length > 0 && reasons.length === 0 && (tier === "heavy" || tier === "extreme")) {
+    reasons.push(`高压重器（${shownHeavy.join("、")}）`);
   }
+
+  const alertReason = reasons.length > 0 ? reasons.join(" · ") : null;
+
+  const chassisLabel = fullBorg
+    ? fullBorg
+    : hasCapacityCore
+      ? "原生血肉 · 装植减缩扩容"
+      : "原生血肉";
 
   const summary =
     tier === "extreme"
-      ? `${facts.join("；")}——神经系统长期处于极限压榨状态，连开加速、双中枢并发、重伤失血、情感重创或长期断药/缺调校极易诱发真实赛博精神病症状。`
+      ? `${alertReason ?? "神经承载已抵极限"}——连续开加速、重伤、遭黑客攻脑或断药时极易诱发耳鸣、鼻血与失控症状。`
       : tier === "heavy"
-        ? `${facts.join("；")}——重度实战改造，常态可控但高烈度连续压榨或严重刺激时易起神经排异与感官噪点，需要定期医生调校或备免疫抑制剂。`
-        : tier === "standard"
-          ? "常规佣兵级义体负荷，日常同步平稳，仅在强黑客攻脑、重伤休克或剧烈精神创伤时可能起波澜。"
-          : installed.length === 0
-            ? "未安装额外义体，纯原生肉身神经。"
-            : "轻度或零负荷生活/感官改造，日常几乎无神经排异负担。";
+        ? `${alertReason ?? "进入超载红线"}——高强度行动或压榨神经时可能出现排异反应。`
+        : installed.length === 0
+          ? "纯原生肉身，未安装额外义体。"
+          : "日常同步平稳，无额外神经压迫负担。";
 
   return {
     totalCount: installed.length,
     zeroLoadCount,
     activeLoadScore: effectiveScore,
+    safeCap,
+    hardCap,
+    overloaded,
     dualCore,
+    dualCorePenalty,
+    hasCapacityCore,
+    stabilizerBonus,
     fullBorg,
+    fullBorgId,
+    chassisLabel,
+    zoneCounts,
+    zoneLimits,
     heavyNames,
     tier,
     label,
     tone,
+    alertReason,
     summary,
+  };
+}
+
+export type CyberwareInstallCheck<T extends LoadProbe = LoadProbe> =
+  | {
+      readonly ok: true;
+      readonly nextLoad: CyberwareLoadProfile;
+      readonly entersOverload: boolean;
+    }
+  | {
+      readonly ok: false;
+      readonly kind: "conflict" | "zoneFull" | "capacityFull";
+      readonly reason: string;
+      readonly blockers?: readonly T[] | undefined;
+      readonly zone?: ExtensionZoneId | undefined;
+      readonly shortfall?: number | undefined;
+      readonly nextLoad?: CyberwareLoadProfile | undefined;
+    };
+
+/**
+ * 统一三道安装校验（创角、诊所报价、手术安装共用）：
+ * 1. 物理互斥（8 核心主位 / 左右臂 / 装植减缩器 / 5 组同类器官）；
+ * 2. 4 个功能扩展区的真实人体空间上限（外观生活区无上限）；
+ * 3. 三段式神经承载硬顶（0 承载外观件永远不被硬顶拦截）。
+ */
+export function checkCyberwareInstall<T extends LoadProbe>(
+  candidate: LoadProbe,
+  installed: readonly T[],
+  options?: { readonly ignoreIds?: readonly string[] },
+): CyberwareInstallCheck<T> {
+  const ignore = new Set(options?.ignoreIds ?? []);
+  const remaining = installed.filter((item) => item.id !== candidate.id && !ignore.has(item.id));
+
+  const conflict = cyberwareConflicts(candidate, remaining);
+  if (!conflict.ok) {
+    return {
+      ok: false,
+      kind: "conflict",
+      reason: `「${conflict.label}」已有 ${conflict.blockers.map((b) => b.name).join("、")}，需先替换或卸下`,
+      blockers: conflict.blockers,
+    };
+  }
+
+  const nextList: LoadProbe[] = [...remaining, candidate];
+  const nextLoad = cyberwareLoadProfile(nextList);
+
+  const zone = cyberwareExtensionZone(candidate);
+  if (zone) {
+    const limit = nextLoad.zoneLimits[zone];
+    if (limit !== null && nextLoad.zoneCounts[zone] > limit) {
+      return {
+        ok: false,
+        kind: "zoneFull",
+        zone,
+        reason: `「${EXTENSION_ZONE_LABELS[zone]}」物理空间已满（${limit}/${limit}），需先卸下同区旧件${nextLoad.fullBorg ? "" : "或换装 FBC 全身躯壳"}`,
+        nextLoad,
+      };
+    }
+  }
+
+  const currentLoad = cyberwareLoadProfile(remaining);
+  const addedLoad = nextLoad.activeLoadScore - currentLoad.activeLoadScore;
+  if (addedLoad > 0 && nextLoad.activeLoadScore > nextLoad.hardCap) {
+    const shortfall = nextLoad.activeLoadScore - nextLoad.hardCap;
+    return {
+      ok: false,
+      kind: "capacityFull",
+      shortfall,
+      reason: `神经承载已达生理上限（超出 ${shortfall} 点，上限 ${nextLoad.hardCap}），需先卸下现有组件，或改用装植减缩 / FBC 躯体底盘`,
+      nextLoad,
+    };
+  }
+
+  return {
+    ok: true,
+    nextLoad,
+    entersOverload: nextLoad.overloaded && !currentLoad.overloaded,
   };
 }
 
@@ -447,8 +976,28 @@ export const CyberwareDefSchema = z.object({
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic）；稀有标签不替代真实货源与交易意愿 */
   iconic: z.boolean().default(false),
-  /** 物理互斥组（不写时由 cyberwareExclusiveGroup 按解剖特征自动推断） */
+  /** 物理互斥组（不写时由 cyberwareExclusiveGroup 按分类与部位特征兜底推断） */
   exclusiveGroup: ExclusiveGroupSchema.optional(),
+  /** v2 显式归类（核心主位 / 4 功能扩展区 / 外观生活） */
+  category: CyberwareCategoryIdSchema.optional(),
+  /** 手臂义体默认装配侧别（单臂型写 left，成对型不填或写 both） */
+  defaultArmSide: ArmSideSchema.optional(),
+  /** 神经承载硬上限扩容值（如装植减缩器 +20） */
+  capacityBonus: z.number().int().min(1).max(40).optional(),
+  /** 神经安全线提升值（如免疫抑制泵/稳态阻尼器 +4，装植减缩器 +18） */
+  safeLineBonus: z.number().int().min(1).max(30).optional(),
+  /** 全身义体（FBC）底盘的专属承载与空间配置 */
+  chassisProfile: ChassisProfileSchema.optional(),
+  /** 同族元素变体折叠分组 id（如 gorilla-arms） */
+  variantGroup: z.string().min(1).max(60).optional(),
+  /** 元素变体键（physical / thermal / electric / toxic） */
+  variantKey: ElementVariantKeySchema.optional(),
+  /** 是否提供手部智能武器数据联锁（如智能连接、虎爪帮纹身） */
+  smartLink: z.boolean().optional(),
+  /** 额外增加的随身大件携带上限（如钛金骨骼、负重脊柱架、Σ 外骨骼、龙骑兵底盘 +1） */
+  carryBonus: z.number().int().min(1).max(3).optional(),
+  /** 专项防护能力（surge 抗电磁短路 / thermal 抗高温燃烧 / ice 自我防黑冰） */
+  defenses: z.array(CyberwareDefenseSchema).optional(),
   behaviorChip: BehaviorChipProfileSchema.optional(),
 });
 export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;
@@ -538,6 +1087,9 @@ export const CyberwareTermsSchema = z.object({
     .optional()
     .describe("自带的未安装实物 ID；不能把型号目录当成自己已持有的零件"),
   replace: z.string().min(1).optional().describe("玩家选定换下的已装型号；满槽不能自行选择"),
+  armSide: ArmSideSchema.optional().describe(
+    "手臂义体装配侧别：left 左臂、right 右臂、both 双臂同款",
+  ),
   disposition: z
     .enum(["keep", "sell", "scrap"])
     .optional()
@@ -596,6 +1148,8 @@ export const CyberwareStateSchema = z.object({
       z.object({
         id: z.string().min(1),
         slot: CyberwareSlotSchema,
+        /** 手臂义体的安装侧别（left 左臂 / right 右臂 / both 双臂同款） */
+        armSide: ArmSideSchema.optional(),
         /** 装上时的游戏时间（分钟） */
         installedAt: z.number().int(),
       }),
@@ -633,6 +1187,7 @@ export type CyberwareCommand = z.infer<typeof CyberwareCommandSchema>;
 export const InstallCyberwareSchema = z.object({
   type: z.literal("cyberware.install"),
   id: z.string().min(1),
+  armSide: ArmSideSchema.optional(),
 });
 export type InstallCyberware = z.infer<typeof InstallCyberwareSchema>;
 

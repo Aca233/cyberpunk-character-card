@@ -3,13 +3,21 @@ import { RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { cyberwareCatalog } from "./apply";
 import {
+  ARM_SIDE_LABELS,
   BEHAVIOR_CHIP_MODE_LABELS,
   type BehaviorChipMode,
+  CYBERWARE_CATEGORY_LABELS,
   type CyberwareDef,
   CyberwareStateSchema,
+  cyberwareCategoryOf,
   cyberwareExclusiveGroup,
+  cyberwareExtensionZone,
+  cyberwareSectionOf,
   DECK_TRAIT_LABELS,
   EXCLUSIVE_GROUP_LABELS,
+  effectiveCyberwareLoad,
+  resolveArmSides,
+  SECTION_LABELS,
   SLOT_LABELS,
 } from "./schema";
 
@@ -43,20 +51,61 @@ export function cyberwareView({ world, data }: ViewContext) {
   const { installed, behaviorChips } = CyberwareStateSchema.parse(world.slices.cyberware ?? {});
   const health = HealthStateSchema.parse(world.slices.health);
   const parts = cyberwareCatalog(data);
+  const armSideMap = resolveArmSides(
+    installed.map((c) => {
+      const def = parts.get(c.id);
+      return {
+        ...(def ?? { id: c.id, name: c.id, slot: c.slot }),
+        ...(c.armSide ? { armSide: c.armSide } : {}),
+      };
+    }),
+  );
   return installed.map((c) => {
     const def = parts.get(c.id);
     const chipState = def?.behaviorChip ? behaviorChips?.[c.id] : undefined;
     const chipMode: BehaviorChipMode | null = def?.behaviorChip ? (chipState?.mode ?? "off") : null;
+    const probe = def ?? { id: c.id, name: c.id, slot: c.slot };
+    const section = cyberwareSectionOf(probe);
+    const category = cyberwareCategoryOf(probe);
+    const extensionZone = cyberwareExtensionZone(probe);
+    const armSide = armSideMap.get(c.id) ?? null;
+    const effectiveLoad = effectiveCyberwareLoad(
+      {
+        id: c.id,
+        slot: c.slot,
+        humanityCost: def?.humanityCost ?? 0,
+        ...(def?.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),
+        ...(def?.category ? { category: def.category } : {}),
+        ...(def?.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+        ...(armSide ? { armSide } : {}),
+      },
+      armSide ?? undefined,
+    );
     return {
       id: c.id,
       name: def?.name ?? c.id,
       slot: c.slot,
       slotLabel: SLOT_LABELS[c.slot],
+      section,
+      sectionLabel: SECTION_LABELS[section],
+      category,
+      categoryLabel: CYBERWARE_CATEGORY_LABELS[category],
+      extensionZone,
+      armSide,
+      armSideLabel: armSide ? ARM_SIDE_LABELS[armSide] : null,
+      defaultArmSide: def?.defaultArmSide,
+      effectiveLoad,
       rarityLabel: def ? RARITY_LABELS[def.rarity] : null,
       // 稀有度和标志性给义体页格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）
       rarity: def?.rarity ?? null,
       iconic: def?.iconic ?? false,
       humanityCost: def?.humanityCost ?? 0,
+      capacityBonus: def?.capacityBonus,
+      safeLineBonus: def?.safeLineBonus,
+      chassisProfile: def?.chassisProfile,
+      smartLink: def?.smartLink ?? false,
+      carryBonus: def?.carryBonus,
+      defenses: def?.defenses,
       exclusiveGroup: def ? cyberwareExclusiveGroup(def) : null,
       exclusiveGroupLabel: def
         ? (() => {

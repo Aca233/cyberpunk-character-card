@@ -1,5 +1,6 @@
 import {
   buildTurnSegmentPromptInput,
+  type cyberwareRules,
   type ImagePromptRequest,
   type PlayerAction,
   type TurnInput,
@@ -51,7 +52,6 @@ import {
   Weapon,
   Zone,
 } from "./Corners";
-import type { CyberSlot } from "./CyberDoll";
 import { CyberdeckPage } from "./CyberdeckPage";
 import type { HackTarget } from "./DeckQuickbar";
 import { DivePanel } from "./DivePanel";
@@ -489,7 +489,11 @@ export function StoryScreen() {
   // 商店、义体医生、好车中间人终端叠在界面上面
   const [atDoc, setAtDoc] = useState(false);
   const [docFocus, setDocFocus] = useState<
-    { readonly slot?: CyberSlot | "installed"; readonly installedId?: string } | undefined
+    | {
+        readonly category?: cyberwareRules.CyberwareCategoryId | "installed";
+        readonly installedId?: string;
+      }
+    | undefined
   >(undefined);
   const [atShop, setAtShop] = useState<string | null>(null);
   const [atAutofixer, setAtAutofixer] = useState(false);
@@ -2034,15 +2038,26 @@ export function StoryScreen() {
           <Ripperdoc
             view={view}
             doc={view.ripperdoc}
-            initialSlot={docFocus?.slot}
+            initialCategory={docFocus?.category}
             initialInstalledId={docFocus?.installedId}
             onBuy={
               busy || view.death || view.ended
                 ? undefined
-                : async (id, credit) => {
+                : async (id, credit, options) => {
                     const doc = view.ripperdoc;
                     if (!doc) return;
-                    await act({ type: "buyCyberware", id, credit, doc: doc.id }, "ripperdoc", true);
+                    await act(
+                      {
+                        type: "buyCyberware",
+                        id,
+                        credit,
+                        doc: doc.id,
+                        ...(options?.armSide ? { armSide: options.armSide } : {}),
+                        ...(options?.replace ? { replace: options.replace } : {}),
+                      },
+                      "ripperdoc",
+                      true,
+                    );
                   }
             }
             onRemove={

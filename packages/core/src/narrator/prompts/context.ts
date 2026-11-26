@@ -222,9 +222,6 @@ const HARDENED_FACTION_MENTION: readonly (readonly [RegExp, string])[] = [
   [/暴恐机动队/, "暴恐机动队"],
   [/网络监察|网监/, "网络监察"],
 ];
-const SURGE_SHIELD_IDS = new Set(["grounding-plating"]);
-const THERMAL_SHIELD_IDS = new Set(["fireproof-coating"]);
-const ICE_DEFENSE_IDS = new Set(["self-ice", "cogito-lattice", "black-ice-sniffer"]);
 const SUBNET_MENTION = /([\u4e00-\u9fa5A-Za-z0-9·-]{2,14}(?:内网|子网))/;
 const SUBNET_GATE = /(?:隔离|封闭|必须先渗入|局域网|本地子网)/;
 const HIGH_END_VENUE =
@@ -243,15 +240,17 @@ function buildWeaponAdvisories(
   items: ReadonlyMap<string, ItemDef>,
   installed: readonly { readonly id: string }[],
   brokenChrome: readonly string[],
+  chromeCatalog: ReadonlyMap<string, { readonly smartLink?: boolean | undefined }>,
 ): string[] {
   const weaponIds = carriedWeaponIds(inv, items);
   if (weaponIds.length === 0) return [];
 
   const displayNames = weaponDisplayNames(weaponIds, inv.objects, items);
   const brokenSet = new Set(brokenChrome);
-  const hasHandSmartLink = installed.some((c) => c.id === "smart-link" && !brokenSet.has(c.id));
+  const isSmartLink = (id: string) => chromeCatalog.get(id)?.smartLink === true;
+  const hasHandSmartLink = installed.some((c) => isSmartLink(c.id) && !brokenSet.has(c.id));
   const brokenHandSmartLink =
-    !hasHandSmartLink && installed.some((c) => c.id === "smart-link" && brokenSet.has(c.id));
+    !hasHandSmartLink && installed.some((c) => isSmartLink(c.id) && brokenSet.has(c.id));
 
   const silencedGuns: string[] = [];
   const loudGuns: string[] = [];
@@ -387,11 +386,12 @@ export function physicsSection(
   const health = HealthStateSchema.safeParse(world.slices.health ?? {});
   const installed = cyber.success ? cyber.data.installed : [];
   const brokenChrome = health.success ? health.data.brokenChrome : [];
+  const chromeCatalog = cyberwareCatalog(safeData);
   const loadout = inv.success
-    ? loadoutSummary(inv.data, items, { installed, brokenChrome })
+    ? loadoutSummary(inv.data, items, { installed, brokenChrome, catalog: chromeCatalog })
     : undefined;
   const weaponAdvisories = inv.success
-    ? buildWeaponAdvisories(inv.data, items, installed, brokenChrome)
+    ? buildWeaponAdvisories(inv.data, items, installed, brokenChrome, chromeCatalog)
     : [];
   if (loadout && loadout.carryLevel !== "light") {
     weaponAdvisories.push(
@@ -448,8 +448,6 @@ export function physicsSection(
         (n.alias !== undefined && n.alias !== "" && inputText.includes(n.alias)) ||
         inputText.includes(n.id),
     );
-    const chromeCatalog = cyberwareCatalog(safeData);
-
     const targetAirGapped = AIR_GAP_HINT.test(sceneContext);
     const mechanicalWeaponOnly =
       WEAPON_GLITCH_HINT.test(inputText) && MECHANICAL_WEAPON_HINT.test(sceneContext);
@@ -474,13 +472,13 @@ export function physicsSection(
     const requiredSubnet = vector === "localSubnet" ? breachedHere[0] : subnetCandidate;
 
     const targetSelfIce = targetedNpcs.some((n) =>
-      (n.body?.cyberware ?? []).some((id) => ICE_DEFENSE_IDS.has(id)),
+      (n.body?.cyberware ?? []).some((id) => chromeCatalog.get(id)?.defenses?.includes("ice")),
     );
     const targetSurgeShielded = targetedNpcs.some((n) =>
-      (n.body?.cyberware ?? []).some((id) => SURGE_SHIELD_IDS.has(id)),
+      (n.body?.cyberware ?? []).some((id) => chromeCatalog.get(id)?.defenses?.includes("surge")),
     );
     const targetThermalShielded = targetedNpcs.some((n) =>
-      (n.body?.cyberware ?? []).some((id) => THERMAL_SHIELD_IDS.has(id)),
+      (n.body?.cyberware ?? []).some((id) => chromeCatalog.get(id)?.defenses?.includes("thermal")),
     );
     const targetHighTierChrome = targetedNpcs.some((n) =>
       (n.body?.cyberware ?? []).some((id) => {
@@ -683,10 +681,16 @@ export function boostNote(
         id: c.id,
         name: c.name,
         slot: c.slot,
+        category: c.category,
         humanityCost: c.humanityCost,
         iconic: c.iconic,
         armor: c.armor,
         accelerator: c.accelerator,
+        ...(c.armSide ? { armSide: c.armSide } : {}),
+        ...(c.defaultArmSide ? { defaultArmSide: c.defaultArmSide } : {}),
+        ...(c.capacityBonus !== undefined ? { capacityBonus: c.capacityBonus } : {}),
+        ...(c.safeLineBonus !== undefined ? { safeLineBonus: c.safeLineBonus } : {}),
+        ...(c.chassisProfile ? { chassisProfile: c.chassisProfile } : {}),
         ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
         ...(c.deckTraits ? { deckTraits: c.deckTraits } : {}),
         ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
@@ -694,9 +698,9 @@ export function boostNote(
   );
   const loadWarn =
     load.tier === "extreme"
-      ? `当前全身神经负荷已处于「极限超载」（${load.activeLoadScore}）${view.humanity.suppressed ? "，虽有压制剂暂时兜底但脊柱与中枢仍在硬抗高压" : "且未在压制剂药效内"}，强开加速极易直接触发鼻血、耳鸣色散、脊柱过热剧痛或赛博精神病症状。`
-      : load.tier === "heavy" || load.dualCore
-        ? `当前神经负荷处于「${load.label}」${load.dualCore ? "（双中枢并行）" : ""}，连续开启或同步并发其他高压硬件易起神经排异与感官失真。`
+      ? `当前全身神经承载已处于「极限红线」（${load.activeLoadScore}/${load.hardCap}）${view.humanity.suppressed ? "，虽有压制剂暂时兜底但脊柱与中枢仍在硬抗高压" : "且未在压制剂药效内"}，强开加速极易直接触发鼻血、耳鸣色散、脊柱过热剧痛或赛博精神病前兆。`
+      : load.overloaded || load.tier === "heavy" || load.dualCore
+        ? `当前神经承载处于「${load.label}」（${load.activeLoadScore}/${load.hardCap}）${load.dualCore ? "（双中枢并行）" : ""}，连续开启或同步并发其他高压硬件易起神经排异与感官失真。`
         : "";
   return `【斯安威斯坦时刻】\n玩家要求开启${name}。根据实际距离、身体动作、设备状态和对手反应判断能完成什么，不设固定动作格；快速破解的上传、装填和物体运动各有实际耗时。${loadWarn}${stage === "narrate" ? "写出加速感知和动作的可见结果；高压/极限负荷下出现的过热、鼻血、感官色散或神经症状如实写出并由后续记账，不按固定次数抽象扣点。" : "在 ruling 中说明具体可行条件、阻碍以及高负荷反噬，不替玩家追加动作。"}`;
 }
@@ -727,6 +731,12 @@ function playerChromeLoad(world: WorldState, data: Readonly<Record<string, unkno
           iconic: def.iconic,
           armor: def.armor,
           accelerator: def.accelerator,
+          ...(c.armSide ? { armSide: c.armSide } : {}),
+          ...(def.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+          ...(def.capacityBonus !== undefined ? { capacityBonus: def.capacityBonus } : {}),
+          ...(def.safeLineBonus !== undefined ? { safeLineBonus: def.safeLineBonus } : {}),
+          ...(def.chassisProfile ? { chassisProfile: def.chassisProfile } : {}),
+          ...(def.category ? { category: def.category } : {}),
           ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
           ...(def.deckTraits ? { deckTraits: def.deckTraits } : {}),
           ...(def.exclusiveGroup ? { exclusiveGroup: def.exclusiveGroup } : {}),

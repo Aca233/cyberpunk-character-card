@@ -1,7 +1,12 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, SystemContext } from "../../kernel/system";
 import { type HumanityState, isImmunosuppressed, neuralStage } from "../humanity";
-import type { InventoryState } from "../inventory";
+import {
+  findSuppressantId,
+  type InventoryState,
+  itemCatalog,
+  withWorldObjects,
+} from "../inventory";
 import { formatGameTime, type WorldClockState } from "../world";
 import {
   BLACKOUTS_KEPT,
@@ -53,8 +58,13 @@ export function takeSuppressant(
   command: SuppressantCommand,
   ctx: SystemContext,
 ): ApplyOutcome {
-  const backpack = ctx.read<InventoryState>("inventory").backpack;
-  if ((backpack[SUPPRESSANT_ID] ?? 0) < 1) return fail("背包里没有压制剂");
+  const inventory = ctx.read<InventoryState>("inventory");
+  const catalog =
+    ctx.data.items !== undefined
+      ? itemCatalog(withWorldObjects(ctx.data, inventory.objects))
+      : undefined;
+  const suppressantId = findSuppressantId(inventory.backpack, catalog, SUPPRESSANT_ID);
+  if (!suppressantId) return fail("背包里没有压制剂");
   draft.doses = draft.doses.filter((t) => ctx.now - t < DEPENDENCE_WINDOW);
   const before = suppressantStatus(draft.doses, ctx.now);
   draft.doses.push(ctx.now);
@@ -71,7 +81,7 @@ export function takeSuppressant(
     ok: true,
     notes,
     emit: [
-      { type: "item", action: "use", id: SUPPRESSANT_ID, reason: command.reason },
+      { type: "item", action: "use", id: suppressantId, reason: command.reason },
       { type: "humanity.suppress", durationMinutes },
     ],
   };

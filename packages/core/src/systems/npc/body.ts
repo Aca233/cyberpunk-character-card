@@ -1,12 +1,9 @@
 import type { ApplyOutcome } from "../../kernel/system";
 import {
   type CyberwareDef,
+  checkCyberwareInstall,
   cyberwareCatalog,
   cyberwareConflicts,
-  cyberwareExclusiveGroup,
-  EXCLUSIVE_GROUP_LABELS,
-  EXCLUSIVE_GROUP_LIMIT,
-  type ExclusiveGroup,
   SLOT_LABELS,
 } from "../cyberware";
 import type { DamageTier } from "../dice";
@@ -196,9 +193,9 @@ export function sanitizeNpcBody(
     if (cyberware.includes(id)) continue;
     const def = chrome?.get(id);
     if (def) {
-      const conflict = cyberwareConflicts(def, placedDefs);
-      if (!conflict.ok) {
-        droppedChrome.push(`${def.name}（与${conflict.label}冲突）`);
+      const check = checkCyberwareInstall(def, placedDefs);
+      if (!check.ok) {
+        droppedChrome.push(`${def.name}（${check.reason}）`);
         continue;
       }
       placedDefs.push(def);
@@ -238,29 +235,26 @@ export function bodyProblems(body: NpcBodyCard | undefined, data: Data, npcId?: 
 }
 
 /**
- * 按物理互斥组校验 NPC 义体：和玩家同一套 EXCLUSIVE_GROUP_LIMIT，
- * 同一脊柱加速主驱、主义眼、全身表皮主甲等物理冲突才拦截，支持双中枢、左右双臂混搭与非互斥生活/感官改造。
+ * 按 v2 三道约束校验 NPC 义体（与玩家完全同一套规则）：
+ * 1. 物理互斥（8 核心主位、装植减缩器、5 组显性同类器官）；
+ * 2. 4 个功能扩展区人体空间上限（外观生活区无上限）；
+ * 3. 三段式神经承载硬顶（原生 50 / 装植减缩 70 / 双子星 FBC 70 / 重装战甲 FBC 90）。
  */
 export function slotProblems(
   ids: readonly string[],
   chrome: ReadonlyMap<string, CyberwareDef>,
 ): string[] {
-  const byGroup = new Map<ExclusiveGroup, string[]>();
+  const problems: string[] = [];
+  const placed: CyberwareDef[] = [];
   for (const id of ids) {
     const def = chrome.get(id);
     if (!def) continue;
-    const group = cyberwareExclusiveGroup(def);
-    if (!group) continue;
-    byGroup.set(group, [...(byGroup.get(group) ?? []), def.name]);
-  }
-  const problems: string[] = [];
-  for (const [group, list] of byGroup) {
-    const cap = EXCLUSIVE_GROUP_LIMIT[group];
-    if (list.length > cap) {
-      problems.push(
-        `${EXCLUSIVE_GROUP_LABELS[group]}最多装 ${cap} 件，现在装了 ${list.length} 件（${list.join("、")}）`,
-      );
+    const check = checkCyberwareInstall(def, placed);
+    if (!check.ok) {
+      problems.push(`${def.name}：${check.reason}`);
+      continue;
     }
+    placed.push(def);
   }
   return problems;
 }
@@ -583,12 +577,11 @@ export function chromeDetails(ids: readonly string[], data: Data): ChromeDetail[
   return ids.map((id) => {
     const def = catalog.get(id);
     if (!def) return { id, name: id, slot: "", ability: "" };
-    const netTag =
-      def.id === "self-ice"
-        ? ("selfIce" as const)
-        : def.slot === "os" && def.deckTraits !== undefined
-          ? ("deck" as const)
-          : undefined;
+    const netTag = def.defenses?.includes("ice")
+      ? ("selfIce" as const)
+      : def.slot === "os" && def.deckTraits !== undefined
+        ? ("deck" as const)
+        : undefined;
     return {
       id,
       name: def.name,

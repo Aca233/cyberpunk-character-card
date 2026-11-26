@@ -1,8 +1,15 @@
 import { z } from "zod";
 import {
+  type ArmSide,
+  ArmSideSchema,
+  ChassisProfileSchema,
+  type CyberwareCategoryId,
+  CyberwareCategoryIdSchema,
   type CyberwareDef,
+  CyberwareDefenseSchema,
   CyberwareSlotSchema,
-  cyberwareConflicts,
+  checkCyberwareInstall,
+  cyberwareCategoryOf,
   cyberwareExclusiveGroup,
   ExclusiveGroupSchema,
 } from "../systems/cyberware/schema";
@@ -294,6 +301,17 @@ export const StartCyberwareSchema = z.object({
   accelerator: z.boolean().optional(),
   deckProfile: line(60).optional(),
   exclusiveGroup: ExclusiveGroupSchema.optional(),
+  /** v2 显式归类（核心主位 / 4 功能扩展区 / 外观生活） */
+  category: CyberwareCategoryIdSchema.optional(),
+  /** 手臂义体装配侧别（left / right / both） */
+  armSide: ArmSideSchema.optional(),
+  defaultArmSide: ArmSideSchema.optional(),
+  capacityBonus: z.number().int().min(1).max(40).optional(),
+  safeLineBonus: z.number().int().min(1).max(30).optional(),
+  chassisProfile: ChassisProfileSchema.optional(),
+  smartLink: z.boolean().optional(),
+  carryBonus: z.number().int().min(1).max(3).optional(),
+  defenses: z.array(CyberwareDefenseSchema).optional(),
   custom: z.boolean().optional(),
   packId: z.string().trim().max(60).optional(),
 });
@@ -488,37 +506,45 @@ export function normalizeBoard(
   tables: BoardTables,
 ): { readonly ok: true; readonly board: Board } | { readonly ok: false; readonly error: string } {
   const catalog = tables.cyberware;
-  const placed: CyberwareDef[] = [];
+  const placed: (CyberwareDef & { readonly armSide?: ArmSide | undefined })[] = [];
   const cyberware: StartCyberware[] = [];
   for (const item of board.cyberware) {
     const def = catalog.find((c) => c.id === item.id);
     if (!def) {
-      // 创意工坊/自定义义体自包含快照兜底：按物理互斥校验
+      // 创意工坊/自定义义体自包含快照兜底：按物理互斥、分区空间与神经承载硬顶校验
       if (item.custom && item.slot) {
         const rarity: Rarity = item.rarity ?? "rare";
-        const probe: CyberwareDef = {
+        const isLifestyle = item.category === "lifestyle";
+        const humanityCost = isLifestyle ? 0 : item.humanityCost;
+        const probe: CyberwareDef & { readonly armSide?: ArmSide | undefined } = {
           id: item.id,
           name: item.name,
           slot: item.slot,
           rarity,
           price: 0,
-          humanityCost: item.humanityCost,
+          humanityCost,
           ability: item.ability || item.summary || "自定义义体模块",
           armor: Boolean(item.armor),
           accelerator: Boolean(item.accelerator),
           iconic: false,
           ...(item.deckProfile ? { deckProfile: item.deckProfile, deckTraits: [] } : {}),
           ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
+          ...(item.category ? { category: item.category } : {}),
+          ...(item.armSide ? { armSide: item.armSide } : {}),
+          ...(item.defaultArmSide ? { defaultArmSide: item.defaultArmSide } : {}),
+          ...(item.capacityBonus !== undefined ? { capacityBonus: item.capacityBonus } : {}),
+          ...(item.safeLineBonus !== undefined ? { safeLineBonus: item.safeLineBonus } : {}),
+          ...(item.chassisProfile ? { chassisProfile: item.chassisProfile } : {}),
+          ...(item.smartLink ? { smartLink: true } : {}),
+          ...(item.carryBonus !== undefined ? { carryBonus: item.carryBonus } : {}),
+          ...(item.defenses ? { defenses: item.defenses } : {}),
         };
-        const conflict = cyberwareConflicts(probe, placed);
-        if (!conflict.ok) {
-          return {
-            ok: false,
-            error: `「${conflict.label}」最多装 ${conflict.limit} 件（与 ${conflict.blockers.map((b) => b.name).join("、")} 冲突）`,
-          };
+        const check = checkCyberwareInstall(probe, placed);
+        if (!check.ok) {
+          return { ok: false, error: check.reason };
         }
         placed.push(probe);
-        cyberware.push({ ...item, rarity });
+        cyberware.push({ ...item, rarity, humanityCost });
         continue;
       }
       return { ok: false, error: `义体表里没有 ${item.id}` };
@@ -526,26 +552,34 @@ export function normalizeBoard(
     if (def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity)) {
       return { ok: false, error: `${def.name}不能在创建时装，进剧情后找义体医生` };
     }
-    const conflict = cyberwareConflicts(def, placed);
-    if (!conflict.ok) {
-      return {
-        ok: false,
-        error: `「${conflict.label}」最多装 ${conflict.limit} 件（与 ${conflict.blockers.map((b) => b.name).join("、")} 冲突）`,
-      };
+    const probe = item.armSide ? { ...def, armSide: item.armSide } : def;
+    const check = checkCyberwareInstall(probe, placed);
+    if (!check.ok) {
+      return { ok: false, error: check.reason };
     }
     const group = cyberwareExclusiveGroup(def);
-    placed.push(def);
+    const category: CyberwareCategoryId = cyberwareCategoryOf(def);
+    placed.push(probe);
     cyberware.push({
       id: def.id,
       name: def.name,
       humanityCost: def.humanityCost,
       slot: def.slot,
       rarity: def.rarity,
+      category,
       ...(def.ability ? { ability: def.ability } : {}),
       ...(def.armor ? { armor: true } : {}),
       ...(def.accelerator ? { accelerator: true } : {}),
       ...(def.deckProfile ? { deckProfile: def.deckProfile } : {}),
       ...(group ? { exclusiveGroup: group } : {}),
+      ...(def.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+      ...(def.capacityBonus !== undefined ? { capacityBonus: def.capacityBonus } : {}),
+      ...(def.safeLineBonus !== undefined ? { safeLineBonus: def.safeLineBonus } : {}),
+      ...(def.chassisProfile ? { chassisProfile: def.chassisProfile } : {}),
+      ...(def.smartLink ? { smartLink: true } : {}),
+      ...(def.carryBonus !== undefined ? { carryBonus: def.carryBonus } : {}),
+      ...(def.defenses ? { defenses: def.defenses } : {}),
+      ...(item.armSide && group === "armMount" ? { armSide: item.armSide } : {}),
       ...(item.custom ? { custom: true, ...(item.packId ? { packId: item.packId } : {}) } : {}),
     });
   }
@@ -564,19 +598,28 @@ export function customCyberwareDefs(
     if (!item.slot || seen.has(item.id)) continue;
     if (!/^[a-z0-9-]+$/.test(item.id)) continue;
     seen.add(item.id);
+    const humanityCost = item.category === "lifestyle" ? 0 : item.humanityCost;
     out.push({
       id: item.id,
       name: item.name,
       slot: item.slot,
       rarity: item.rarity ?? "rare",
       price: 0,
-      humanityCost: item.humanityCost,
+      humanityCost,
       ability: item.ability || item.summary || "自定义义体模块",
       armor: Boolean(item.armor),
       accelerator: Boolean(item.accelerator),
       iconic: false,
       ...(item.deckProfile ? { deckProfile: item.deckProfile, deckTraits: [] } : {}),
       ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
+      ...(item.category ? { category: item.category } : {}),
+      ...(item.defaultArmSide ? { defaultArmSide: item.defaultArmSide } : {}),
+      ...(item.capacityBonus !== undefined ? { capacityBonus: item.capacityBonus } : {}),
+      ...(item.safeLineBonus !== undefined ? { safeLineBonus: item.safeLineBonus } : {}),
+      ...(item.chassisProfile ? { chassisProfile: item.chassisProfile } : {}),
+      ...(item.smartLink ? { smartLink: true } : {}),
+      ...(item.carryBonus !== undefined ? { carryBonus: item.carryBonus } : {}),
+      ...(item.defenses ? { defenses: item.defenses } : {}),
     });
   }
   return out;

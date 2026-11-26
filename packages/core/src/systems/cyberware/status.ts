@@ -72,7 +72,8 @@ export const cyberwareStatus: readonly SystemStatus[] = [
             const detail = c.broken
               ? "打坏了，修好前用不了"
               : [ability || c.bonusText].filter(Boolean).join("；");
-            return `${c.name}（${c.id}，${[grade, c.slotLabel].filter(Boolean).join("·")}${detail ? `：${detail}` : ""}${chipTag}）`;
+            const sideTag = c.armSideLabel ? `·${c.armSideLabel}` : "";
+            return `${c.name}（${c.id}，${[grade, `${c.categoryLabel}${sideTag}`].filter(Boolean).join("·")}${detail ? `：${detail}` : ""}${chipTag}）`;
           })
           .join("；")}`,
       ];
@@ -85,21 +86,33 @@ export const cyberwareStatus: readonly SystemStatus[] = [
             id: c.id,
             name: c.name,
             slot: c.slot,
+            category: c.category,
             humanityCost: c.humanityCost,
             iconic: c.iconic,
             armor: c.armor,
             accelerator: c.accelerator,
+            ...(c.armSide ? { armSide: c.armSide } : {}),
+            ...(c.defaultArmSide ? { defaultArmSide: c.defaultArmSide } : {}),
+            ...(c.capacityBonus !== undefined ? { capacityBonus: c.capacityBonus } : {}),
+            ...(c.safeLineBonus !== undefined ? { safeLineBonus: c.safeLineBonus } : {}),
+            ...(c.chassisProfile ? { chassisProfile: c.chassisProfile } : {}),
             ...(c.deckProfile ? { deckProfile: c.deckProfile } : {}),
             ...(c.deckTraits ? { deckTraits: c.deckTraits } : {}),
             ...(c.exclusiveGroup ? { exclusiveGroup: c.exclusiveGroup } : {}),
           })),
       );
-      if (load.tier === "heavy" || load.tier === "extreme" || load.dualCore || load.fullBorg) {
+      if (
+        load.overloaded ||
+        load.tier === "heavy" ||
+        load.tier === "extreme" ||
+        load.dualCore ||
+        load.fullBorg
+      ) {
         const pressure =
           load.tier === "extreme"
-            ? `负荷指数 ${load.activeLoadScore}（已远超常规肉身神经承载，装新高压件、连开加速、双中枢并发、激战重伤或未用压制剂时极易直接触发排异与赛博精神病症状）`
-            : `负荷指数 ${load.activeLoadScore}（持续高压压榨、叠装重器或重大刺激时易起神经排异与感官失真）`;
-        lines.push(`义体神经负荷（${load.label}，${pressure}）：${load.summary}`);
+            ? `神经承载 ${load.activeLoadScore}/${load.hardCap}（安全线 ${load.safeCap}，已抵极限红线；连开加速、双中枢并发、激战重伤或未用压制剂时极易直接触发排异与赛博精神病前兆）`
+            : `神经承载 ${load.activeLoadScore}/${load.hardCap}（安全线 ${load.safeCap}，处于超载红线；持续高压压榨或重大刺激时易起神经排异与感官失真）`;
+        lines.push(`义体神经承载（${load.label}，${pressure}）：${load.summary}`);
       }
       const eyes = installed.filter((c) => c.slot === "eyes" && !c.broken);
       if (eyes.length > 0) {

@@ -689,7 +689,7 @@ export function InventoryPage({
     const ceiling =
       view.health.wound === "severe" ? Math.floor(view.health.max * 0.29) : view.health.max;
     const directHeal = kind === "healing" && !view.combat.active;
-    const directSuppressant = id === "psycho-suppressant" && !view.combat.active;
+    const directSuppressant = Boolean(detail?.suppressant) && !view.combat.active;
     const suppressantUntil = view.psychosis.suppressant.until;
     const useBlocked =
       disabledReason ||
