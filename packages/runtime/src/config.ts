@@ -229,7 +229,9 @@ function checkKey(raw: unknown): { ok: true; key: string } | Failure {
   if (typeof raw !== "string") return fail(400, "请填写密钥");
   const key = raw.trim();
   if (key.length < 8) return fail(400, "密钥太短，检查是不是没复制完整");
-  if (key.length > 1000) return fail(400, "密钥太长，检查是不是多复制了别的内容");
+  // 以 { 开头的是 Vertex 服务账号 JSON（压成单行约 2.4KB），普通 API key 不会这么长
+  const maxLength = key.startsWith("{") ? 8000 : 1000;
+  if (key.length > maxLength) return fail(400, "密钥太长，检查是不是多复制了别的内容");
   if (!/^[\x21-\x7e]+$/.test(key)) {
     return fail(400, "密钥里有空格、换行或中文字符，检查是不是多复制了内容");
   }
