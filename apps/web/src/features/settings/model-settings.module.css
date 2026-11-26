@@ -856,6 +856,12 @@
   color: var(--cp-cyan);
 }
 
+.keyActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .keyBadge[data-tone="warn"] {
   border-color: rgb(252 238 10 / 40%);
   background: rgb(252 238 10 / 12%);

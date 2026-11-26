@@ -1308,6 +1308,8 @@ function ConnectionForm({
   const [modelList, setModelList] = useState<readonly string[] | null>(null);
   const [modelFilter, setModelFilter] = useState("");
   const [modelError, setModelError] = useState("");
+  const [keyNote, setKeyNote] = useState("");
+  const keyFileInput = useRef<HTMLInputElement | null>(null);
   // 创建成功后保留名字；后续步骤失败时重试更新，不重复创建。
   const persisted = useRef<string | null>(profile?.name ?? null);
   const currentType = profile?.type ?? copyFrom?.type ?? PRESETS[preset].type;
@@ -1531,6 +1533,35 @@ function ConnectionForm({
     event.preventDefault();
     if (!save.isPending) save.mutate();
   };
+  /** 服务账号 JSON 文件直接导入密钥栏（Vertex）：校验字段后压成单行 */
+  const importKeyFile = async (event: { target: HTMLInputElement }) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    setKeyNote("");
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      if (
+        parsed.type !== "service_account" ||
+        typeof parsed.client_email !== "string" ||
+        !parsed.client_email ||
+        typeof parsed.private_key !== "string" ||
+        !parsed.private_key
+      ) {
+        setKeyNote(
+          `「${file.name}」不是有效的服务账号 JSON（需要 type=service_account、client_email、private_key）`,
+        );
+        return;
+      }
+      setKey(JSON.stringify(parsed));
+      setKeyNote(`已导入服务账号密钥（${parsed.client_email}），保存连接后生效`);
+    } catch {
+      setKeyNote(`「${file.name}」读取失败：不是合法的 JSON 文件`);
+    }
+  };
+
   const selectPreset = (next: Preset) => {
     if (persisted.current !== null || save.isPending) return;
     setPreset(next);
@@ -1765,14 +1796,35 @@ function ConnectionForm({
                   {keyBadge.label}
                 </span>
               </div>
-              <button
-                type="button"
-                className={styles.inlineToggle}
-                disabled={save.isPending || key.length === 0}
-                onClick={() => setShowKey((v) => !v)}
-              >
-                {showKey ? "隐藏输入" : "显示输入"}
-              </button>
+              <span className={styles.keyActions}>
+                {currentType === "vertex" && (
+                  <>
+                    <input
+                      ref={keyFileInput}
+                      type="file"
+                      accept=".json,application/json"
+                      hidden
+                      onChange={(e) => void importKeyFile(e)}
+                    />
+                    <button
+                      type="button"
+                      className={styles.inlineToggle}
+                      disabled={save.isPending}
+                      onClick={() => keyFileInput.current?.click()}
+                    >
+                      导入 JSON
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className={styles.inlineToggle}
+                  disabled={save.isPending || key.length === 0}
+                  onClick={() => setShowKey((v) => !v)}
+                >
+                  {showKey ? "隐藏输入" : "显示输入"}
+                </button>
+              </span>
             </div>
             <FrameBox>
               <input
@@ -1797,9 +1849,10 @@ function ConnectionForm({
               />
             </FrameBox>
             <small>
-              {isLocalNoKey
-                ? `本地 ${currentType} 通常不需要密钥。`
-                : "没有密钥也可以先保存连接，但不能用于剧情或文生图。"}
+              {keyNote ||
+                (isLocalNoKey
+                  ? `本地 ${currentType} 通常不需要密钥。`
+                  : "没有密钥也可以先保存连接，但不能用于剧情或文生图。")}
             </small>
           </div>
           <label className={styles.field}>
