@@ -8,7 +8,7 @@ import { useShellTheme } from "./store";
 /** 原作 panel.frame（1060×1560）：切角和侧边缺口都在离边 120 原图像素以内，按 120 切 */
 const FRAME_SLICE = 120;
 
-export type ShellBackdropVariant = "menu" | "settings" | "characters";
+export type ShellBackdropVariant = "menu" | "settings" | "characters" | "workshop";
 
 /** 跨路由保留视频播放进度，主菜单 / 设置 / 角色工作台 / 局内剧情之间切换时动态壁纸无缝续播 */
 const videoTimeMemory = new Map<ShellThemeId, number>();
@@ -142,7 +142,7 @@ export function ShellBackdrop({ variant }: { readonly variant: ShellBackdropVari
   }, [effectiveId, videoSrc]);
 
   const showStrip = variant === "menu" && effectiveId === "night-city";
-  const showGrid = variant !== "characters";
+  const showGrid = variant !== "characters" && variant !== "workshop";
 
   return (
     <div

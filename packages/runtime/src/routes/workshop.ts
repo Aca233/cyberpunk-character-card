@@ -1,12 +1,15 @@
-import type { Clock } from "@cp/core";
+import type { Clock, LlmClient } from "@cp/core";
 import {
+  generateWorkshopPack,
   type InstalledWorkshopPack,
+  WorkshopGenerateRequestSchema,
   type WorkshopPack,
   WorkshopPackSchema,
   workshopPackIssues,
 } from "@cp/core";
 import { Hono } from "hono";
 import { z } from "zod";
+import { AbortedError, UpstreamError } from "../providers/http";
 import type { WorkshopStore } from "../workshop";
 import { workshopCatalog } from "../workshop-content";
 
@@ -14,6 +17,7 @@ const UpdateSchema = z.strictObject({ enabled: z.boolean() });
 
 function packSummary(pack: WorkshopPack) {
   return {
+    characters: pack.characters.length,
     modules: pack.modules.length,
     npcs: pack.npcs.length,
     items: pack.items.length,
@@ -37,10 +41,44 @@ function validatePack(
   return issues;
 }
 
-/** 本地玩家内容包的列表、校验、安装、原地更新、启停和卸载。 */
-export function workshopRoutes(store: WorkshopStore, clock: Clock): Hono {
+/** 本地玩家内容包的列表、AI 生成、校验、安装、原地更新、启停和卸载。 */
+export function workshopRoutes(store: WorkshopStore, clock: Clock, llm?: LlmClient): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json({ packages: await store.list() }));
+  app.post("/generate", async (c) => {
+    if (!llm) {
+      return c.json({ error: "当前环境未配置 AI 模型服务" }, 503);
+    }
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "请求体不是合法的 JSON" }, 400);
+    }
+    const parsed = WorkshopGenerateRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues[0]?.message ?? "生成参数不合法" }, 400);
+    }
+    try {
+      const result = await generateWorkshopPack(llm, parsed.data, c.req.raw.signal);
+      if (!result.ok) {
+        return c.json(
+          { error: result.error, blocked: Boolean(result.blocked) },
+          result.blocked ? 422 : 400,
+        );
+      }
+      const issues = workshopPackIssues(result.pack, workshopCatalog);
+      return c.json({ pack: result.pack, issues, summary: packSummary(result.pack) });
+    } catch (error) {
+      if (error instanceof AbortedError) {
+        return c.json({ error: "已取消生成" }, 408);
+      }
+      if (error instanceof UpstreamError) {
+        return c.json({ error: error.message }, 502);
+      }
+      return c.json({ error: error instanceof Error ? error.message : "AI 生成内容包失败" }, 500);
+    }
+  });
   app.post("/validate", async (c) => {
     let raw: unknown;
     try {

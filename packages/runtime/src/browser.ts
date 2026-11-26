@@ -8,6 +8,7 @@ import { IdbDocStore, IdbSaveStore, openGameDb } from "./idb-store";
 import { ImageStore } from "./images";
 import { PresetStore } from "./presets";
 import { TurnHub } from "./turns";
+import { WorkshopStore } from "./workshop";
 
 /**
  * 浏览器端纯静态运行时：使用 Hono 在页面内存里分发虚拟路由（app.fetch），
@@ -46,7 +47,7 @@ export async function createLocalBackend(
     images: new ImageStore(docs),
     checkpoints: new TurnCheckpointStore(docs),
     embeddingCache: new EmbeddingCacheStore(docs),
-    // 创意工坊尚未完成，暂不启用
+    workshop: new WorkshopStore(docs),
     hub,
     log: (message) => console.warn(message),
   });

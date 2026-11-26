@@ -381,7 +381,7 @@ export function createApp(deps: AppDeps): Hono {
     app.route("/api/saves", saveImageRoutes(deps.images));
   }
   app.route("/api/characters", characterRoutes(deps.characters, clock, llm, deps.workshop));
-  if (deps.workshop) app.route("/api/workshop", workshopRoutes(deps.workshop, clock));
+  if (deps.workshop) app.route("/api/workshop", workshopRoutes(deps.workshop, clock, llm));
   app.route("/api/saves", saveRoutes(game, hub));
   return app;
 }

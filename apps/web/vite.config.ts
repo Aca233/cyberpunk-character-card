@@ -1,5 +1,9 @@
 import react from "@vitejs/plugin-react";
 import { type Connect, defineConfig, type Plugin } from "vite";
+import {
+  createMemoryWorkshopStore,
+  handleCommunityWorkshop,
+} from "../../functions/api/community-workshop/core";
 import { handleRelay } from "../../functions/api/proxy";
 
 /**
@@ -8,43 +12,51 @@ import { handleRelay } from "../../functions/api/proxy";
  */
 const BASE = process.env.CP_BASE ?? "/";
 
+function forwardWebHandler(
+  req: Parameters<Connect.NextHandleFunction>[0],
+  res: Parameters<Connect.NextHandleFunction>[1],
+  handler: (request: Request) => Promise<Response>,
+) {
+  const origin = `http://${req.headers.host ?? "127.0.0.1"}`;
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) for (const v of value) headers.append(name, v);
+    else if (value !== undefined) headers.set(name, value);
+  }
+  const hasBody = req.method !== "GET" && req.method !== "HEAD";
+  const request = new Request(`${origin}${req.url ?? "/"}`, {
+    method: req.method ?? "GET",
+    headers,
+    body: hasBody ? (req as unknown as RequestInit["body"]) : null,
+    ...(hasBody ? { duplex: "half" } : {}),
+  } as RequestInit);
+  handler(request)
+    .then(async (out) => {
+      res.statusCode = out.status;
+      out.headers.forEach((value, name) => {
+        res.setHeader(name, value);
+      });
+      if (!out.body) return res.end();
+      const reader = out.body.getReader();
+      res.on("close", () => void reader.cancel().catch(() => {}));
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(value);
+      }
+      res.end();
+    })
+    .catch((error: unknown) => {
+      if (!res.headersSent) res.statusCode = 502;
+      res.end(String(error));
+    });
+}
+
 /** 开发和预览时提供与线上一致的 /api/proxy 转发（线上是 functions/api/proxy.ts） */
 function relayDevPlugin(): Plugin {
   const middleware: Connect.NextHandleFunction = (req, res, next) => {
     if (!req.url?.startsWith("/api/proxy")) return next();
-    const origin = `http://${req.headers.host ?? "127.0.0.1"}`;
-    const headers = new Headers();
-    for (const [name, value] of Object.entries(req.headers)) {
-      if (Array.isArray(value)) for (const v of value) headers.append(name, v);
-      else if (value !== undefined) headers.set(name, value);
-    }
-    const hasBody = req.method !== "GET" && req.method !== "HEAD";
-    const request = new Request(`${origin}/api/proxy`, {
-      method: req.method ?? "GET",
-      headers,
-      body: hasBody ? (req as unknown as RequestInit["body"]) : null,
-      ...(hasBody ? { duplex: "half" } : {}),
-    } as RequestInit);
-    handleRelay(request)
-      .then(async (out) => {
-        res.statusCode = out.status;
-        out.headers.forEach((value, name) => {
-          res.setHeader(name, value);
-        });
-        if (!out.body) return res.end();
-        const reader = out.body.getReader();
-        res.on("close", () => void reader.cancel().catch(() => {}));
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(value);
-        }
-        res.end();
-      })
-      .catch((error: unknown) => {
-        if (!res.headersSent) res.statusCode = 502;
-        res.end(String(error));
-      });
+    forwardWebHandler(req, res, handleRelay);
   };
   return {
     name: "cp-relay-dev",
@@ -53,9 +65,27 @@ function relayDevPlugin(): Plugin {
   };
 }
 
+/** 开发和预览时提供与线上一致的 /api/community-workshop 社区工坊接口（纯内存模拟 D1） */
+function communityWorkshopDevPlugin(): Plugin {
+  const store = createMemoryWorkshopStore();
+  const middleware: Connect.NextHandleFunction = (req, res, next) => {
+    if (!req.url?.startsWith("/api/community-workshop")) return next();
+    forwardWebHandler(req, res, (request) =>
+      handleCommunityWorkshop(request, store, {
+        clientIp: req.socket.remoteAddress ?? "127.0.0.1",
+      }),
+    );
+  };
+  return {
+    name: "cp-community-workshop-dev",
+    configureServer: (server) => void server.middlewares.use(middleware),
+    configurePreviewServer: (server) => void server.middlewares.use(middleware),
+  };
+}
+
 export default defineConfig({
   base: BASE,
-  plugins: [react(), relayDevPlugin()],
+  plugins: [react(), relayDevPlugin(), communityWorkshopDevPlugin()],
   server: {
     host: "127.0.0.1",
     port: 5177,

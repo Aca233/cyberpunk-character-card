@@ -41,6 +41,7 @@ export const WorkshopPackSchema = z
     title: z.string().trim().min(1).max(40),
     author: z.string().trim().max(40).default(""),
     description: z.string().trim().max(300).default(""),
+    characters: z.array(CharacterCardSchema).max(20).default([]),
     modules: z.array(BoardModuleSchema).max(200).default([]),
     acquaintances: z.array(AcquaintanceSchema).max(100).default([]),
     npcs: z.array(NpcCardSchema).max(200).default([]),
@@ -327,6 +328,9 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
     cyberware: pack.cyberware.map((entry) => ({
       ...entry,
       id: workshopEntityId(pack.id, entry.id),
+      ...(entry.variantGroup
+        ? { variantGroup: workshopEntityId(pack.id, entry.variantGroup) }
+        : {}),
     })),
     braindances: pack.braindances.map((entry) => ({
       ...entry,
@@ -355,3 +359,80 @@ export const WorkshopCharacterExportSchema = z.object({
   character: CharacterCardSchema,
 });
 export type WorkshopCharacterExport = z.infer<typeof WorkshopCharacterExportSchema>;
+
+/** 社区工坊单包体积上限（字节）：512 KB，防止滥用并适配 Cloudflare D1 单行存储 */
+export const WORKSHOP_PACK_MAX_BYTES = 512 * 1024;
+/** 社区工坊内容包封面图上限（字节）：180 KB（前端自动压缩为 16:9 WebP） */
+export const WORKSHOP_COVER_MAX_BYTES = 180 * 1024;
+
+export const WorkshopPackSummaryCountsSchema = z.object({
+  characters: z.number().int().min(0).default(0),
+  modules: z.number().int().min(0),
+  acquaintances: z.number().int().min(0),
+  npcs: z.number().int().min(0),
+  items: z.number().int().min(0),
+  weapons: z.number().int().min(0),
+  cyberware: z.number().int().min(0),
+  braindances: z.number().int().min(0),
+  chipContents: z.number().int().min(0),
+  listings: z.number().int().min(0),
+});
+export type WorkshopPackSummaryCounts = z.infer<typeof WorkshopPackSummaryCountsSchema>;
+
+export function workshopPackSummary(pack: WorkshopPack): WorkshopPackSummaryCounts {
+  return {
+    characters: pack.characters.length,
+    modules: pack.modules.length,
+    acquaintances: pack.acquaintances.length,
+    npcs: pack.npcs.length,
+    items: pack.items.length,
+    weapons: pack.items.filter((item) => item.kind === "weapon").length,
+    cyberware: pack.cyberware.length,
+    braindances: pack.braindances.length,
+    chipContents: pack.chipContents.length,
+    listings: pack.shopListings.length + pack.ripperdocListings.length,
+  };
+}
+
+/** 社区创意工坊广场中单个公开内容包的目录元数据 */
+export const CommunityWorkshopSummarySchema = z.object({
+  id: PackIdSchema,
+  title: z.string().min(1).max(40),
+  author: z.string().max(40),
+  description: z.string().max(300),
+  summary: WorkshopPackSummaryCountsSchema,
+  entryCount: z.number().int().min(0),
+  byteSize: z.number().int().min(0),
+  downloads: z.number().int().min(0),
+  revision: z.number().int().min(1),
+  coverHash: z.string().nullable().default(null),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type CommunityWorkshopSummary = z.infer<typeof CommunityWorkshopSummarySchema>;
+
+export const CommunityWorkshopListResponseSchema = z.object({
+  items: z.array(CommunityWorkshopSummarySchema),
+  total: z.number().int().min(0),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  hasMore: z.boolean(),
+});
+export type CommunityWorkshopListResponse = z.infer<typeof CommunityWorkshopListResponseSchema>;
+
+export const CommunityWorkshopDownloadResponseSchema = z.object({
+  item: CommunityWorkshopSummarySchema,
+  pack: WorkshopPackSchema,
+});
+export type CommunityWorkshopDownloadResponse = z.infer<
+  typeof CommunityWorkshopDownloadResponseSchema
+>;
+
+export const CommunityWorkshopPublishResponseSchema = z.object({
+  item: CommunityWorkshopSummarySchema,
+  /** 仅首次发布时一次性返回，作者凭此密钥更新或下架该内容包 */
+  editToken: z.string().min(16).optional(),
+});
+export type CommunityWorkshopPublishResponse = z.infer<
+  typeof CommunityWorkshopPublishResponseSchema
+>;

@@ -1,13 +1,25 @@
 import {
+  type CharacterCard,
+  type CommunityWorkshopSummary,
+  cyberwareRules,
   type InstalledWorkshopPack,
   InstalledWorkshopPackSchema,
   type WorkshopPack,
-  WorkshopPackSchema,
 } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../../api/client";
+import {
+  type CommunityCategoryFilter,
+  type CommunitySortKey,
+  CommunityWorkshopError,
+  communityCoverUrl,
+  communityWorkshopApi,
+  loadCommunityEditTokens,
+  removeCommunityEditToken,
+  saveCommunityEditToken,
+} from "../../api/communityWorkshop";
 import { formatDate } from "../../labels";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
@@ -17,35 +29,19 @@ import { CellFrame, FrameBox } from "../../ui/FrameBox";
 import { KeyBar, KeyHint } from "../../ui/KeyHint";
 import { useLayer } from "../../ui/layers";
 import { ToggleCheck } from "../../ui/ToggleCheck";
+import { ShellBackdrop } from "../theme/ShellBackdrop";
 import {
-  exportLocalWorkshopPack,
-  loadLocalCustomCyberware,
-  loadLocalCustomModules,
-} from "../characters/creator";
+  type PublishSourceTab,
+  type PublishSubmitPayload,
+  WorkshopPublishModal,
+} from "./WorkshopPublishModal";
 import styles from "./workshop.module.css";
 
-const FRAME_SLICE = 120;
-
-const EMPTY_PACK: WorkshopPack = {
-  format: "cp2077-workshop-pack",
-  version: 2,
-  id: "my-pack",
-  title: "我的夜之城内容包",
-  author: "",
-  description: "",
-  modules: [],
-  acquaintances: [],
-  npcs: [],
-  seedNpcs: [],
-  items: [],
-  cyberware: [],
-  braindances: [],
-  chipContents: [],
-  shopListings: [],
-  ripperdocListings: [],
-};
+type MainView = "market" | "library";
+type StatusFilter = "all" | "enabled" | "disabled";
 
 type EntryCategory =
+  | "characters"
   | "modules"
   | "acquaintances"
   | "npcs"
@@ -60,7 +56,6 @@ type EntryCategory =
 interface PreviewEntry {
   readonly key: string;
   readonly category: EntryCategory;
-  readonly index: number;
   readonly label: string;
   readonly name: string;
   readonly id: string;
@@ -68,6 +63,7 @@ interface PreviewEntry {
 }
 
 const CATEGORY_LABELS: Readonly<Record<EntryCategory, string>> = {
+  characters: "角色卡",
   modules: "模块",
   acquaintances: "人脉",
   npcs: "人物",
@@ -87,6 +83,25 @@ const MODULE_SLOT_LABELS: Readonly<Record<string, string>> = {
   flaw: "缺陷",
 };
 
+const COMMUNITY_CATEGORIES: readonly {
+  readonly id: CommunityCategoryFilter;
+  readonly label: string;
+}[] = [
+  { id: "all", label: "全部" },
+  { id: "characters", label: "角色卡" },
+  { id: "cyberware", label: "义体" },
+  { id: "items", label: "武器与物品" },
+  { id: "npcs", label: "人物与人脉" },
+  { id: "modules", label: "出身与特质" },
+  { id: "media", label: "超梦与芯片" },
+];
+
+const COMMUNITY_SORTS: readonly { readonly id: CommunitySortKey; readonly label: string }[] = [
+  { id: "popular", label: "最多订阅" },
+  { id: "newest", label: "最新发布" },
+  { id: "updated", label: "最近更新" },
+];
+
 function downloadJson(value: unknown, fileName: string) {
   const blob = new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -97,18 +112,23 @@ function downloadJson(value: unknown, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(bytes >= 10 * 1024 ? 0 : 1)} KB`;
+}
+
 function packCategoryCounts(pack: WorkshopPack): readonly {
   readonly key: EntryCategory;
   readonly label: string;
   readonly count: number;
 }[] {
   const entries: readonly [EntryCategory, number][] = [
-    ["modules", pack.modules.length],
-    ["acquaintances", pack.acquaintances.length],
-    ["npcs", pack.npcs.length],
-    ["seedNpcs", pack.seedNpcs.length],
-    ["items", pack.items.length],
+    ["characters", pack.characters.length],
     ["cyberware", pack.cyberware.length],
+    ["items", pack.items.length],
+    ["modules", pack.modules.length],
+    ["npcs", pack.npcs.length],
+    ["acquaintances", pack.acquaintances.length],
     ["braindances", pack.braindances.length],
     ["chipContents", pack.chipContents.length],
     ["shopListings", pack.shopListings.length],
@@ -121,6 +141,7 @@ function packCategoryCounts(pack: WorkshopPack): readonly {
 
 function totalEntries(pack: WorkshopPack): number {
   return (
+    pack.characters.length +
     pack.modules.length +
     pack.acquaintances.length +
     pack.npcs.length +
@@ -134,31 +155,62 @@ function totalEntries(pack: WorkshopPack): number {
   );
 }
 
+function communitySummaryChips(summary: CommunityWorkshopSummary["summary"]): readonly string[] {
+  const out: string[] = [];
+  if (summary.characters > 0) out.push(`角色卡 ${summary.characters}`);
+  if (summary.cyberware > 0) out.push(`义体 ${summary.cyberware}`);
+  if (summary.weapons > 0) out.push(`武器 ${summary.weapons}`);
+  const otherItems = summary.items - summary.weapons;
+  if (otherItems > 0) out.push(`物品 ${otherItems}`);
+  if (summary.modules > 0) out.push(`模块 ${summary.modules}`);
+  if (summary.npcs > 0) out.push(`人物 ${summary.npcs}`);
+  if (summary.acquaintances > 0) out.push(`人脉 ${summary.acquaintances}`);
+  if (summary.braindances > 0) out.push(`超梦 ${summary.braindances}`);
+  if (summary.chipContents > 0) out.push(`芯片 ${summary.chipContents}`);
+  if (summary.listings > 0) out.push(`货架 ${summary.listings}`);
+  return out;
+}
+
+function primaryBadgeForSummary(summary: CommunityWorkshopSummary["summary"]): string {
+  if (summary.characters > 0) return "CHARACTER CARD";
+  if (summary.cyberware > 0) return "CYBERWARE";
+  if (summary.weapons > 0 || summary.items > 0) return "ARSENAL & GEAR";
+  if (summary.npcs > 0 || summary.acquaintances > 0) return "NIGHT CITY CAST";
+  if (summary.modules > 0) return "LIFEPATH & TRAITS";
+  if (summary.braindances > 0 || summary.chipContents > 0) return "BD & SHARDS";
+  return "WORKSHOP PACK";
+}
+
 function previewEntries(pack: WorkshopPack): PreviewEntry[] {
   const npcNameById = new Map(pack.npcs.map((npc) => [npc.id, npc.name]));
   return [
+    ...pack.cyberware.map((entry, index) => ({
+      key: `chrome-${entry.id}-${index}`,
+      category: "cyberware" as const,
+      label: cyberwareRules.CYBERWARE_CATEGORY_LABELS[cyberwareRules.cyberwareCategoryOf(entry)],
+      name: entry.name,
+      id: entry.id,
+      detail: entry.ability ?? "",
+    })),
+    ...pack.items.map((entry, index) => ({
+      key: `item-${entry.id}-${index}`,
+      category: "items" as const,
+      label: entry.kind === "weapon" ? "武器" : entry.kind === "mod" ? "改装件" : "物品",
+      name: entry.name,
+      id: entry.id,
+      detail: entry.ability ?? "",
+    })),
     ...pack.modules.map((entry, index) => ({
       key: `module-${entry.id}-${index}`,
       category: "modules" as const,
-      index,
       label: MODULE_SLOT_LABELS[entry.slot] ?? "模块",
       name: entry.label,
       id: entry.id,
       detail: entry.ability || entry.hook,
     })),
-    ...pack.acquaintances.map((entry, index) => ({
-      key: `person-${entry.id}-${index}`,
-      category: "acquaintances" as const,
-      index,
-      label: "人脉",
-      name: entry.name,
-      id: entry.id,
-      detail: [entry.role, entry.note].filter(Boolean).join(" · "),
-    })),
     ...pack.npcs.map((entry, index) => ({
       key: `npc-${entry.id}-${index}`,
       category: "npcs" as const,
-      index,
       label: "人物",
       name: entry.alias ? `${entry.name}「${entry.alias}」` : entry.name,
       id: entry.id,
@@ -167,34 +219,22 @@ function previewEntries(pack: WorkshopPack): PreviewEntry[] {
     ...pack.seedNpcs.map((id, index) => ({
       key: `seed-${id}-${index}`,
       category: "seedNpcs" as const,
-      index,
       label: "开局登场",
       name: npcNameById.get(id) ?? id,
       id,
       detail: "新建存档时直接写入城内人物表",
     })),
-    ...pack.items.map((entry, index) => ({
-      key: `item-${entry.id}-${index}`,
-      category: "items" as const,
-      index,
-      label: entry.kind === "weapon" ? "武器" : entry.kind === "mod" ? "改装件" : "物品",
+    ...pack.acquaintances.map((entry, index) => ({
+      key: `person-${entry.id}-${index}`,
+      category: "acquaintances" as const,
+      label: "人脉",
       name: entry.name,
       id: entry.id,
-      detail: entry.ability ?? "",
-    })),
-    ...pack.cyberware.map((entry, index) => ({
-      key: `chrome-${entry.id}-${index}`,
-      category: "cyberware" as const,
-      index,
-      label: "义体",
-      name: entry.name,
-      id: entry.id,
-      detail: entry.ability ?? "",
+      detail: [entry.role, entry.note].filter(Boolean).join(" · "),
     })),
     ...pack.braindances.map((entry, index) => ({
       key: `bd-${entry.id}-${index}`,
       category: "braindances" as const,
-      index,
       label: "超梦",
       name: entry.title,
       id: entry.id,
@@ -203,7 +243,6 @@ function previewEntries(pack: WorkshopPack): PreviewEntry[] {
     ...pack.chipContents.map((entry, index) => ({
       key: `chip-${entry.id}-${index}`,
       category: "chipContents" as const,
-      index,
       label: "芯片资料",
       name: entry.title,
       id: entry.id,
@@ -212,8 +251,7 @@ function previewEntries(pack: WorkshopPack): PreviewEntry[] {
     ...pack.shopListings.map((entry, index) => ({
       key: `shop-${entry.shop}-${entry.item}-${index}`,
       category: "shopListings" as const,
-      index,
-      label: "商店货架",
+      label: "商店上架",
       name: `${entry.shop} → ${entry.item}`,
       id: entry.item,
       detail: `库存 ${entry.stock}`,
@@ -221,8 +259,7 @@ function previewEntries(pack: WorkshopPack): PreviewEntry[] {
     ...pack.ripperdocListings.map((entry, index) => ({
       key: `clinic-${entry.ripperdoc}-${entry.cyberware}-${index}`,
       category: "ripperdocListings" as const,
-      index,
-      label: "诊所货架",
+      label: "诊所上架",
       name: `${entry.ripperdoc} → ${entry.cyberware}`,
       id: entry.cyberware,
       detail: `库存 ${entry.stock}`,
@@ -230,19 +267,19 @@ function previewEntries(pack: WorkshopPack): PreviewEntry[] {
   ];
 }
 
-function PackEntryBrowser({
-  pack,
-  compact = false,
-  onRemove,
-}: {
-  readonly pack: WorkshopPack;
-  readonly compact?: boolean;
-  readonly onRemove?: (category: EntryCategory, index: number) => void;
-}) {
+function PackEntryBrowser({ pack }: { readonly pack: WorkshopPack }) {
   const [cat, setCat] = useState<EntryCategory | "all">("all");
   const [query, setQuery] = useState("");
   const entries = useMemo(() => previewEntries(pack), [pack]);
-  const counts = useMemo(() => packCategoryCounts(pack), [pack]);
+  const counts = useMemo(() => {
+    const map = new Map<EntryCategory, number>();
+    for (const e of entries) map.set(e.category, (map.get(e.category) ?? 0) + 1);
+    return [...map.entries()].map(([key, count]) => ({
+      key,
+      label: CATEGORY_LABELS[key],
+      count,
+    }));
+  }, [entries]);
   const normalized = query.trim().toLowerCase();
   const filtered = useMemo(
     () =>
@@ -256,9 +293,7 @@ function PackEntryBrowser({
     [entries, cat, normalized],
   );
 
-  if (entries.length === 0) {
-    return <p className={styles.note}>这个内容包目前还没有收录任何条目。</p>;
-  }
+  if (entries.length === 0) return null;
 
   return (
     <div className={styles.browser}>
@@ -279,85 +314,111 @@ function PackEntryBrowser({
           ))}
         </fieldset>
       )}
-      {entries.length > 5 && (
+      {entries.length > 6 && (
         <FrameBox className={styles.compactInput}>
           <input
             type="search"
             value={query}
-            placeholder="筛选条目名称、id 或说明…"
+            placeholder="筛选条目名称或说明…"
             aria-label="筛选包内条目"
             onChange={(e) => setQuery(e.target.value)}
           />
         </FrameBox>
       )}
-      {filtered.length === 0 ? (
-        <p className={styles.note}>没有匹配「{query}」的条目。</p>
-      ) : (
-        <ul className={styles.entryList} data-compact={compact || undefined}>
-          {filtered.map((entry) => (
-            <li key={entry.key} className={styles.entryItem}>
-              <div className={styles.entryTop}>
-                <span className={styles.entryTag}>{entry.label}</span>
-                <strong className={styles.entryName}>{entry.name}</strong>
-                <code className={styles.entryId}>{entry.id}</code>
-                {onRemove && (
-                  <button
-                    type="button"
-                    className={styles.entryRemoveBtn}
-                    onClick={() => onRemove(entry.category, entry.index)}
-                  >
-                    移除
-                  </button>
-                )}
-              </div>
-              {entry.detail && <p className={styles.entryDetail}>{entry.detail}</p>}
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className={styles.entryList} data-compact>
+        {filtered.map((entry) => (
+          <li key={entry.key} className={styles.entryItem}>
+            <div className={styles.entryTop}>
+              <span className={styles.entryTag}>{entry.label}</span>
+              <strong className={styles.entryName}>{entry.name}</strong>
+              <code className={styles.entryId}>{entry.id}</code>
+            </div>
+            {entry.detail && <p className={styles.entryDetail}>{entry.detail}</p>}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-type StatusFilter = "all" | "enabled" | "disabled";
-type RightPaneTab = "import" | "inspect" | "edit";
-
 export function WorkshopScreen() {
   const navigate = useNavigate();
   const client = useQueryClient();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const packages = useQuery({ queryKey: ["workshop"], queryFn: api.workshopPackages });
 
-  const [rightTab, setRightTab] = useState<RightPaneTab>("import");
-  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-
-  const [candidate, setCandidate] = useState<WorkshopPack | null>(null);
-  const [validation, setValidation] = useState<Awaited<
-    ReturnType<typeof api.validateWorkshopPack>
-  > | null>(null);
-  const [reading, setReading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const [editTargetId, setEditTargetId] = useState<string | null>(null);
-  const [editSourcePack, setEditSourcePack] = useState<WorkshopPack | null>(null);
-  const [editJson, setEditJson] = useState("");
-  const [editValidation, setEditValidation] = useState<{
-    readonly valid: boolean;
-    readonly issues: readonly string[];
-  } | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState<InstalledWorkshopPack | null>(null);
+  const [view, setView] = useState<MainView>("market");
   const [notice, setNotice] = useState<{
     readonly tone: "ok" | "error";
     readonly text: string;
   } | null>(null);
 
-  const localModuleCount = useMemo(
-    () => loadLocalCustomModules().length + loadLocalCustomCyberware().length,
-    [],
+  // ———— 社区广场状态 ————
+  const [communityQuery, setCommunityQuery] = useState("");
+  const [communityCategory, setCommunityCategory] = useState<CommunityCategoryFilter>("all");
+  const [communitySort, setCommunitySort] = useState<CommunitySortKey>("popular");
+  const [communityPage, setCommunityPage] = useState(1);
+
+  // ———— 我的订阅状态 ————
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+
+  // ———— 弹窗状态 ————
+  const [publishModal, setPublishModal] = useState<{
+    readonly tab: PublishSourceTab;
+    readonly pack: WorkshopPack | null;
+    readonly existingCoverHash: string | null;
+  } | null>(null);
+
+  const [detailModal, setDetailModal] = useState<
+    | {
+        readonly source: "community";
+        readonly item: CommunityWorkshopSummary;
+        readonly pack: WorkshopPack;
+      }
+    | {
+        readonly source: "local";
+        readonly entry: InstalledWorkshopPack;
+      }
+    | null
+  >(null);
+
+  const [issuedTokenDialog, setIssuedTokenDialog] = useState<{
+    readonly packId: string;
+    readonly title: string;
+    readonly token: string;
+    readonly copied: boolean;
+  } | null>(null);
+
+  const [unpublishDialog, setUnpublishDialog] = useState<{
+    readonly item: CommunityWorkshopSummary;
+    readonly tokenInput: string;
+  } | null>(null);
+
+  const [confirmRemove, setConfirmRemove] = useState<InstalledWorkshopPack | null>(null);
+
+  const [savedTokens, setSavedTokens] = useState<Record<string, string>>(() =>
+    loadCommunityEditTokens(),
   );
+
+  // ———— 数据查询 ————
+  const packages = useQuery({ queryKey: ["workshop"], queryFn: api.workshopPackages });
+  const community = useQuery({
+    queryKey: [
+      "communityWorkshop",
+      communityQuery.trim(),
+      communityCategory,
+      communitySort,
+      communityPage,
+    ],
+    queryFn: () =>
+      communityWorkshopApi.list({
+        q: communityQuery.trim(),
+        category: communityCategory,
+        sort: communitySort,
+        page: communityPage,
+        pageSize: 18,
+      }),
+    retry: false,
+  });
 
   const installed = useMemo(
     () =>
@@ -366,233 +427,198 @@ export function WorkshopScreen() {
         .filter((entry): entry is InstalledWorkshopPack => entry !== null),
     [packages.data],
   );
+  const installedIds = useMemo(() => new Set(installed.map((e) => e.pack.id)), [installed]);
+  const enabledCount = useMemo(() => installed.filter((e) => e.enabled).length, [installed]);
 
-  const enabledPacks = useMemo(() => installed.filter((entry) => entry.enabled), [installed]);
-  const enabledEntryTotal = useMemo(
-    () => enabledPacks.reduce((sum, entry) => sum + totalEntries(entry.pack), 0),
-    [enabledPacks],
-  );
-
-  const filteredPacks = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  const filteredLibrary = useMemo(() => {
+    const q = librarySearch.trim().toLowerCase();
     return installed.filter((entry) => {
       if (statusFilter === "enabled" && !entry.enabled) return false;
       if (statusFilter === "disabled" && entry.enabled) return false;
       if (!q) return true;
-      const hay = `${entry.pack.title} ${entry.pack.id} ${entry.pack.author} ${entry.pack.description}`;
-      return hay.toLowerCase().includes(q);
+      return `${entry.pack.title} ${entry.pack.id} ${entry.pack.author} ${entry.pack.description}`
+        .toLowerCase()
+        .includes(q);
     });
-  }, [installed, search, statusFilter]);
+  }, [installed, librarySearch, statusFilter]);
 
-  const inspected = useMemo(
-    () => installed.find((entry) => entry.pack.id === selectedPackId) ?? installed[0] ?? null,
-    [installed, selectedPackId],
-  );
-
-  const existingMatch = useMemo(
-    () => (candidate ? (installed.find((entry) => entry.pack.id === candidate.id) ?? null) : null),
-    [candidate, installed],
-  );
-
-  const editParsed = useMemo(() => {
-    if (editJson.trim() === "") {
-      return {
-        raw: null as Record<string, unknown> | null,
-        pack: null as WorkshopPack | null,
-        error: null as string | null,
-      };
-    }
-    try {
-      const value: unknown = JSON.parse(editJson);
-      if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        return { raw: null, pack: null, error: "内容包顶层必须是 JSON 对象" };
-      }
-      const parsed = WorkshopPackSchema.safeParse(value);
-      return {
-        raw: value as Record<string, unknown>,
-        pack: parsed.success ? parsed.data : null,
-        error: null,
-      };
-    } catch {
-      return { raw: null, pack: null, error: "JSON 语法有误，请检查引号、逗号或括号" };
-    }
-  }, [editJson]);
-
-  const openEditor = (pack: WorkshopPack, existingId: string | null) => {
-    setEditTargetId(existingId);
-    setEditSourcePack(pack);
-    setEditJson(JSON.stringify(pack, null, 2));
-    setEditValidation(null);
-    setNotice(null);
-    if (existingId) setSelectedPackId(existingId);
-    setRightTab("edit");
-  };
-
-  const patchEditPack = (
-    updater: (current: Record<string, unknown>) => Record<string, unknown>,
-  ) => {
-    if (!editParsed.raw) return;
-    const next = updater({ ...editParsed.raw });
-    setEditJson(JSON.stringify(next, null, 2));
-    setEditValidation(null);
-  };
-
-  const removeEditEntry = (category: EntryCategory, index: number) => {
-    patchEditPack((current) => {
-      const list = Array.isArray(current[category]) ? [...(current[category] as unknown[])] : [];
-      list.splice(index, 1);
-      return { ...current, [category]: list };
-    });
-  };
-
-  const validate = useMutation({
-    mutationFn: async (pack: unknown) => {
-      const parsed = WorkshopPackSchema.safeParse(pack);
-      if (!parsed.success) {
-        return {
-          pack: null,
-          result: {
-            valid: false,
-            issues: parsed.error.issues.map((issue) =>
-              issue.path.length > 0 ? `${issue.path.join(".")}：${issue.message}` : issue.message,
-            ),
-          } as Awaited<ReturnType<typeof api.validateWorkshopPack>>,
-        };
-      }
-      const replaceId = installed.some((entry) => entry.pack.id === parsed.data.id)
-        ? parsed.data.id
-        : undefined;
-      return { pack: parsed.data, result: await api.validateWorkshopPack(parsed.data, replaceId) };
+  // ———— 变更操作 ————
+  const installLocalPack = useMutation({
+    mutationFn: async (pack: WorkshopPack) => {
+      const replacing = installedIds.has(pack.id);
+      await api.installWorkshopPack(pack, replacing);
+      return { pack, replacing };
     },
-    onMutate: () => {
-      setValidation(null);
-      setNotice(null);
-      setRightTab("import");
-    },
-    onSuccess: ({ pack, result }) => {
-      setCandidate(pack);
-      setValidation(result);
-      if (!pack) {
-        setNotice({ tone: "error", text: result.issues.join("\n") });
-      }
-    },
-    onError: (reason) => {
-      setValidation(null);
-      setNotice({ tone: "error", text: reason.message });
-    },
-  });
-
-  const install = useMutation({
-    mutationFn: async () => {
-      if (!candidate) throw new Error("先选择并校验一个内容包");
-      const replacing = Boolean(existingMatch);
-      const res = await api.installWorkshopPack(candidate, replacing);
-      return { res, replacing, title: candidate.title, id: candidate.id };
-    },
-    onSuccess: async ({ replacing, title, id }) => {
-      setCandidate(null);
-      setValidation(null);
-      setPasteOpen(false);
-      setPasteText("");
-      setSelectedPackId(id);
-      setRightTab("inspect");
+    onSuccess: async ({ pack, replacing }) => {
+      setPublishModal(null);
+      setView("library");
       setNotice({
         tone: "ok",
-        text: replacing ? `已覆盖更新内容包「${title}」` : `已安装并启用内容包「${title}」`,
+        text: replacing
+          ? `已覆盖更新本地内容包「${pack.title}」`
+          : `已安装并启用内容包「${pack.title}」`,
       });
       await client.invalidateQueries({ queryKey: ["workshop"] });
       await client.invalidateQueries({ queryKey: ["characterBoard"] });
     },
-    onError: (reason) => setNotice({ tone: "error", text: reason.message }),
+    onError: (err) => setNotice({ tone: "error", text: err.message }),
   });
 
-  const validateEdit = useMutation({
-    mutationFn: async () => {
-      let raw: unknown;
-      try {
-        raw = JSON.parse(editJson);
-      } catch {
-        return { valid: false, issues: ["JSON 语法有误，请检查引号、逗号或括号"] };
-      }
-      const parsed = WorkshopPackSchema.safeParse(raw);
-      if (!parsed.success) {
-        return {
-          valid: false,
-          issues: parsed.error.issues.map((issue) =>
-            issue.path.length > 0 ? `${issue.path.join(".")}：${issue.message}` : issue.message,
-          ),
-        };
-      }
-      if (editTargetId !== null && parsed.data.id !== editTargetId) {
-        return {
-          valid: false,
-          issues: [`更新已安装内容包时不能修改包 id（需保持为 ${editTargetId}）`],
-        };
-      }
-      const result = await api.validateWorkshopPack(parsed.data, editTargetId ?? undefined);
-      return { valid: result.valid, issues: result.issues };
-    },
-    onSuccess: (result) => setEditValidation(result),
-    onError: (reason) => setEditValidation({ valid: false, issues: [reason.message] }),
-  });
-
-  const saveEdit = useMutation({
-    mutationFn: async () => {
-      let raw: unknown;
-      try {
-        raw = JSON.parse(editJson);
-      } catch {
-        throw new Error("JSON 语法有误，请检查引号、逗号或括号");
-      }
-      const parsed = WorkshopPackSchema.safeParse(raw);
-      if (!parsed.success) {
-        const issues = parsed.error.issues.map((issue) =>
-          issue.path.length > 0 ? `${issue.path.join(".")}：${issue.message}` : issue.message,
-        );
-        setEditValidation({ valid: false, issues });
-        throw new Error(issues[0] ?? "内容包结构校验失败");
-      }
-      if (editTargetId !== null && parsed.data.id !== editTargetId) {
-        const msg = `更新已安装内容包时不能修改包 id（需保持为 ${editTargetId}）`;
-        setEditValidation({ valid: false, issues: [msg] });
-        throw new Error(msg);
-      }
-      const check = await api.validateWorkshopPack(parsed.data, editTargetId ?? undefined);
-      setEditValidation({ valid: check.valid, issues: check.issues });
+  const subscribeCommunity = useMutation({
+    mutationFn: async (summary: CommunityWorkshopSummary) => {
+      const { pack } = await communityWorkshopApi.fetchPack(summary.id, { download: true });
+      const check = await api.validateWorkshopPack(pack, pack.id);
       if (!check.valid) {
-        throw new Error(check.issues[0] ?? "内容包引用校验未通过");
+        throw new Error(`该内容包未通过本地引用校验：${check.issues[0] ?? "格式不兼容"}`);
       }
-      if (editTargetId !== null) {
-        await api.updateWorkshopPack(editTargetId, parsed.data);
-        return { updated: true, pack: parsed.data };
-      }
-      await api.installWorkshopPack(parsed.data, false);
-      return { updated: false, pack: parsed.data };
+      const replacing = installedIds.has(pack.id);
+      await api.installWorkshopPack(pack, replacing);
+      return { pack, replacing };
     },
-    onSuccess: async ({ updated, pack }) => {
-      setEditTargetId(pack.id);
-      setEditSourcePack(pack);
-      setEditJson(JSON.stringify(pack, null, 2));
-      setSelectedPackId(pack.id);
-      setRightTab("inspect");
+    onSuccess: async ({ pack, replacing }) => {
+      const hasChars = pack.characters.length > 0;
       setNotice({
         tone: "ok",
-        text: updated
-          ? `已保存内容包「${pack.title}」的修改`
-          : `已创建并启用内容包「${pack.title}」`,
+        text: replacing
+          ? `已更新「${pack.title}」到本地`
+          : hasChars
+            ? `已订阅「${pack.title}」（包含 ${pack.characters.length} 张角色卡，点详情可一键导入角色档案）`
+            : `已订阅并启用「${pack.title}」（新建存档时自动生效）`,
       });
       await client.invalidateQueries({ queryKey: ["workshop"] });
       await client.invalidateQueries({ queryKey: ["characterBoard"] });
+      await client.invalidateQueries({ queryKey: ["communityWorkshop"] });
     },
-    onError: (reason) => setNotice({ tone: "error", text: reason.message }),
+    onError: (err) => setNotice({ tone: "error", text: err.message }),
+  });
+
+  const openCommunityDetail = useMutation({
+    mutationFn: async (id: string) => communityWorkshopApi.fetchPack(id, { download: false }),
+    onSuccess: ({ item, pack }) => {
+      setDetailModal({ source: "community", item, pack });
+    },
+    onError: (err) => setNotice({ tone: "error", text: err.message }),
+  });
+
+  const importCharacterCard = useMutation({
+    mutationFn: async (card: CharacterCard) => api.createCharacter(card),
+    onSuccess: async (entry) => {
+      setNotice({
+        tone: "ok",
+        text: `已将角色卡「${entry.card.name}」导入你的角色档案，可在「角色档案」中直接选用开局！`,
+      });
+      await client.invalidateQueries({ queryKey: ["characters"] });
+    },
+    onError: (err) => setNotice({ tone: "error", text: `导入角色卡失败：${err.message}` }),
+  });
+
+  const publishCommunity = useMutation({
+    mutationFn: async (payload: PublishSubmitPayload) => {
+      const { pack, mode, tokenInput, coverBlob, clearExistingCover } = payload;
+      const check = await api.validateWorkshopPack(pack, pack.id);
+      if (!check.valid) {
+        throw new Error(`发布前本地校验未通过：${check.issues[0] ?? "请检查条目引用"}`);
+      }
+
+      // 先确保社区写入
+      const res =
+        mode === "update"
+          ? await communityWorkshopApi.update(pack, tokenInput)
+          : await communityWorkshopApi.publish(pack);
+      const effectiveToken = res.editToken ?? tokenInput.trim();
+
+      let coverWarning: string | null = null;
+      if (coverBlob && effectiveToken) {
+        try {
+          await communityWorkshopApi.uploadCover(res.item.id, coverBlob, effectiveToken);
+        } catch (err) {
+          coverWarning = err instanceof Error ? err.message : "封面上传失败";
+        }
+      } else if (clearExistingCover && effectiveToken) {
+        try {
+          await communityWorkshopApi.deleteCover(res.item.id, effectiveToken);
+        } catch (err) {
+          coverWarning = err instanceof Error ? err.message : "封面移除失败";
+        }
+      }
+
+      // 同步保存一份到本机「我的订阅」（不影响已有其他包）
+      try {
+        await api.installWorkshopPack(pack, installedIds.has(pack.id));
+      } catch {
+        // 社区已发布成功，本机同步失败不阻断提示
+      }
+
+      return { mode, res, coverWarning };
+    },
+    onSuccess: async ({ mode, res, coverWarning }) => {
+      setPublishModal(null);
+      setView("market");
+      if (res.editToken) {
+        saveCommunityEditToken(res.item.id, res.editToken);
+        setSavedTokens(loadCommunityEditTokens());
+        setIssuedTokenDialog({
+          packId: res.item.id,
+          title: res.item.title,
+          token: res.editToken,
+          copied: false,
+        });
+      }
+      setNotice({
+        tone: coverWarning ? "error" : "ok",
+        text: coverWarning
+          ? `作品「${res.item.title}」已发布，但封面未保存：${coverWarning}`
+          : mode === "update"
+            ? `已更新社区作品「${res.item.title}」（版本 r${res.item.revision}）`
+            : `已将「${res.item.title}」发布到社区广场！`,
+      });
+      await client.invalidateQueries({ queryKey: ["communityWorkshop"] });
+      await client.invalidateQueries({ queryKey: ["workshop"] });
+      await client.invalidateQueries({ queryKey: ["characterBoard"] });
+    },
+    onError: (err) => {
+      const text =
+        err instanceof CommunityWorkshopError && err.code === "PACK_EXISTS"
+          ? `${err.message}（若这是你发布的作品，请切换到「更新已有社区作品」填入密钥）`
+          : err.message;
+      setNotice({ tone: "error", text });
+    },
+  });
+
+  const unpublishPack = useMutation({
+    mutationFn: async (input: {
+      readonly id: string;
+      readonly title: string;
+      readonly token: string;
+    }) => {
+      await communityWorkshopApi.unpublish(input.id, input.token);
+      return input;
+    },
+    onSuccess: async ({ id, title }) => {
+      removeCommunityEditToken(id);
+      setSavedTokens(loadCommunityEditTokens());
+      setUnpublishDialog(null);
+      if (detailModal?.source === "community" && detailModal.item.id === id) {
+        setDetailModal(null);
+      }
+      setNotice({ tone: "ok", text: `已从社区广场下架「${title}」` });
+      await client.invalidateQueries({ queryKey: ["communityWorkshop"] });
+    },
+    onError: (err) => setNotice({ tone: "error", text: err.message }),
   });
 
   const setEnabled = useMutation({
     mutationFn: async ({ id, title, enabled }: { id: string; title: string; enabled: boolean }) => {
       await api.setWorkshopEnabled(id, enabled);
-      return { title, enabled };
+      return { id, title, enabled };
     },
-    onSuccess: async ({ title, enabled }) => {
+    onSuccess: async ({ id, title, enabled }) => {
+      if (detailModal?.source === "local" && detailModal.entry.pack.id === id) {
+        setDetailModal({
+          source: "local",
+          entry: { ...detailModal.entry, enabled },
+        });
+      }
       setNotice({
         tone: "ok",
         text: enabled ? `已启用「${title}」（新建存档时生效）` : `已停用「${title}」`,
@@ -600,121 +626,60 @@ export function WorkshopScreen() {
       await client.invalidateQueries({ queryKey: ["workshop"] });
       await client.invalidateQueries({ queryKey: ["characterBoard"] });
     },
-    onError: (reason) => setNotice({ tone: "error", text: reason.message }),
+    onError: (err) => setNotice({ tone: "error", text: err.message }),
   });
 
-  const remove = useMutation({
+  const removeLocal = useMutation({
     mutationFn: async (entry: InstalledWorkshopPack) => {
       await api.removeWorkshopPack(entry.pack.id);
       return entry;
     },
     onSuccess: async (entry) => {
       setConfirmRemove(null);
-      if (selectedPackId === entry.pack.id) setSelectedPackId(null);
-      if (editTargetId === entry.pack.id) {
-        setEditTargetId(null);
-        setEditSourcePack(null);
-        if (rightTab === "edit") setRightTab("import");
+      if (detailModal?.source === "local" && detailModal.entry.pack.id === entry.pack.id) {
+        setDetailModal(null);
       }
-      setNotice({
-        tone: "ok",
-        text: `已卸载「${entry.pack.title}」（已有存档保留其内容快照）`,
-      });
+      setNotice({ tone: "ok", text: `已卸载「${entry.pack.title}」` });
       await client.invalidateQueries({ queryKey: ["workshop"] });
       await client.invalidateQueries({ queryKey: ["characterBoard"] });
     },
-    onError: (reason) => setNotice({ tone: "error", text: reason.message }),
+    onError: (err) => setNotice({ tone: "error", text: err.message }),
   });
 
   const busy =
-    reading ||
-    validate.isPending ||
-    install.isPending ||
-    validateEdit.isPending ||
-    saveEdit.isPending ||
+    installLocalPack.isPending ||
+    subscribeCommunity.isPending ||
+    openCommunityDetail.isPending ||
+    importCharacterCard.isPending ||
+    publishCommunity.isPending ||
+    unpublishPack.isPending ||
     setEnabled.isPending ||
-    remove.isPending;
+    removeLocal.isPending;
 
-  useLayer(() => setPasteOpen(false), pasteOpen && !confirmRemove);
+  const hasOpenDialog = Boolean(
+    publishModal || detailModal || issuedTokenDialog || unpublishDialog || confirmRemove,
+  );
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select")) return;
-      navigate("/menu");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  useLayer(() => {
+    if (!busy) navigate("/menu");
+  }, !hasOpenDialog);
 
-  const parseAndValidate = (rawText: string) => {
-    setCandidate(null);
-    setValidation(null);
-    setNotice(null);
-    try {
-      const data: unknown = JSON.parse(rawText);
-      validate.mutate(data);
-    } catch {
-      setNotice({ tone: "error", text: "输入内容不是合法的 JSON，请检查括号与引号格式" });
-    }
-  };
-
-  const handleFile = async (file: File | undefined) => {
-    if (!file || busy) return;
-    setReading(true);
-    try {
-      parseAndValidate(await file.text());
-    } finally {
-      setReading(false);
-    }
-  };
-
-  const readFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    await handleFile(file);
-  };
-
-  const onDragOver = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    if (!busy) setDragOver(true);
-  };
-
-  const onDragLeave = (event: DragEvent<HTMLElement>) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      setDragOver(false);
-    }
-  };
-
-  const onDrop = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault();
-    setDragOver(false);
-    const file = event.dataTransfer.files?.[0];
-    void handleFile(file);
+  const openPublishForExisting = (pack: WorkshopPack) => {
+    const matched = community.data?.items.find((item) => item.id === pack.id);
+    setPublishModal({
+      tab: "local",
+      pack,
+      existingCoverHash: matched?.coverHash ?? null,
+    });
   };
 
   const tabLineMask = cssUrl("tab.line");
 
   return (
     <main className={styles.screen}>
-      <span
-        className={styles.bg}
-        style={{ backgroundImage: cssUrl("menu.nightCity") }}
-        aria-hidden
-      />
-      <span className={styles.shade} aria-hidden />
-      <span
-        className={styles.scan}
-        style={{ backgroundImage: cssUrl("fx.scanlines") }}
-        aria-hidden
-      />
-      <NineSlice
-        id="panel.frame"
-        tint="var(--cp-red)"
-        slice={FRAME_SLICE}
-        className={styles.frame}
-      />
+      <ShellBackdrop variant="workshop" />
 
+      {/* ———— 顶部 Steam 工坊风格导航栏 ———— */}
       <header className={styles.head}>
         <Asset id="menu.header" tint="var(--cp-red)" height={52} className={styles.headBg} />
         <Asset id="panel.glowLeft" height={28} tint="var(--cp-cyan)" className={styles.headGlow} />
@@ -722,21 +687,42 @@ export function WorkshopScreen() {
           <span className={styles.headCode}>{"WK // WORKSHOP"}</span>
           <h1>创意工坊</h1>
         </div>
-        <Asset id="fluff.code" tint="var(--cp-red)" height={16} className={styles.headFluff} />
+
+        <nav className={styles.viewNav} aria-label="工坊视图切换">
+          <Button
+            small
+            primary={view === "market"}
+            pressed={view === "market"}
+            onClick={() => setView("market")}
+          >
+            社区广场{community.isSuccess ? ` (${community.data.total})` : ""}
+          </Button>
+          <Button
+            small
+            primary={view === "library"}
+            pressed={view === "library"}
+            onClick={() => setView("library")}
+          >
+            我的订阅 ({enabledCount}/{installed.length})
+          </Button>
+        </nav>
+
         <span className={styles.spacer} />
+
+        <Button
+          small
+          primary
+          disabled={busy}
+          onClick={() => setPublishModal({ tab: "local", pack: null, existingCoverHash: null })}
+        >
+          ＋ 发布作品
+        </Button>
         <Button small disabled={busy} onClick={() => navigate("/characters")}>
           角色档案
         </Button>
         <Button small keyId="key.esc" disabled={busy} onClick={() => navigate("/menu")}>
           返回主菜单
         </Button>
-        <input
-          ref={inputRef}
-          hidden
-          type="file"
-          accept=".json,application/json"
-          onChange={readFile}
-        />
       </header>
 
       <span
@@ -745,34 +731,8 @@ export function WorkshopScreen() {
         aria-hidden
       />
 
+      {/* ———— 主内容区（全屏宽版） ———— */}
       <div className={styles.workspace}>
-        {/* ———— 顶部概览状态条 ———— */}
-        <section className={styles.telemetryBar} aria-label="工坊概览">
-          <div className={styles.statCards}>
-            <div className={styles.statCard}>
-              <CellFrame />
-              <span className={styles.statKey}>已安装内容包</span>
-              <strong className={`${styles.statVal} num`}>{installed.length}</strong>
-            </div>
-            <div
-              className={styles.statCard}
-              data-accent={enabledPacks.length > 0 ? "cyan" : undefined}
-            >
-              <CellFrame />
-              <span className={styles.statKey}>当前已启用</span>
-              <strong className={`${styles.statVal} num`}>{enabledPacks.length}</strong>
-            </div>
-            <div className={styles.statCard}>
-              <CellFrame />
-              <span className={styles.statKey}>启用包注入条目</span>
-              <strong className={`${styles.statVal} num`}>{enabledEntryTotal}</strong>
-            </div>
-          </div>
-          <p className={styles.telemetryNote}>
-            启用包会自动注入创角目录与新建存档；已有存档保留独立内容快照，后续停用或卸载不影响旧档。
-          </p>
-        </section>
-
         {notice && (
           <div
             className={styles.banner}
@@ -785,814 +745,465 @@ export function WorkshopScreen() {
           </div>
         )}
 
-        {packages.isError && (
-          <div className={styles.banner} data-tone="error" role="alert">
-            <CellFrame />
-            <p className={styles.bannerText}>读取本地内容包失败：{packages.error.message}</p>
-            <Button small onClick={() => void packages.refetch()}>
-              重试
-            </Button>
-          </div>
-        )}
+        <section
+          className={styles.mainStage}
+          aria-label={view === "market" ? "社区广场" : "我的订阅"}
+        >
+          <NineSlice
+            id="notify.itemCellBg"
+            tint="var(--cp-panel)"
+            slice={30}
+            className={styles.paneLayer}
+          />
+          <NineSlice
+            id="notify.itemCellFg"
+            tint={view === "market" ? "var(--cp-cyan-dim)" : "var(--cp-red-dim)"}
+            slice={30}
+            className={styles.paneLayer}
+          />
 
-        {/* ———— 主双栏工作区：左列本地内容包，右列导入/检视工作台 ———— */}
-        <div className={styles.split}>
-          <section className={styles.pane} aria-label="本地内容包">
-            <NineSlice
-              id="notify.itemCellBg"
-              tint="rgb(8 8 14 / 86%)"
-              slice={30}
-              className={styles.paneLayer}
-            />
-            <NineSlice
-              id="notify.itemCellFg"
-              tint="var(--cp-red-dim)"
-              slice={30}
-              className={styles.paneLayer}
-            />
-            <div className={styles.paneHead}>
-              <div className={styles.paneTitleGroup}>
-                <h2>本地内容包</h2>
-                <span className={styles.paneCount}>
-                  {filteredPacks.length} / {installed.length} 件
-                </span>
+          {view === "market" ? (
+            <>
+              <div className={styles.toolbar}>
+                <div className={styles.searchRow}>
+                  <FrameBox className={styles.searchBox}>
+                    <input
+                      type="search"
+                      value={communityQuery}
+                      placeholder="搜索社区作品名称、作者、简介…"
+                      aria-label="搜索社区作品"
+                      onChange={(e) => {
+                        setCommunityQuery(e.target.value);
+                        setCommunityPage(1);
+                      }}
+                    />
+                  </FrameBox>
+                  <fieldset className={styles.filterPills} aria-label="排序方式">
+                    {COMMUNITY_SORTS.map((sort) => (
+                      <Button
+                        key={sort.id}
+                        small
+                        pressed={communitySort === sort.id}
+                        onClick={() => {
+                          setCommunitySort(sort.id);
+                          setCommunityPage(1);
+                        }}
+                      >
+                        {sort.label}
+                      </Button>
+                    ))}
+                  </fieldset>
+                  <Button
+                    small
+                    disabled={community.isFetching}
+                    onClick={() => void community.refetch()}
+                  >
+                    {community.isFetching ? "刷新中…" : "刷新"}
+                  </Button>
+                </div>
+
+                <fieldset className={styles.filterPills} aria-label="按内容分类筛选">
+                  {COMMUNITY_CATEGORIES.map((cat) => (
+                    <Button
+                      key={cat.id}
+                      small
+                      pressed={communityCategory === cat.id}
+                      onClick={() => {
+                        setCommunityCategory(cat.id);
+                        setCommunityPage(1);
+                      }}
+                    >
+                      {cat.label}
+                    </Button>
+                  ))}
+                </fieldset>
               </div>
-              <div className={styles.actions}>
-                <Button
-                  small
-                  disabled={busy}
-                  onClick={() =>
-                    openEditor(
-                      { ...EMPTY_PACK, id: `pack-${Date.now().toString(36).slice(-6)}` },
-                      null,
-                    )
-                  }
-                >
-                  ＋ 新建内容包
-                </Button>
-                <Button
-                  small
-                  primary
-                  disabled={busy}
-                  onClick={() => {
-                    setRightTab("import");
-                    inputRef.current?.click();
-                  }}
-                >
-                  ＋ 导入内容包
-                </Button>
+
+              <div className={styles.stageScroll}>
+                {community.isPending && <p className={styles.note}>正在连接夜之城创意工坊广场…</p>}
+
+                {community.isError && (
+                  <div className={styles.emptyHero}>
+                    <CellFrame />
+                    <strong>暂时无法连接社区广场</strong>
+                    <p className={styles.note}>{community.error.message}</p>
+                    <div className={styles.actions}>
+                      <Button small primary onClick={() => void community.refetch()}>
+                        重试连接
+                      </Button>
+                      <Button
+                        small
+                        onClick={() =>
+                          setPublishModal({ tab: "json", pack: null, existingCoverHash: null })
+                        }
+                      >
+                        导入本地 JSON
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {community.isSuccess && community.data.items.length === 0 && (
+                  <div className={styles.emptyHero}>
+                    <CellFrame />
+                    <strong>
+                      {communityQuery.trim() || communityCategory !== "all"
+                        ? "没有符合筛选条件的社区作品"
+                        : "社区广场虚位以待"}
+                    </strong>
+                    <p className={styles.note}>
+                      {communityQuery.trim() || communityCategory !== "all"
+                        ? "试试清空关键词或切回「全部」分类。"
+                        : "点右上角「＋ 发布作品」，可以把你在角色档案里捏好的角色卡、自创义体和特质一键分享出来，或者用 AI 一句话生成整套扩展包！"}
+                    </p>
+                    <div className={styles.actions}>
+                      {(communityQuery.trim() || communityCategory !== "all") && (
+                        <Button
+                          small
+                          onClick={() => {
+                            setCommunityQuery("");
+                            setCommunityCategory("all");
+                            setCommunityPage(1);
+                          }}
+                        >
+                          重置筛选
+                        </Button>
+                      )}
+                      <Button
+                        small
+                        primary
+                        onClick={() =>
+                          setPublishModal({ tab: "local", pack: null, existingCoverHash: null })
+                        }
+                      >
+                        ＋ 发布我的第一份作品
+                      </Button>
+                      <Button
+                        small
+                        onClick={() =>
+                          setPublishModal({ tab: "ai", pack: null, existingCoverHash: null })
+                        }
+                      >
+                        AI 一句话生成扩展包
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {community.isSuccess && community.data.items.length > 0 && (
+                  <>
+                    <ul className={styles.cardGrid}>
+                      {community.data.items.map((item) => {
+                        const isInstalled = installedIds.has(item.id);
+                        const hasToken = Boolean(savedTokens[item.id]);
+                        const chips = communitySummaryChips(item.summary);
+                        const coverUrl = communityCoverUrl(item.id, item.coverHash);
+                        return (
+                          <li
+                            key={item.id}
+                            className={styles.marketCard}
+                            data-installed={isInstalled || undefined}
+                          >
+                            <CellFrame />
+                            <button
+                              type="button"
+                              className={styles.cardCoverBtn}
+                              onClick={() => openCommunityDetail.mutate(item.id)}
+                            >
+                              {coverUrl ? (
+                                <img
+                                  src={coverUrl}
+                                  alt={`${item.title} 封面`}
+                                  loading="lazy"
+                                  className={styles.cardCoverImg}
+                                />
+                              ) : (
+                                <div className={styles.cardCoverFallback}>
+                                  <span className={styles.coverTypeTag}>
+                                    {primaryBadgeForSummary(item.summary)}
+                                  </span>
+                                  <strong className={styles.coverFallbackTitle}>
+                                    {item.title}
+                                  </strong>
+                                  <span className={styles.coverFallbackMeta}>
+                                    {item.entryCount} 项内容 · {formatBytes(item.byteSize)}
+                                  </span>
+                                </div>
+                              )}
+                              <div className={styles.coverBadges}>
+                                {hasToken && <span className={styles.ownerBadge}>我的发布</span>}
+                                {isInstalled && (
+                                  <span className={styles.statePill} data-on>
+                                    已订阅
+                                  </span>
+                                )}
+                                <span className={styles.revBadge}>r{item.revision}</span>
+                              </div>
+                            </button>
+
+                            <div className={styles.cardBody}>
+                              <button
+                                type="button"
+                                className={styles.cardTitleBtn}
+                                onClick={() => openCommunityDetail.mutate(item.id)}
+                              >
+                                <strong>{item.title}</strong>
+                              </button>
+                              <p className={styles.packMeta}>
+                                <span>{item.author || "匿名创作者"}</span>
+                                <span>·</span>
+                                <span>订阅 {item.downloads}</span>
+                                <span>·</span>
+                                <span>{formatDate(item.updatedAt)}</span>
+                              </p>
+                              <p className={styles.cardDesc}>
+                                {item.description || "暂无简介，点击查看详情浏览收录条目。"}
+                              </p>
+                              <div className={styles.chipRow}>
+                                {chips.slice(0, 4).map((label) => (
+                                  <span key={label} className={styles.chip}>
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className={styles.cardFooter}>
+                              <Button
+                                small
+                                primary={!isInstalled}
+                                disabled={busy}
+                                onClick={() => subscribeCommunity.mutate(item)}
+                              >
+                                {isInstalled ? "更新到本地" : "＋ 订阅启用"}
+                              </Button>
+                              <Button
+                                small
+                                disabled={busy}
+                                onClick={() => openCommunityDetail.mutate(item.id)}
+                              >
+                                详情
+                              </Button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {(communityPage > 1 || community.data.hasMore) && (
+                      <div className={styles.pagerRow}>
+                        <Button
+                          small
+                          disabled={communityPage <= 1 || community.isFetching}
+                          onClick={() => setCommunityPage((p) => Math.max(1, p - 1))}
+                        >
+                          上一页
+                        </Button>
+                        <span className={styles.paneCount}>
+                          第 {communityPage} 页 · 共 {community.data.total} 个作品
+                        </span>
+                        <Button
+                          small
+                          disabled={!community.data.hasMore || community.isFetching}
+                          onClick={() => setCommunityPage((p) => p + 1)}
+                        >
+                          下一页
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            </div>
-
-            <div className={styles.listTools}>
-              <FrameBox className={styles.searchBox}>
-                <input
-                  type="search"
-                  value={search}
-                  placeholder="搜索包名、id、作者或简介…"
-                  aria-label="搜索已安装内容包"
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </FrameBox>
-              <fieldset className={styles.filterPills} aria-label="按启用状态筛选">
-                <Button
-                  small
-                  pressed={statusFilter === "all"}
-                  onClick={() => setStatusFilter("all")}
-                >
-                  全部 ({installed.length})
-                </Button>
-                <Button
-                  small
-                  pressed={statusFilter === "enabled"}
-                  onClick={() => setStatusFilter("enabled")}
-                >
-                  已启用 ({enabledPacks.length})
-                </Button>
-                <Button
-                  small
-                  pressed={statusFilter === "disabled"}
-                  onClick={() => setStatusFilter("disabled")}
-                >
-                  已停用 ({installed.length - enabledPacks.length})
-                </Button>
-              </fieldset>
-            </div>
-
-            <div className={styles.paneScroll}>
-              {packages.isPending && <p className={styles.note}>正在读取本地内容包…</p>}
-              {packages.isSuccess && installed.length === 0 && (
-                <div className={styles.emptyCard}>
-                  <CellFrame />
-                  <strong>还没有安装任何内容包</strong>
-                  <p className={styles.note}>
-                    拖入或选择 `.json` 内容包文件即可安装，也可以在右侧下载 v2 空白模板自行创作。
-                  </p>
-                  <div className={styles.actions}>
-                    <Button small primary onClick={() => inputRef.current?.click()}>
-                      选择内容包 JSON
+            </>
+          ) : (
+            /* ———— 视图 2：我的订阅 ———— */
+            <>
+              <div className={styles.toolbar}>
+                <div className={styles.searchRow}>
+                  <FrameBox className={styles.searchBox}>
+                    <input
+                      type="search"
+                      value={librarySearch}
+                      placeholder="搜索已订阅或本地安装的作品…"
+                      aria-label="搜索已安装内容包"
+                      onChange={(e) => setLibrarySearch(e.target.value)}
+                    />
+                  </FrameBox>
+                  <fieldset className={styles.filterPills} aria-label="按启用状态筛选">
+                    <Button
+                      small
+                      pressed={statusFilter === "all"}
+                      onClick={() => setStatusFilter("all")}
+                    >
+                      全部 ({installed.length})
                     </Button>
                     <Button
                       small
-                      onClick={() => {
-                        downloadJson(EMPTY_PACK, "cp2077-workshop-pack-v2.json");
-                        setNotice({
-                          tone: "ok",
-                          text: "已下载空白模板 cp2077-workshop-pack-v2.json",
-                        });
-                      }}
+                      pressed={statusFilter === "enabled"}
+                      onClick={() => setStatusFilter("enabled")}
                     >
-                      下载空白模板
+                      启用中 ({enabledCount})
                     </Button>
-                  </div>
-                </div>
-              )}
-              {packages.isSuccess && installed.length > 0 && filteredPacks.length === 0 && (
-                <div className={styles.emptyCard}>
-                  <CellFrame />
-                  <p className={styles.note}>当前筛选条件下没有匹配的内容包。</p>
-                  <Button
-                    small
-                    onClick={() => {
-                      setSearch("");
-                      setStatusFilter("all");
-                    }}
-                  >
-                    重置筛选
-                  </Button>
-                </div>
-              )}
-              <ul className={styles.list}>
-                {filteredPacks.map((entry) => {
-                  const { pack, enabled, installedAt } = entry;
-                  const selected = rightTab === "inspect" && inspected?.pack.id === pack.id;
-                  const chips = packCategoryCounts(pack);
-                  return (
-                    <li
-                      key={pack.id}
-                      className={styles.row}
-                      data-selected={selected || undefined}
-                      data-enabled={enabled || undefined}
+                    <Button
+                      small
+                      pressed={statusFilter === "disabled"}
+                      onClick={() => setStatusFilter("disabled")}
                     >
-                      <CellFrame />
-                      <div className={styles.rowMain}>
-                        <div className={styles.packHeader}>
-                          <button
-                            type="button"
-                            className={styles.packSelect}
-                            onClick={() => {
-                              setSelectedPackId(pack.id);
-                              setRightTab("inspect");
-                            }}
-                          >
-                            <strong className={styles.packName}>{pack.title}</strong>
-                            <code className={styles.packId}>{pack.id}</code>
-                          </button>
-                          <span className={styles.statePill} data-on={enabled || undefined}>
-                            {enabled ? "已启用" : "已停用"}
-                          </span>
-                        </div>
-
-                        <p className={styles.packMeta}>
-                          <span>{pack.author || "未署名作者"}</span>
-                          <span>·</span>
-                          <span>安装于 {formatDate(installedAt)}</span>
-                        </p>
-
-                        {pack.description && <p className={styles.packDesc}>{pack.description}</p>}
-
-                        <div className={styles.chipRow}>
-                          {chips.length > 0 ? (
-                            chips.map((c) => (
-                              <span key={c.key} className={styles.chip}>
-                                {c.label} {c.count}
-                              </span>
-                            ))
-                          ) : (
-                            <span className={styles.chip}>空内容包</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className={styles.rowSide}>
-                        <div className={styles.enabledControl}>
-                          <span>{enabled ? "启用中" : "已停用"}</span>
-                          <ToggleCheck
-                            variant="switch"
-                            checked={enabled}
-                            disabled={busy}
-                            aria-label={`启用${pack.title}`}
-                            onChange={(next) =>
-                              setEnabled.mutate({ id: pack.id, title: pack.title, enabled: next })
-                            }
-                          />
-                        </div>
-                        <div className={styles.rowActions}>
-                          <Button
-                            small
-                            pressed={rightTab === "edit" && editTargetId === pack.id}
-                            disabled={busy}
-                            onClick={() => openEditor(pack, pack.id)}
-                          >
-                            编辑
-                          </Button>
-                          <Button
-                            small
-                            pressed={selected}
-                            onClick={() => {
-                              setSelectedPackId(pack.id);
-                              setRightTab("inspect");
-                            }}
-                          >
-                            查看条目
-                          </Button>
-                          <Button
-                            small
-                            onClick={() => {
-                              downloadJson(pack, `${pack.id}.json`);
-                              setNotice({
-                                tone: "ok",
-                                text: `已导出「${pack.title}」(${pack.id}.json)`,
-                              });
-                            }}
-                          >
-                            导出
-                          </Button>
-                          <Button small disabled={busy} onClick={() => setConfirmRemove(entry)}>
-                            卸载
-                          </Button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </section>
-
-          <section className={styles.pane} aria-label="导入与内容包检视">
-            <NineSlice
-              id="notify.itemCellBg"
-              tint="rgb(8 8 14 / 88%)"
-              slice={30}
-              className={styles.paneLayer}
-            />
-            <NineSlice
-              id="notify.itemCellFg"
-              tint="var(--cp-cyan-dim)"
-              slice={30}
-              className={styles.paneLayer}
-            />
-            <div className={styles.paneHead}>
-              <div className={styles.tabSwitch} role="tablist" aria-label="工作台视图">
-                <Button
-                  small
-                  primary={rightTab === "import"}
-                  pressed={rightTab === "import"}
-                  onClick={() => setRightTab("import")}
-                >
-                  导入与制作
-                </Button>
-                <Button
-                  small
-                  primary={rightTab === "inspect"}
-                  pressed={rightTab === "inspect"}
-                  disabled={!inspected}
-                  reason="安装至少一个内容包后可查看包内条目"
-                  onClick={() => setRightTab("inspect")}
-                >
-                  内容包检视
-                </Button>
-                <Button
-                  small
-                  primary={rightTab === "edit"}
-                  pressed={rightTab === "edit"}
-                  disabled={busy}
-                  onClick={() => {
-                    if (editSourcePack) {
-                      setRightTab("edit");
-                    } else if (inspected) {
-                      openEditor(inspected.pack, inspected.pack.id);
-                    } else {
-                      openEditor(
-                        { ...EMPTY_PACK, id: `pack-${Date.now().toString(36).slice(-6)}` },
-                        null,
-                      );
-                    }
-                  }}
-                >
-                  在线编辑
-                </Button>
+                      已停用 ({installed.length - enabledCount})
+                    </Button>
+                  </fieldset>
+                </div>
               </div>
-              {rightTab === "import" && candidate && (
-                <span className={styles.paneCount}>待校验：{candidate.id}</span>
-              )}
-              {rightTab === "inspect" && inspected && (
-                <span className={styles.paneCount}>{totalEntries(inspected.pack)} 项条目</span>
-              )}
-              {rightTab === "edit" && (
-                <span className={styles.paneCount}>
-                  {editTargetId ? `编辑：${editTargetId}` : "新建内容包"}
-                </span>
-              )}
-            </div>
 
-            <div className={styles.paneScroll}>
-              {rightTab === "import" ? (
-                <div className={styles.workbenchCol}>
-                  <section
-                    className={styles.dropzone}
-                    data-drag={dragOver || undefined}
-                    aria-label="拖放或选择内容包"
-                    onDragOver={onDragOver}
-                    onDragLeave={onDragLeave}
-                    onDrop={onDrop}
-                  >
+              <div className={styles.stageScroll}>
+                {packages.isPending && <p className={styles.note}>正在读取本地订阅列表…</p>}
+
+                {packages.isSuccess && installed.length === 0 && (
+                  <div className={styles.emptyHero}>
                     <CellFrame />
-                    <div className={styles.dropHead}>
-                      <strong>
-                        {reading
-                          ? "正在读取文件内容…"
-                          : validate.isPending
-                            ? "正在执行结构与引用校验…"
-                            : dragOver
-                              ? "松开鼠标以读取内容包"
-                              : "拖入内容包 JSON，或点击下方选择文件"}
-                      </strong>
-                      <p className={styles.note}>
-                        支持 `cp2077-workshop-pack` v2
-                        格式；导入前会自动校验所有物品、义体、NPC、超梦与商店引用。
-                      </p>
-                    </div>
-                    <div className={styles.actions}>
-                      <Button
-                        small
-                        primary
-                        disabled={busy}
-                        onClick={() => inputRef.current?.click()}
-                      >
-                        选择本地 JSON 文件
-                      </Button>
-                      <Button
-                        small
-                        pressed={pasteOpen}
-                        disabled={busy}
-                        onClick={() => setPasteOpen((open) => !open)}
-                      >
-                        {pasteOpen ? "收起粘贴框" : "粘贴 JSON 文本"}
-                      </Button>
-                    </div>
-
-                    {pasteOpen && (
-                      <div className={styles.pasteBox}>
-                        <FrameBox className={styles.pasteFrame}>
-                          <textarea
-                            rows={6}
-                            value={pasteText}
-                            placeholder='在此粘贴完整的内容包 JSON（format: "cp2077-workshop-pack", version: 2）…'
-                            aria-label="粘贴内容包 JSON"
-                            onChange={(e) => setPasteText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (
-                                (e.ctrlKey || e.metaKey) &&
-                                e.key === "Enter" &&
-                                pasteText.trim()
-                              ) {
-                                e.preventDefault();
-                                parseAndValidate(pasteText);
-                              }
-                            }}
-                          />
-                        </FrameBox>
-                        <div className={styles.actions}>
-                          <Button
-                            small
-                            primary
-                            disabled={busy || pasteText.trim() === ""}
-                            onClick={() => parseAndValidate(pasteText)}
-                          >
-                            解析并校验 (Ctrl+Enter)
-                          </Button>
-                          <Button
-                            small
-                            disabled={busy || pasteText === ""}
-                            onClick={() => setPasteText("")}
-                          >
-                            清空文本
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </section>
-
-                  {candidate && (
-                    <section className={styles.candidateCard} aria-label="待安装内容包校验结果">
-                      <CellFrame />
-                      <div className={styles.packHeader}>
-                        <div className={styles.packTitleWrap}>
-                          <strong className={styles.packName}>{candidate.title}</strong>
-                          <code className={styles.packId}>{candidate.id}</code>
-                        </div>
-                        <span className={styles.paneCount}>
-                          {candidate.author || "未署名作者"} · {totalEntries(candidate)} 项条目
-                        </span>
-                      </div>
-
-                      {candidate.description && (
-                        <p className={styles.packDesc}>{candidate.description}</p>
-                      )}
-
-                      {existingMatch && (
-                        <div className={styles.overwriteWarn} role="status">
-                          <strong>将覆盖本地已有内容包「{existingMatch.pack.title}」</strong>
-                          <span>
-                            同 ID（{candidate.id}）内容包将被更新为新版本；已有存档快照不受影响。
-                          </span>
-                        </div>
-                      )}
-
-                      {validation && (
-                        <div
-                          className={styles.validation}
-                          data-valid={validation.valid || undefined}
-                        >
-                          <strong>
-                            {validation.valid
-                              ? "✓ 结构与引用校验通过，可以安装"
-                              : `⚠ 发现 ${validation.issues.length} 个校验问题`}
-                          </strong>
-                          {validation.issues.length > 0 && (
-                            <ul>
-                              {[...new Set(validation.issues)].map((issue) => (
-                                <li key={issue}>{issue}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-
-                      <PackEntryBrowser key={candidate.id} pack={candidate} compact />
-
-                      <div className={styles.actions}>
-                        <Button
-                          small
-                          primary
-                          disabled={!validation?.valid || busy}
-                          reason={!validation?.valid ? "请先修复所有校验问题" : undefined}
-                          onClick={() => install.mutate()}
-                        >
-                          {install.isPending
-                            ? "安装中…"
-                            : existingMatch
-                              ? "覆盖更新内容包"
-                              : "安装并启用内容包"}
-                        </Button>
-                        <Button small disabled={busy} onClick={() => validate.mutate(candidate)}>
-                          重新校验
-                        </Button>
-                        <Button
-                          small
-                          disabled={busy}
-                          onClick={() => {
-                            setCandidate(null);
-                            setValidation(null);
-                          }}
-                        >
-                          放弃待导入项
-                        </Button>
-                      </div>
-                    </section>
-                  )}
-
-                  <section className={styles.toolkitCard} aria-label="内容创作工具">
-                    <CellFrame />
-                    <div className={styles.toolkitHead}>
-                      <h3>创作与打包工具</h3>
-                      <span className={styles.paneCount}>v2 协议</span>
-                    </div>
+                    <strong>还没有订阅任何工坊作品</strong>
                     <p className={styles.note}>
-                      需要自己编写内容包或分享你在角色工作台里创作的出身、特质和缺陷？可以直接导出模板或打包本地自创模块。
+                      去「社区广场」一键订阅他人创作的角色卡、义体与扩展包，或点「＋
+                      发布作品」打包你自己在角色档案里的创作 / 让 AI
+                      生成一套！旧存档均保留独立快照，随时启停不影响已有进度。
                     </p>
                     <div className={styles.actions}>
-                      <Button
-                        small
-                        onClick={() => {
-                          downloadJson(EMPTY_PACK, "cp2077-workshop-pack-v2.json");
-                          setNotice({
-                            tone: "ok",
-                            text: "已下载空白内容包模板 cp2077-workshop-pack-v2.json",
-                          });
-                        }}
-                      >
-                        下载空白模板 (v2)
+                      <Button small primary onClick={() => setView("market")}>
+                        逛逛社区广场
                       </Button>
                       <Button
                         small
-                        disabled={localModuleCount === 0}
-                        reason="你在角色工作台里还没有创建任何自定义模块"
-                        onClick={() => {
-                          const pack = exportLocalWorkshopPack();
-                          openEditor(pack, null);
-                          setNotice({
-                            tone: "ok",
-                            text: `已将 ${localModuleCount} 个本地自创模块载入在线编辑器，可继续修改并直接安装`,
-                          });
-                        }}
-                      >
-                        载入自创模块到编辑器 ({localModuleCount})
-                      </Button>
-                      <Button
-                        small
-                        disabled={localModuleCount === 0}
-                        reason="你在角色工作台里还没有创建任何自定义模块"
-                        onClick={() => {
-                          const pack = exportLocalWorkshopPack();
-                          downloadJson(pack, `${pack.id}.json`);
-                          setNotice({
-                            tone: "ok",
-                            text: `已打包导出 ${localModuleCount} 个本地自创模块 (${pack.id}.json)`,
-                          });
-                        }}
-                      >
-                        导出自创模块 ({localModuleCount})
-                      </Button>
-                    </div>
-                  </section>
-                </div>
-              ) : rightTab === "edit" ? (
-                <div className={styles.workbenchCol}>
-                  <section className={styles.editCard} aria-label="内容包在线编辑器">
-                    <CellFrame />
-                    <div className={styles.toolkitHead}>
-                      <h3>{editTargetId ? "修改内容包" : "新建自创内容包"}</h3>
-                      <span className={styles.paneCount}>
-                        {editParsed.pack
-                          ? `${totalEntries(editParsed.pack)} 项条目`
-                          : editParsed.error
-                            ? "JSON 语法待修正"
-                            : "结构待补全"}
-                      </span>
-                    </div>
-
-                    <div className={styles.editMetaGrid}>
-                      <label className={styles.editField}>
-                        <span>
-                          内容包 ID
-                          <small>{editTargetId ? "已锁定" : "小写字母/数字/短横线"}</small>
-                        </span>
-                        <FrameBox className={styles.compactInput}>
-                          <input
-                            disabled={editTargetId !== null || editParsed.raw === null}
-                            maxLength={22}
-                            value={typeof editParsed.raw?.id === "string" ? editParsed.raw.id : ""}
-                            onChange={(e) =>
-                              patchEditPack((cur) => ({ ...cur, id: e.target.value.trim() }))
-                            }
-                          />
-                        </FrameBox>
-                      </label>
-                      <label className={styles.editField}>
-                        <span>包名</span>
-                        <FrameBox className={styles.compactInput}>
-                          <input
-                            disabled={editParsed.raw === null}
-                            maxLength={40}
-                            value={
-                              typeof editParsed.raw?.title === "string" ? editParsed.raw.title : ""
-                            }
-                            onChange={(e) =>
-                              patchEditPack((cur) => ({ ...cur, title: e.target.value }))
-                            }
-                          />
-                        </FrameBox>
-                      </label>
-                      <label className={styles.editField}>
-                        <span>作者</span>
-                        <FrameBox className={styles.compactInput}>
-                          <input
-                            disabled={editParsed.raw === null}
-                            maxLength={30}
-                            value={
-                              typeof editParsed.raw?.author === "string"
-                                ? editParsed.raw.author
-                                : ""
-                            }
-                            onChange={(e) =>
-                              patchEditPack((cur) => ({ ...cur, author: e.target.value }))
-                            }
-                          />
-                        </FrameBox>
-                      </label>
-                      <label className={styles.editField}>
-                        <span>简介</span>
-                        <FrameBox className={styles.compactInput}>
-                          <input
-                            disabled={editParsed.raw === null}
-                            maxLength={160}
-                            value={
-                              typeof editParsed.raw?.description === "string"
-                                ? editParsed.raw.description
-                                : ""
-                            }
-                            onChange={(e) =>
-                              patchEditPack((cur) => ({ ...cur, description: e.target.value }))
-                            }
-                          />
-                        </FrameBox>
-                      </label>
-                    </div>
-
-                    {editParsed.error && (
-                      <div className={styles.validation} role="alert">
-                        <strong>⚠ {editParsed.error}</strong>
-                      </div>
-                    )}
-
-                    {editValidation && (
-                      <div
-                        className={styles.validation}
-                        data-valid={editValidation.valid || undefined}
-                      >
-                        <strong>
-                          {editValidation.valid
-                            ? "✓ 校验通过，可以保存"
-                            : `⚠ 发现 ${editValidation.issues.length} 个校验问题`}
-                        </strong>
-                        {editValidation.issues.length > 0 && (
-                          <ul>
-                            {[...new Set(editValidation.issues)].map((issue) => (
-                              <li key={issue}>{issue}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-
-                    <label className={styles.editField}>
-                      <span>
-                        完整内容包 JSON（可直接增删改模块、人物、物品、义体、超梦、商店货架）
-                        <small>Ctrl+Enter 保存</small>
-                      </span>
-                      <FrameBox className={styles.editJsonFrame}>
-                        <textarea
-                          rows={14}
-                          spellCheck={false}
-                          value={editJson}
-                          aria-label="内容包 JSON 源码"
-                          onChange={(e) => {
-                            setEditJson(e.target.value);
-                            setEditValidation(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !busy) {
-                              e.preventDefault();
-                              saveEdit.mutate();
-                            }
-                          }}
-                        />
-                      </FrameBox>
-                    </label>
-
-                    <div className={styles.actions}>
-                      <Button
-                        small
-                        primary
-                        disabled={busy || editJson.trim() === ""}
-                        onClick={() => saveEdit.mutate()}
-                      >
-                        {saveEdit.isPending
-                          ? "保存中…"
-                          : editTargetId
-                            ? "保存修改"
-                            : "创建并启用内容包"}
-                      </Button>
-                      <Button
-                        small
-                        disabled={busy || editJson.trim() === ""}
-                        onClick={() => validateEdit.mutate()}
-                      >
-                        {validateEdit.isPending ? "校验中…" : "校验内容包"}
-                      </Button>
-                      <Button
-                        small
-                        disabled={busy || !editParsed.raw}
-                        onClick={() => {
-                          if (!editParsed.raw) return;
-                          setEditJson(JSON.stringify(editParsed.raw, null, 2));
-                        }}
-                      >
-                        格式化 JSON
-                      </Button>
-                      {editSourcePack && (
-                        <Button
-                          small
-                          disabled={busy}
-                          onClick={() => {
-                            setEditJson(JSON.stringify(editSourcePack, null, 2));
-                            setEditValidation(null);
-                          }}
-                        >
-                          还原
-                        </Button>
-                      )}
-                      <Button
-                        small
-                        disabled={busy}
-                        onClick={() => setRightTab(inspected ? "inspect" : "import")}
-                      >
-                        退出编辑
-                      </Button>
-                    </div>
-                  </section>
-
-                  {editParsed.pack && (
-                    <section className={styles.inspectEntries} aria-label="当前包内条目预览">
-                      <div className={styles.toolkitHead}>
-                        <h3>条目快览与删减</h3>
-                        <span className={styles.paneCount}>
-                          共 {totalEntries(editParsed.pack)} 项
-                        </span>
-                      </div>
-                      <PackEntryBrowser pack={editParsed.pack} compact onRemove={removeEditEntry} />
-                    </section>
-                  )}
-                </div>
-              ) : inspected ? (
-                <div className={styles.workbenchCol}>
-                  <section className={styles.inspectCard} aria-label="已安装内容包详情">
-                    <CellFrame />
-                    <div className={styles.packHeader}>
-                      <div className={styles.packTitleWrap}>
-                        <strong className={styles.packName}>{inspected.pack.title}</strong>
-                        <code className={styles.packId}>{inspected.pack.id}</code>
-                      </div>
-                      <span className={styles.statePill} data-on={inspected.enabled || undefined}>
-                        {inspected.enabled ? "已启用" : "已停用"}
-                      </span>
-                    </div>
-                    <p className={styles.packMeta}>
-                      <span>作者：{inspected.pack.author || "未署名"}</span>
-                      <span>·</span>
-                      <span>安装时间：{formatDate(inspected.installedAt)}</span>
-                    </p>
-                    <p className={styles.packDesc}>
-                      {inspected.pack.description || "这个内容包没有填写简介。"}
-                    </p>
-                    <div className={styles.actions}>
-                      <Button
-                        small
-                        primary
-                        disabled={busy}
-                        onClick={() => openEditor(inspected.pack, inspected.pack.id)}
-                      >
-                        编辑内容包
-                      </Button>
-                      <Button
-                        small
-                        primary={!inspected.enabled}
-                        disabled={busy}
                         onClick={() =>
-                          setEnabled.mutate({
-                            id: inspected.pack.id,
-                            title: inspected.pack.title,
-                            enabled: !inspected.enabled,
-                          })
+                          setPublishModal({ tab: "local", pack: null, existingCoverHash: null })
                         }
                       >
-                        {inspected.enabled ? "停用此包" : "启用此包"}
-                      </Button>
-                      <Button
-                        small
-                        onClick={() => {
-                          downloadJson(inspected.pack, `${inspected.pack.id}.json`);
-                          setNotice({
-                            tone: "ok",
-                            text: `已导出「${inspected.pack.title}」(${inspected.pack.id}.json)`,
-                          });
-                        }}
-                      >
-                        导出 JSON
-                      </Button>
-                      <Button small disabled={busy} onClick={() => setConfirmRemove(inspected)}>
-                        卸载
+                        ＋ 发布或制作作品
                       </Button>
                     </div>
-                  </section>
+                  </div>
+                )}
 
-                  <section className={styles.inspectEntries} aria-label="包内条目清单">
-                    <div className={styles.toolkitHead}>
-                      <h3>包内收录条目</h3>
-                      <span className={styles.paneCount}>共 {totalEntries(inspected.pack)} 项</span>
-                    </div>
-                    <PackEntryBrowser key={inspected.pack.id} pack={inspected.pack} />
-                  </section>
-                </div>
-              ) : (
-                <p className={styles.note}>在左侧选择任意已安装内容包以查看收录条目。</p>
-              )}
-            </div>
-          </section>
-        </div>
+                {packages.isSuccess && installed.length > 0 && filteredLibrary.length === 0 && (
+                  <div className={styles.emptyHero}>
+                    <CellFrame />
+                    <p className={styles.note}>当前筛选条件下没有匹配的作品。</p>
+                    <Button
+                      small
+                      onClick={() => {
+                        setLibrarySearch("");
+                        setStatusFilter("all");
+                      }}
+                    >
+                      重置筛选
+                    </Button>
+                  </div>
+                )}
+
+                {filteredLibrary.length > 0 && (
+                  <ul className={styles.libraryList}>
+                    {filteredLibrary.map((entry) => {
+                      const { pack, enabled, installedAt } = entry;
+                      const chips = packCategoryCounts(pack);
+                      const hasToken = Boolean(savedTokens[pack.id]);
+                      return (
+                        <li
+                          key={pack.id}
+                          className={styles.libraryRow}
+                          data-enabled={enabled || undefined}
+                        >
+                          <CellFrame />
+                          <div className={styles.rowMain}>
+                            <div className={styles.packHeader}>
+                              <button
+                                type="button"
+                                className={styles.cardTitleBtn}
+                                onClick={() => setDetailModal({ source: "local", entry })}
+                              >
+                                <strong>{pack.title}</strong>
+                              </button>
+                              <code className={styles.packId}>{pack.id}</code>
+                              {hasToken && <span className={styles.ownerBadge}>我的发布</span>}
+                              <span className={styles.statePill} data-on={enabled || undefined}>
+                                {enabled ? "已启用" : "已停用"}
+                              </span>
+                            </div>
+                            <p className={styles.packMeta}>
+                              <span>{pack.author || "匿名创作者"}</span>
+                              <span>·</span>
+                              <span>安装于 {formatDate(installedAt)}</span>
+                              <span>·</span>
+                              <span>共 {totalEntries(pack)} 项内容</span>
+                            </p>
+                            {pack.description && (
+                              <p className={styles.packDesc}>{pack.description}</p>
+                            )}
+                            <div className={styles.chipRow}>
+                              {chips.map((c) => (
+                                <span key={c.key} className={styles.chip}>
+                                  {c.label} {c.count}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className={styles.rowSide}>
+                            <div className={styles.enabledControl}>
+                              <span>{enabled ? "新建存档生效" : "已停用"}</span>
+                              <ToggleCheck
+                                variant="switch"
+                                checked={enabled}
+                                disabled={busy}
+                                aria-label={`启用${pack.title}`}
+                                onChange={(next) =>
+                                  setEnabled.mutate({
+                                    id: pack.id,
+                                    title: pack.title,
+                                    enabled: next,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className={styles.actions}>
+                              <Button
+                                small
+                                primary
+                                disabled={busy || totalEntries(pack) === 0}
+                                onClick={() => openPublishForExisting(pack)}
+                              >
+                                {hasToken ? "更新云端" : "上传社区"}
+                              </Button>
+                              <Button
+                                small
+                                onClick={() => setDetailModal({ source: "local", entry })}
+                              >
+                                查看详情
+                              </Button>
+                              <Button
+                                small
+                                onClick={() => {
+                                  downloadJson(pack, `${pack.id}.json`);
+                                  setNotice({
+                                    tone: "ok",
+                                    text: `已导出「${pack.title}」(${pack.id}.json)`,
+                                  });
+                                }}
+                              >
+                                导出 JSON
+                              </Button>
+                              <Button small disabled={busy} onClick={() => setConfirmRemove(entry)}>
+                                卸载
+                              </Button>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </section>
       </div>
 
       <div className={styles.keys}>
@@ -1601,31 +1212,303 @@ export function WorkshopScreen() {
         </KeyBar>
       </div>
 
+      {/* ———— 三合一发布弹窗 ———— */}
+      {publishModal && (
+        <WorkshopPublishModal
+          initialTab={publishModal.tab}
+          initialPack={publishModal.pack}
+          initialExistingCoverHash={publishModal.existingCoverHash}
+          installedPacks={installed}
+          savedTokens={savedTokens}
+          busy={busy}
+          onClose={() => setPublishModal(null)}
+          onInstallLocal={(pack) => installLocalPack.mutate(pack)}
+          onPublishCommunity={(payload) => publishCommunity.mutate(payload)}
+          onGoCharacters={() => {
+            setPublishModal(null);
+            navigate("/characters");
+          }}
+        />
+      )}
+
+      {/* ———— 作品详情弹窗（支持社区作品 & 本地作品） ———— */}
+      {detailModal && (
+        <Dialog
+          title={
+            detailModal.source === "community"
+              ? detailModal.item.title
+              : detailModal.entry.pack.title
+          }
+          onClose={() => setDetailModal(null)}
+          actions={
+            detailModal.source === "community" ? (
+              <>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    setUnpublishDialog({
+                      item: detailModal.item,
+                      tokenInput: savedTokens[detailModal.item.id] ?? "",
+                    })
+                  }
+                >
+                  {savedTokens[detailModal.item.id] ? "下架我的作品" : "管理 / 下架"}
+                </Button>
+                <Button
+                  onClick={() => downloadJson(detailModal.pack, `${detailModal.item.id}.json`)}
+                >
+                  另存 JSON
+                </Button>
+                <Button
+                  primary
+                  disabled={busy}
+                  onClick={() => subscribeCommunity.mutate(detailModal.item)}
+                >
+                  {installedIds.has(detailModal.item.id) ? "更新到本地" : "＋ 一键订阅并启用"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    const target = detailModal.entry;
+                    setDetailModal(null);
+                    setConfirmRemove(target);
+                  }}
+                >
+                  卸载
+                </Button>
+                <Button
+                  onClick={() =>
+                    downloadJson(detailModal.entry.pack, `${detailModal.entry.pack.id}.json`)
+                  }
+                >
+                  导出 JSON
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    const pack = detailModal.entry.pack;
+                    setDetailModal(null);
+                    openPublishForExisting(pack);
+                  }}
+                >
+                  {savedTokens[detailModal.entry.pack.id] ? "更新社区版本" : "上传到社区"}
+                </Button>
+                <Button
+                  primary
+                  disabled={busy}
+                  onClick={() =>
+                    setEnabled.mutate({
+                      id: detailModal.entry.pack.id,
+                      title: detailModal.entry.pack.title,
+                      enabled: !detailModal.entry.enabled,
+                    })
+                  }
+                >
+                  {detailModal.entry.enabled ? "停用此包" : "启用此包"}
+                </Button>
+              </>
+            )
+          }
+        >
+          {(() => {
+            const pack =
+              detailModal.source === "community" ? detailModal.pack : detailModal.entry.pack;
+            const cover =
+              detailModal.source === "community"
+                ? communityCoverUrl(detailModal.item.id, detailModal.item.coverHash)
+                : null;
+            return (
+              <div className={styles.dialogBody}>
+                {cover && (
+                  <div className={styles.previewCoverWrap}>
+                    <img
+                      src={cover}
+                      alt={`${pack.title} 封面`}
+                      className={styles.previewCoverImg}
+                    />
+                  </div>
+                )}
+
+                <p className={styles.packMeta}>
+                  <span>作者：{pack.author || "匿名创作者"}</span>
+                  <span>·</span>
+                  <code>{pack.id}</code>
+                  {detailModal.source === "community" ? (
+                    <>
+                      <span>·</span>
+                      <span>版本 r{detailModal.item.revision}</span>
+                      <span>·</span>
+                      <span>订阅 {detailModal.item.downloads}</span>
+                      <span>·</span>
+                      <span>{formatBytes(detailModal.item.byteSize)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>·</span>
+                      <span>安装于 {formatDate(detailModal.entry.installedAt)}</span>
+                    </>
+                  )}
+                </p>
+
+                {pack.description && <p className={styles.packDesc}>{pack.description}</p>}
+
+                {/* 若包内包含角色卡：提供一键导入到角色档案！ */}
+                {pack.characters.length > 0 && (
+                  <div className={styles.charCardsBox}>
+                    <strong>收录角色卡 ({pack.characters.length})</strong>
+                    <ul className={styles.charCardList}>
+                      {pack.characters.map((card) => (
+                        <li
+                          key={`${card.name}-${card.alias}-${card.origin}`}
+                          className={styles.charCardItem}
+                        >
+                          <div className={styles.charCardInfo}>
+                            <strong>{card.name}</strong>
+                            <span>{card.origin || "原创角色"}</span>
+                            {card.look && <p className={styles.entryDetail}>{card.look}</p>}
+                          </div>
+                          <Button
+                            small
+                            primary
+                            disabled={busy}
+                            onClick={() => importCharacterCard.mutate(card)}
+                          >
+                            导入到角色档案
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <PackEntryBrowser key={pack.id} pack={pack} />
+              </div>
+            );
+          })()}
+        </Dialog>
+      )}
+
+      {/* ———— 首次发布一次性密钥提示 ———— */}
+      {issuedTokenDialog && (
+        <Dialog
+          title={`「${issuedTokenDialog.title}」已发布成功`}
+          onClose={() => setIssuedTokenDialog(null)}
+          actions={
+            <>
+              <Button
+                onClick={() => {
+                  void navigator.clipboard?.writeText(issuedTokenDialog.token);
+                  setIssuedTokenDialog((d) => (d ? { ...d, copied: true } : null));
+                }}
+              >
+                {issuedTokenDialog.copied ? "✓ 已复制密钥" : "复制管理密钥"}
+              </Button>
+              <Button primary onClick={() => setIssuedTokenDialog(null)}>
+                我已记下
+              </Button>
+            </>
+          }
+        >
+          <div className={styles.dialogBody}>
+            <p className={styles.note}>
+              以下是作品 <code>{issuedTokenDialog.packId}</code> 的专属管理密钥，
+              <b>仅本次显示</b>（服务端只保存哈希，无法找回）：
+            </p>
+            <code className={styles.tokenBox}>{issuedTokenDialog.token}</code>
+            <p className={styles.note}>
+              本机浏览器已自动记住该密钥，当前设备可直接一键更新或下架；换设备管理请复制备份。
+            </p>
+          </div>
+        </Dialog>
+      )}
+
+      {/* ———— 下架社区作品 ———— */}
+      {unpublishDialog && (
+        <Dialog
+          title={`从社区广场下架「${unpublishDialog.item.title}」？`}
+          tone="danger"
+          onClose={() => {
+            if (!unpublishPack.isPending) setUnpublishDialog(null);
+          }}
+          actions={
+            <>
+              <Button disabled={unpublishPack.isPending} onClick={() => setUnpublishDialog(null)}>
+                取消
+              </Button>
+              <Button
+                primary
+                disabled={unpublishPack.isPending || unpublishDialog.tokenInput.trim() === ""}
+                onClick={() =>
+                  unpublishPack.mutate({
+                    id: unpublishDialog.item.id,
+                    title: unpublishDialog.item.title,
+                    token: unpublishDialog.tokenInput,
+                  })
+                }
+              >
+                {unpublishPack.isPending ? "下架中…" : "确认从社区下架"}
+              </Button>
+            </>
+          }
+        >
+          <div className={styles.dialogBody}>
+            <p className={styles.note}>
+              下架后其他玩家将无法在社区广场搜到 <code>{unpublishDialog.item.id}</code>
+              （已订阅到本地或已有存档不受影响）。
+            </p>
+            <label className={styles.editField}>
+              <span>
+                管理密钥（作者密钥或站长密钥）
+                <small>
+                  {savedTokens[unpublishDialog.item.id]
+                    ? "已自动填入本机缓存"
+                    : "请输入发布时的管理密钥"}
+                </small>
+              </span>
+              <FrameBox className={styles.compactInput}>
+                <input
+                  type="password"
+                  value={unpublishDialog.tokenInput}
+                  placeholder="cpwk_..."
+                  onChange={(e) =>
+                    setUnpublishDialog((d) => (d ? { ...d, tokenInput: e.target.value } : null))
+                  }
+                />
+              </FrameBox>
+            </label>
+          </div>
+        </Dialog>
+      )}
+
+      {/* ———— 卸载本地订阅确认 ———— */}
       {confirmRemove && (
         <Dialog
           title={`卸载「${confirmRemove.pack.title}」？`}
           tone="danger"
           onClose={() => {
-            if (!remove.isPending) setConfirmRemove(null);
+            if (!removeLocal.isPending) setConfirmRemove(null);
           }}
           actions={
             <>
-              <Button disabled={remove.isPending} onClick={() => setConfirmRemove(null)}>
+              <Button disabled={removeLocal.isPending} onClick={() => setConfirmRemove(null)}>
                 取消
               </Button>
               <Button
                 primary
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(confirmRemove)}
+                disabled={removeLocal.isPending}
+                onClick={() => removeLocal.mutate(confirmRemove)}
               >
-                {remove.isPending ? "卸载中…" : "确认卸载"}
+                {removeLocal.isPending ? "卸载中…" : "确认卸载"}
               </Button>
             </>
           }
         >
           <p>
-            内容包 <code>{confirmRemove.pack.id}</code> 将从本地创意工坊移除，新建存档不再加载其中的
-            {totalEntries(confirmRemove.pack)} 项条目。已有存档仍会保留各自的完整快照。
+            作品 <code>{confirmRemove.pack.id}</code> 将从本机订阅列表移除，新建存档不再加载其中的{" "}
+            {totalEntries(confirmRemove.pack)} 项内容；已有存档仍保留完整独立快照。
           </p>
         </Dialog>
       )}

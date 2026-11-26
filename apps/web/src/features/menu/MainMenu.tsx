@@ -194,10 +194,8 @@ export function MainMenu() {
     {
       id: "workshop",
       label: "创意工坊",
-      hint: "未完成",
-      hintTone: "dim",
-      disabled: true,
-      reason: "创意工坊尚未完成，暂未启用",
+      hint: "社区广场",
+      hintTone: "cyan",
     },
     {
       id: "theme",
@@ -227,7 +225,7 @@ export function MainMenu() {
   const select = (id: Item) => {
     if (immersive) setImmersive(false);
     if (id === "continue" && latest) navigate(`/play/${latest.id}`);
-    else if (id === "workshop") return;
+    else if (id === "workshop") navigate("/workshop");
     else if (id === "settings") navigate("/settings");
     else setFocus(id);
   };
@@ -693,7 +691,15 @@ export function MainMenu() {
               {focus === "workshop" && (
                 <Panel line="var(--cp-red-dim)">
                   <div className={styles.form}>
-                    <p className={styles.note}>创意工坊功能尚未完成，当前版本暂未启用。</p>
+                    <p className={styles.note}>
+                      在社区广场浏览、搜索并一键下载安装玩家上传的义体、武器、NPC、超梦与模块扩展包，也可以直接上传发布自己的创作。
+                    </p>
+                    <div className={styles.submit}>
+                      <span className={styles.note}>支持在线上传下载与本地 JSON 管理</span>
+                      <Button primary onClick={() => navigate("/workshop")}>
+                        进入创意工坊
+                      </Button>
+                    </div>
                   </div>
                 </Panel>
               )}

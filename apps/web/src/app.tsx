@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { createHashRouter, Navigate, Outlet, useLocation } from "react-router";
+import { createHashRouter, Outlet, useLocation } from "react-router";
 import { useRoutePreload } from "./assets/usePreload";
 import {
   clearBgmPreview,
@@ -28,9 +28,15 @@ import {
 import { StoryScreen } from "./features/story/StoryScreen";
 import { useStory } from "./features/story/store";
 import { themeById, useShellTheme } from "./features/theme";
+import { WorkshopScreen } from "./features/workshop/WorkshopScreen";
 
 function isShellThemedPath(path: string): boolean {
-  return path === "/menu" || path.startsWith("/settings") || path.startsWith("/characters");
+  return (
+    path === "/menu" ||
+    path.startsWith("/settings") ||
+    path.startsWith("/characters") ||
+    path.startsWith("/workshop")
+  );
 }
 
 function Shell() {
@@ -118,8 +124,7 @@ const routes = [
       { path: "/characters", element: <CharactersScreen /> },
       { path: "/play/:saveId", element: <StoryScreen /> },
       { path: "/settings", element: <SettingsScreen /> },
-      // 创意工坊尚未完成，暂不启用
-      { path: "/workshop", element: <Navigate to="/menu" replace /> },
+      { path: "/workshop", element: <WorkshopScreen /> },
       // 开发用的页：地图校准、U0 神经界面视觉稿，只在 pnpm dev 下有
       ...(import.meta.env.DEV
         ? [

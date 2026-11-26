@@ -2,7 +2,7 @@
 
 ## 架构边界
 
-- 本仓库为前端静态应用，部署产物为 `apps/web`；无独立后端服务进程。唯一的服务端代码是 `functions/api/proxy.ts`（Cloudflare Pages Function）：无状态的 CORS 转发，只处理同源请求、只放行公网 http(s) 目标、不保存或记录密钥与请求内容；`pnpm dev` 由 `apps/web/vite.config.ts` 复用同一份处理函数。
+- 本仓库为前端静态应用，部署产物为 `apps/web`；无独立后端服务进程。服务端代码仅包含 Cloudflare Pages Functions：`functions/api/proxy.ts`（无状态 CORS 转发，只处理同源请求、只放行公网 http(s) 目标、不保存或记录密钥与请求内容）与 `functions/api/community-workshop/*`（社区创意工坊纯数据 JSON 内容包的浏览、上传、更新与下载，由 Cloudflare D1 持久化）；`pnpm dev` 由 `apps/web/vite.config.ts` 复用同一份处理函数。
 - `packages/core` 与 `packages/content` 保持纯逻辑，不依赖 React、Hono 或 `node:*` 模块。
 - `packages/runtime` 封装浏览器端内存虚拟路由（Hono `app.fetch`）、IndexedDB 事务存储与多模型直连适配；`apps/web` 仅通过 `apps/web/src/api/transport.ts` 导入 `@cp/runtime/browser`。
 - 跨包与跨系统边界由 `biome.json` 中的 `noRestrictedImports` 与 `noNodejsModules` 强制校验。

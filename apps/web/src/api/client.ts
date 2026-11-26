@@ -18,6 +18,7 @@ import type {
   TurnCheckpointSummary,
   TurnInput,
   TurnUsage,
+  WorkshopGenerateFocus,
   WorkshopPack,
 } from "@cp/core";
 
@@ -330,6 +331,8 @@ export interface BoardData {
     readonly name: string;
     readonly slot: string;
     readonly slotLabel: string;
+    readonly category?: cyberwareRules.CyberwareCategoryId;
+    readonly categoryLabel?: string;
     /** 稀有度，给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）；旧后端没有 */
     readonly rarity?: string;
     readonly humanityCost: number;
@@ -340,6 +343,15 @@ export interface BoardData {
     readonly armor?: boolean;
     readonly accelerator?: boolean;
     readonly exclusiveGroup?: cyberwareRules.ExclusiveGroup;
+    readonly defaultArmSide?: cyberwareRules.ArmSide;
+    readonly capacityBonus?: number;
+    readonly safeLineBonus?: number;
+    readonly chassisProfile?: cyberwareRules.ChassisProfile;
+    readonly variantGroup?: string;
+    readonly variantKey?: cyberwareRules.ElementVariantKey;
+    readonly smartLink?: boolean;
+    readonly carryBonus?: number;
+    readonly defenses?: readonly cyberwareRules.CyberwareDefense[];
     readonly custom?: boolean;
     readonly packId?: string;
     readonly checks?: readonly string[];
@@ -1008,6 +1020,19 @@ export const api = {
   characterBoard: () => request<BoardData>("GET", "/characters/board"),
   workshopPackages: () =>
     request<{ packages: InstalledWorkshopPack[] }>("GET", "/workshop").then((r) => r.packages),
+  generateWorkshopPack: (
+    input: {
+      readonly prompt: string;
+      readonly focus?: WorkshopGenerateFocus;
+      readonly author?: string;
+    },
+    signal?: AbortSignal,
+  ) =>
+    request<{
+      readonly pack: WorkshopPack;
+      readonly issues: readonly string[];
+      readonly summary: Readonly<Record<string, number>>;
+    }>("POST", "/workshop/generate", input, {}, signal),
   validateWorkshopPack: (pack: unknown, replaceId?: string) =>
     request<{
       valid: boolean;
