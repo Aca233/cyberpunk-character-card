@@ -19,6 +19,7 @@ const ImageGenerationMetadataSchema = z.object({
     "sdwebui",
     "comfyui",
     "novelai",
+    "wavespeed",
     "local-upload",
   ]),
   requestedPrompt: z.string(),

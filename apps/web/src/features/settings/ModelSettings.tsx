@@ -101,6 +101,7 @@ const IMAGE_PROTOCOLS: readonly { readonly id: ImageProtocol; readonly label: st
   { id: "sdwebui", label: "Stable Diffusion WebUI (/sdapi/v1/txt2img)" },
   { id: "comfyui", label: "ComfyUI (/prompt)" },
   { id: "novelai", label: "NovelAI V5 / V4.5 (/ai/generate-image)" },
+  { id: "wavespeed", label: "WaveSpeed (/api/v3/{model}，异步轮询)" },
 ];
 
 function problems(profile: PublicProfile | undefined): string[] {

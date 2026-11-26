@@ -19,16 +19,45 @@ export type CyberwareSlot = z.infer<typeof CyberwareSlotSchema>;
 
 export const SLOT_LABELS: Readonly<Record<CyberwareSlot, string>> = {
   frontalCortex: "额叶皮质",
-  eyes: "面部与感官",
+  eyes: "义眼与面甲",
   nervous: "神经系统",
   os: "操作系统",
   circulatory: "循环系统",
-  integumentary: "皮肤",
+  integumentary: "表皮防护",
   skeleton: "骨骼",
-  hands: "手部",
+  hands: "手掌",
   arms: "手臂",
   legs: "腿部",
 };
+
+/** 界面与叙事统一分区：10 个身体核心解剖部位 + 独立的「日常与感官」「全身躯壳」 */
+export const CYBERWARE_SECTION_IDS = [...CYBERWARE_SLOTS, "lifestyle", "fbc"] as const;
+export type CyberwareSectionId = (typeof CYBERWARE_SECTION_IDS)[number];
+
+export const SECTION_LABELS: Readonly<Record<CyberwareSectionId, string>> = {
+  ...SLOT_LABELS,
+  lifestyle: "日常与感官",
+  fbc: "全身躯壳",
+};
+
+const LIFESTYLE_SENSORY_IDS = new Set([
+  "audio-suite",
+  "chemo-olfactory-filter",
+  "jaw-stash-implant",
+  "chroma-iris-overlay",
+  "voice-modulator",
+  "sleep-skip-regulator",
+  "braindance-recorder",
+  "tactile-nerve-amp",
+  "neural-sync-bridge",
+  "endorphin-micro-pump",
+  "mr-studd",
+  "midnight-lady",
+  "synth-pheromone-glands",
+  "chemskin-pigment",
+  "light-tattoo-circuit",
+  "thermo-comfort-weave",
+]);
 
 /**
  * 物理互斥组：只拦截现实人体解剖/接口层面真正无法并存的硬件，不再用固定部位总格数一刀切。
@@ -127,6 +156,14 @@ export function cyberwareExclusiveGroup(def: ExclusiveProbe): ExclusiveGroup | n
   if (def.slot === "legs") return LEG_DRIVE_IDS.has(def.id) ? "legDrive" : null;
   if (def.slot === "integumentary") return def.armor ? "skinArmor" : null;
   return null;
+}
+
+/** 按常识归类一件义体在界面中的直觉分区：全身义体化(FBC) 归「全身躯壳」，生活/外观/感官/亲密归「日常与感官」，其余按解剖部位展示。 */
+export function cyberwareSectionOf(def: ExclusiveProbe): CyberwareSectionId {
+  const group = cyberwareExclusiveGroup(def);
+  if (group === "fullBorg") return "fbc";
+  if (LIFESTYLE_SENSORY_IDS.has(def.id)) return "lifestyle";
+  return def.slot;
 }
 
 export type CyberwareConflictResult<T extends ExclusiveProbe = ExclusiveProbe> =

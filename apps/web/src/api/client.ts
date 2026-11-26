@@ -408,7 +408,8 @@ export type ImageProtocol =
   | "gemini-imagen"
   | "sdwebui"
   | "comfyui"
-  | "novelai";
+  | "novelai"
+  | "wavespeed";
 
 export type AspectRatio = "1:1" | "3:4" | "4:3" | "16:9" | "9:16";
 

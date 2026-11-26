@@ -62,9 +62,10 @@ export type ImageResolved =
   | { readonly ok: false; readonly error: string };
 
 const DEFAULT_BASE: Record<
-  "openai" | "ollama" | "gemini" | "sdwebui" | "comfyui" | "novelai",
+  "openai" | "ollama" | "gemini" | "sdwebui" | "comfyui" | "novelai" | "wavespeed",
   string
 > = {
+  wavespeed: "https://api.wavespeed.ai",
   openai: "https://api.openai.com/v1",
   ollama: "http://127.0.0.1:11434/v1",
   gemini: "https://generativelanguage.googleapis.com/v1beta",
@@ -275,7 +276,8 @@ export function imageProtocolCapabilities(protocol: ResolvedImageProtocol) {
       protocol === "openai-images" ||
       protocol === "sdwebui" ||
       protocol === "comfyui" ||
-      protocol === "novelai",
+      protocol === "novelai" ||
+      protocol === "wavespeed",
     sampling: protocol === "sdwebui" || protocol === "comfyui" || protocol === "novelai",
   } as const;
 }
@@ -292,6 +294,7 @@ export function resolveImageProtocol(profile: Profile): ResolvedImageProtocol {
     const cleanModel = profile.model.replace(/^models\//, "");
     return /^imagen/i.test(cleanModel) ? "gemini-imagen" : "gemini-native";
   }
+  if (/wavespeed/i.test(profile.baseUrl ?? "")) return "wavespeed";
   const m = profile.model.toLowerCase();
   if (m.includes("nai-diffusion") || m.startsWith("nai-") || m.includes("novelai")) {
     return "novelai";
@@ -850,6 +853,84 @@ async function generateComfyUi(
   throw new UpstreamError(`${provider} ComfyUI 生成超时，请检查本地队列或工作流`);
 }
 
+/* ———— 6. WaveSpeed (POST /api/v3/{model}，异步任务轮询 /predictions/{id}/result) ———— */
+
+const WAVESPEED_POLL_MS = 2_000;
+const WAVESPEED_MAX_WAIT_MS = 240_000;
+
+async function generateWaveSpeed(
+  provider: string,
+  profile: Profile,
+  apiKey: string,
+  request: ImageGenerateRequest,
+  signal?: AbortSignal,
+): Promise<RawImageGenerateResult> {
+  // 兼容用户把地址写成 https://api.wavespeed.ai/api/v3
+  const base = cleanBaseUrl(profile.baseUrl, DEFAULT_BASE.wavespeed).replace(/\/api\/v3$/i, "");
+  const model = profile.model.trim().replace(/^\/+|\/+$/g, "");
+  if (!model) throw new UpstreamError(`${provider} 还没有填写模型名（例如 bytedance/seedream-v4）`);
+  const headers: Record<string, string> = { authorization: `Bearer ${apiKey}` };
+  const { width, height } = dimensionsForRequest(request);
+  const submit = await postJson(
+    provider,
+    `${base}/api/v3/${model.split("/").map(encodeURIComponent).join("/")}`,
+    headers,
+    {
+      prompt: request.prompt,
+      size: `${width}*${height}`,
+      enable_base64_output: false,
+      enable_sync_mode: false,
+    },
+    signal,
+  );
+  if (!submit.ok) throw statusError(provider, submit.status, submit.message);
+  const submitData = asRecord(asRecord(submit.json)?.data);
+  const taskId = submitData?.id;
+  if (typeof taskId !== "string" || !taskId) {
+    throw new UpstreamError(`${provider} 没有返回 WaveSpeed 任务 ID`);
+  }
+  const resultUrl = `${base}/api/v3/predictions/${encodeURIComponent(taskId)}/result`;
+  const pickOutput = (data: Record<string, unknown> | undefined): string | undefined => {
+    const outputs = data?.outputs;
+    const first = Array.isArray(outputs) ? outputs[0] : undefined;
+    return typeof first === "string" && first ? first : undefined;
+  };
+  let data = submitData;
+  const deadline = Date.now() + WAVESPEED_MAX_WAIT_MS;
+  while (true) {
+    const status = data?.status;
+    if (status === "completed") {
+      const output = pickOutput(data);
+      if (!output) throw new UpstreamError(`${provider} WaveSpeed 任务完成但没有返回图片`);
+      if (output.startsWith("data:")) return toDataUrl(output);
+      // 结果图在 CDN 上，不需要也不能带密钥
+      return fetchUrlAsDataUrl(provider, output, {}, signal);
+    }
+    if (
+      status === "failed" ||
+      status === "cancelled" ||
+      status === "timeout" ||
+      status === "deleted"
+    ) {
+      const detail = typeof data?.error === "string" ? `：${data.error.slice(0, 300)}` : "";
+      throw new UpstreamError(`${provider} WaveSpeed 生成失败（${status}）${detail}`);
+    }
+    if (Date.now() >= deadline) {
+      throw new UpstreamError(`${provider} WaveSpeed 生成超时，请到 WaveSpeed 控制台查看任务`);
+    }
+    await sleep(WAVESPEED_POLL_MS, signal);
+    const res = await get(provider, resultUrl, headers, signal);
+    if (!res.ok) {
+      // 限流或临时 5xx 继续轮询，其余错误直接报
+      if (res.status === 429 || res.status >= 500) continue;
+      const detail = await errorDetail(res);
+      throw statusError(provider, res.status, detail.message);
+    }
+    const json = asRecord(await res.json().catch(() => null));
+    data = asRecord(json?.data) ?? data;
+  }
+}
+
 /* ———— 5. NovelAI Diffusion V5 / V4.5 / V4 / V3 (/ai/generate-image) ———— */
 
 function isRawImageBytes(bytes: Uint8Array): boolean {
@@ -1105,6 +1186,9 @@ async function requestImageWithProfile(
     case "novelai":
       if (!apiKey) throw new UpstreamError(`${provider} 缺少 NovelAI API 密钥`);
       return generateNovelAi(provider, profile, apiKey, request, signal);
+    case "wavespeed":
+      if (!apiKey) throw new UpstreamError(`${provider} 缺少 WaveSpeed API 密钥`);
+      return generateWaveSpeed(provider, profile, apiKey, request, signal);
   }
 }
 

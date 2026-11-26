@@ -25,6 +25,7 @@ export const ImageProtocolSchema = z.enum([
   "sdwebui",
   "comfyui",
   "novelai",
+  "wavespeed",
 ]);
 export type ImageProtocol = z.infer<typeof ImageProtocolSchema>;
 
