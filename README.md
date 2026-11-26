@@ -50,7 +50,7 @@ CP_BASE=/仓库名/ pnpm --filter @cp/web build # GitHub Pages 项目子路径�
 
 - **路由与刷新**：使用 Hash 路由（`#/menu`），静态托管任意子路径刷新均不会 404，无需配置服务端重定向。
 - **素材与构建**：素材目录不进 Git。本地完成构建后，直接将 `apps/web/dist` 上传托管。如果未解包正式素材，会以 demo 素材兜底运行并在界面标注提示。
-- **跨域与连接**：所选模型服务商需支持浏览器端 CORS 访问；若使用本地 Ollama，请配置 `OLLAMA_ORIGINS`。
+- **跨域与连接**：浏览器优先直连模型服务商；上游不支持 CORS 时自动改走同源的 `/api/proxy`（`functions/api/proxy.ts`，Cloudflare Pages Function，无状态透传，密钥仍由浏览器每次请求携带，不落盘）。转发只放行公网地址，本机地址（如本地 Ollama、`127.0.0.1`）始终浏览器直连，需配置 `OLLAMA_ORIGINS`。部署须在仓库根目录执行 `pnpm deploy`，wrangler 才会带上 `functions/`。
 - **数据安全**：存档仅保存在当前浏览器的存储区，清理浏览器缓存会导致存档丢失；请随时在「读取存档」页面导出 JSON 备份。
 
 ### 部署到 Cloudflare Pages

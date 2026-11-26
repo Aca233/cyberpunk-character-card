@@ -1,6 +1,7 @@
 import type { AbortSignalLike, Reranker, RerankOptions, RerankResult } from "@cp/core";
 import type { Profile, ProviderType } from "../config";
 import { AbortedError, errorDetail, statusError, toAbortSignal, UpstreamError } from "./http";
+import { relayFetch } from "./relay";
 
 /**
  * 语义重排（Reranker）客户端：
@@ -68,7 +69,7 @@ async function rerankStrict(
       : documents.length;
 
   try {
-    const res = await fetch(url, {
+    const res = await relayFetch(url, {
       method: "POST",
       headers: {
         "content-type": "application/json",

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Profile } from "../config";
 import { geminiClient } from "./gemini";
 import { UpstreamError } from "./http";
+import { relayFetch } from "./relay";
 
 /**
  * GCP Vertex AI 直连。两种认证都支持：
@@ -121,7 +122,7 @@ async function vertexAccessToken(
   }
   const pending = (async (): Promise<CachedToken> => {
     const assertion = await signServiceAccountJwt(sa);
-    const res = await fetch(sa.token_uri ?? DEFAULT_TOKEN_URI, {
+    const res = await relayFetch(sa.token_uri ?? DEFAULT_TOKEN_URI, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({

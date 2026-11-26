@@ -1,6 +1,7 @@
 import type { AbortSignalLike, Embedder, EmbedOptions, EmbedTask } from "@cp/core";
 import type { Profile, ProviderType } from "../config";
 import { AbortedError, errorDetail, statusError, toAbortSignal, UpstreamError } from "./http";
+import { relayFetch } from "./relay";
 
 /**
  * 多提供方向量嵌入客户端：
@@ -134,7 +135,7 @@ async function embedOpenAiBatch(
     accept: "application/json",
     ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
   };
-  const res = await fetch(url, {
+  const res = await relayFetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({ model, input: [...texts] }),
@@ -167,7 +168,7 @@ async function embedGeminiBatch(
   const cleanModel = model.replace(/^models\//, "");
   const taskType =
     task === "query" ? "RETRIEVAL_QUERY" : task === "document" ? "RETRIEVAL_DOCUMENT" : undefined;
-  const res = await fetch(url, {
+  const res = await relayFetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",

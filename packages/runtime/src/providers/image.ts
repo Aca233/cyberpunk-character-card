@@ -7,6 +7,7 @@ import {
   validateImageDataUrl,
 } from "./image-bytes";
 import { imageGenerationQueue } from "./image-queue";
+import { relayFetch } from "./relay";
 import { vertexAuthHeaders, vertexModelUrl } from "./vertex";
 
 export type AspectRatio = "1:1" | "3:4" | "4:3" | "16:9" | "9:16";
@@ -139,7 +140,7 @@ async function fetchUrlAsDataUrl(
     if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password) {
       throw new UpstreamError("生成图片的下载地址仅支持不带账号的 HTTP 或 HTTPS");
     }
-    const res = await fetch(url, {
+    const res = await relayFetch(url, {
       method: "GET",
       headers,
       credentials: "omit",

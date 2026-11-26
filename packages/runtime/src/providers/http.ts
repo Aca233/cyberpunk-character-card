@@ -1,5 +1,7 @@
 /** 各家提供方共用的 HTTP 和 SSE 工具；报错文字给玩家看，统一用中文，调用方负责脱敏 */
 
+import { relayFetch } from "./relay";
+
 export class UpstreamError extends Error {
   constructor(
     message: string,
@@ -64,7 +66,7 @@ async function send(
   for (let attempt = 0; attempt <= NETWORK_RETRY_DELAYS_MS.length; attempt += 1) {
     if (signal?.aborted) throw new AbortedError();
     try {
-      return await fetch(url, {
+      return await relayFetch(url, {
         ...init,
         ...(signal ? { signal } : {}),
       });
