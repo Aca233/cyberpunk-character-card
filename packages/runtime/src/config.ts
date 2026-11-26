@@ -230,8 +230,18 @@ function checkKey(raw: unknown): { ok: true; key: string } | Failure {
   const key = raw.trim();
   if (key.length < 8) return fail(400, "密钥太短，检查是不是没复制完整");
   // 以 { 开头的是 Vertex 服务账号 JSON（压成单行约 2.4KB），普通 API key 不会这么长
-  const maxLength = key.startsWith("{") ? 8000 : 1000;
-  if (key.length > maxLength) return fail(400, "密钥太长，检查是不是多复制了别的内容");
+  if (key.startsWith("{")) {
+    if (key.length > 8000) return fail(400, "密钥太长，检查是不是多复制了别的内容");
+    // JSON 内部允许空格和非 ASCII 字符；只要求能解析且是单行
+    if (/[\r\n]/.test(key)) return fail(400, "服务账号 JSON 必须压成单行，请重新导入 JSON 文件");
+    try {
+      JSON.parse(key);
+    } catch {
+      return fail(400, "密钥以 { 开头但不是合法 JSON，请重新导入服务账号 JSON 文件");
+    }
+    return { ok: true, key };
+  }
+  if (key.length > 1000) return fail(400, "密钥太长，检查是不是多复制了别的内容");
   if (!/^[\x21-\x7e]+$/.test(key)) {
     return fail(400, "密钥里有空格、换行或中文字符，检查是不是多复制了内容");
   }
