@@ -14,7 +14,7 @@ import { UpstreamError } from "./http";
 export const VERTEX_DEFAULT_BASE = "https://aiplatform.googleapis.com/v1";
 
 const BASE_HINT =
-  "Vertex 的 baseUrl 填到模型集合根，例如 https://aiplatform.googleapis.com/v1/projects/项目ID/locations/区域/publishers/google（区域可用 global 或具体区域域名）";
+  "Vertex 的 baseUrl 可以只填 https://aiplatform.googleapis.com/v1（global 区域），也可换成 {区域}-aiplatform.googleapis.com；填完整集合根 .../projects/{项目ID}/locations/{区域}/publishers/google 时按所填路径使用";
 
 const CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token";
@@ -27,6 +27,7 @@ const ServiceAccountSchema = z.looseObject({
   client_email: z.string().min(1),
   private_key: z.string().min(1),
   token_uri: z.string().min(1).optional(),
+  project_id: z.string().min(1).optional(),
 });
 export type VertexServiceAccount = z.infer<typeof ServiceAccountSchema>;
 
@@ -176,8 +177,23 @@ export async function vertexAuthHeaders(
   return { "x-goog-api-key": apiKey };
 }
 
-/** 把 baseUrl 归一化到模型集合根（.../projects/{p}/locations/{l}/publishers/{publisher}） */
-export function vertexCollectionRoot(rawBase: string | undefined): string {
+/** 从 aiplatform 域名推导区域：aiplatform.googleapis.com → global，{region}-aiplatform → region */
+function vertexRegionFromHost(host: string): string | null {
+  if (host === "aiplatform.googleapis.com") return "global";
+  const m = /^([a-z0-9-]+)-aiplatform\.googleapis\.com$/u.exec(host);
+  return m ? (m[1] ?? null) : null;
+}
+
+const VERSION_PATH = /\/v\d+[a-z0-9]*$/u;
+
+/**
+ * 把 baseUrl 归一化到模型集合根（.../publishers/{publisher}）：
+ * - 已经填到 .../publishers/{x} 或 .../projects/{p}/locations/{l}：直接补齐
+ * - 只填域名或 /v1 这类根路径：
+ *   - 服务账号且 JSON 带 project_id、域名可推出区域：自动补 projects/{id}/locations/{region}
+ *   - 否则按快捷模式裸集合根 /v1/publishers/google
+ */
+export function vertexCollectionRoot(rawBase: string | undefined, apiKey?: string): string {
   const raw = (rawBase?.trim() ? rawBase.trim() : VERTEX_DEFAULT_BASE).replace(/\/+$/, "");
   let parsed: URL;
   try {
@@ -200,7 +216,13 @@ export function vertexCollectionRoot(rawBase: string | undefined): string {
   } else if (/\/projects\/[^/]+\/locations\/[^/]+$/u.test(path)) {
     path = `${path}/publishers/google`;
   } else {
-    throw new UpstreamError(BASE_HINT);
+    const version = VERSION_PATH.test(path) ? "" : "/v1";
+    const sa = apiKey ? parseServiceAccount(apiKey) : null;
+    const region = vertexRegionFromHost(parsed.hostname);
+    path =
+      sa?.project_id && region
+        ? `${path}${version}/projects/${sa.project_id}/locations/${region}/publishers/google`
+        : `${path}${version}/publishers/google`;
   }
   parsed.pathname = path;
   return parsed.toString().replace(/\/+$/, "");
@@ -220,7 +242,7 @@ export function vertexModelUrl(
   apiKey: string | undefined,
   method: "streamGenerateContent" | "generateContent" | "predict",
 ): string {
-  const root = new URL(vertexCollectionRoot(profile.baseUrl));
+  const root = new URL(vertexCollectionRoot(profile.baseUrl, apiKey));
   root.pathname = `${root.pathname}/models/${encodeURIComponent(cleanVertexModel(profile))}:${method}`;
   if (apiKey && !parseServiceAccount(apiKey)) root.searchParams.set("key", apiKey);
   if (method === "streamGenerateContent") root.searchParams.set("alt", "sse");
@@ -229,7 +251,7 @@ export function vertexModelUrl(
 
 /** 模型列表地址：{集合根}/models；API key 附带 ?key=，服务账号不带 */
 export function vertexModelsUrl(baseUrl: string | undefined, apiKey: string | undefined): string {
-  const root = new URL(vertexCollectionRoot(baseUrl));
+  const root = new URL(vertexCollectionRoot(baseUrl, apiKey));
   root.pathname = `${root.pathname}/models`;
   if (apiKey && !parseServiceAccount(apiKey)) root.searchParams.set("key", apiKey);
   root.searchParams.set("pageSize", "100");

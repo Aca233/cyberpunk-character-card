@@ -32,6 +32,15 @@ const SAFETY_CATEGORIES = [
   "HARM_CATEGORY_DANGEROUS_CONTENT",
 ] as const;
 
+/** Vertex 专属安全类别（图像与越狱类），这些类别用 OFF 阈值关闭（参考 SillyTavern VERTEX_SAFETY） */
+const VERTEX_SAFETY_CATEGORIES = [
+  "HARM_CATEGORY_IMAGE_HATE",
+  "HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT",
+  "HARM_CATEGORY_IMAGE_HARASSMENT",
+  "HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT",
+  "HARM_CATEGORY_JAILBREAK",
+] as const;
+
 const TokenCount = z.number().int().min(0);
 const ChunkSchema = z.object({
   promptFeedback: z
@@ -270,10 +279,18 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
     // 被拦截时报告 blocked，不重试修改安全设置。
     ...(profile.safety === "blockNone"
       ? {
-          safetySettings: SAFETY_CATEGORIES.map((category) => ({
-            category,
-            threshold: "BLOCK_NONE",
-          })),
+          safetySettings: [
+            ...SAFETY_CATEGORIES.map((category) => ({
+              category,
+              threshold: "BLOCK_NONE",
+            })),
+            ...(profile.type === "vertex"
+              ? VERTEX_SAFETY_CATEGORIES.map((category) => ({
+                  category,
+                  threshold: "OFF",
+                }))
+              : []),
+          ],
         }
       : {}),
   };
