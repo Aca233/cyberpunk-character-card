@@ -31,6 +31,7 @@ import {
   CompanionActionSchema,
   NpcExchangeGearActionSchema,
   ScanNpcActionSchema,
+  SetNpcRelationActionSchema,
 } from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { UseSuppressantActionSchema } from "./systems/psychosis";
@@ -119,6 +120,8 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   ReadShardsActionSchema,
   /** 在场的人：点「扫描」立刻用义眼扫一下，不调用模型、不花时间；要人在场、义眼装着没坏（计划第十二节第 14 条） */
   ScanNpcActionSchema,
+  /** 人物档案里直接补充或修订与已结识 NPC 的关系定性（不调用模型，即时同步给叙事 AI） */
+  SetNpcRelationActionSchema,
 ]);
 export type PlayerAction = z.infer<typeof PlayerActionSchema>;
 

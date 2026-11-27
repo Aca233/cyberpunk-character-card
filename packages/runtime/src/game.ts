@@ -99,6 +99,7 @@ import { randomHex } from "./random";
 import type { TurnHub, TurnRun } from "./turns";
 import type { WorkshopStore } from "./workshop";
 import { requiredPackIds, workshopRuntime } from "./workshop-content";
+import type { WorldbookStore } from "./worldbooks";
 
 /** 每追加这么多条记录写一次快照 */
 export const SNAPSHOT_EVERY = 10;
@@ -188,6 +189,8 @@ export interface GameDeps {
   readonly log: (message: string) => void;
   /** 玩家导入的酒馆预设（用户定的）：每轮开始时读当前启用的那一份，只给写正文 */
   readonly presets?: PresetStore | undefined;
+  /** 玩家导入的酒馆世界书（可同时启用多本）：每轮开始时读全部启用中的世界书，只给写正文 */
+  readonly worldbooks?: WorldbookStore | undefined;
   /** 回合阶段断点存储：每步调用完成后落盘，防止报错重头再来 */
   readonly checkpoints?: TurnCheckpointStore | undefined;
   /** 本地持久化向量缓存：按存档缓存旧记忆文档向量 */
@@ -1601,7 +1604,10 @@ export class GameService {
         }),
         this.deps.llm.resolveReranker((msg) => this.deps.log(msg)),
       ]);
-      const preset = await this.deps.presets?.active();
+      const [preset, worldbooks] = await Promise.all([
+        this.deps.presets?.active(),
+        this.deps.worldbooks?.active(),
+      ]);
       if (signal.aborted) throw new NarratorAbortedError("已停止");
       const result = await runNarratorTurn(
         {
@@ -1619,8 +1625,9 @@ export class GameService {
           startTime,
           offscreen: OFFSCREEN_PACE_SCENES[offscreen ?? "normal"],
           encounters: travelRules.ENCOUNTER_PACE_FACTORS[encounters ?? "normal"],
-          // 本轮开始前读取一次预设；生成途中切换开关，不改变这一轮已经选定的内容。
+          // 本轮开始前读取一次预设与世界书；生成途中切换开关，不改变这一轮已经选定的内容。
           preset,
+          worldbooks,
           signal,
           saveId: run.saveId,
           baseVersion: run.baseVersion,

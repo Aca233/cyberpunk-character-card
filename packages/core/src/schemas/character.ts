@@ -3,6 +3,7 @@ import type { Trait } from "../systems/character/schema";
 import { NO_FACTION, NPC_UNDECIDED_PREFIX } from "../systems/npc/schema";
 import {
   type Acquaintance,
+  acquaintanceRelationLabel,
   BOARD_SLOT_LABELS,
   type Board,
   BoardSchema,
@@ -235,17 +236,17 @@ export function boardPeople(board: Board): BoardStart["people"] {
  */
 export function acquaintanceSeed(a: Acquaintance): StartAcquaintance {
   const info = RELATION_INFO[a.relation];
+  const label = acquaintanceRelationLabel(a);
   const note = a.note.trim();
-  const relation =
-    info.note || (!info.ledger && note) ? (note ? `${info.label}：${note}` : info.label) : "";
+  const relation = info.note || (!info.ledger && note) ? (note ? `${label}：${note}` : label) : "";
   return {
     id: a.id,
-    ...(relation ? { relation: relation.slice(0, 60) } : {}),
+    ...(relation ? { relation: relation.slice(0, 120) } : {}),
     ledger: info.ledger
       ? [
           {
             kind: info.ledger,
-            text: (note || `${info.label}：开局以前的旧事，细节第一次提起时再定`).slice(0, 80),
+            text: (note || `${label}：开局以前的旧事，细节第一次提起时再定`).slice(0, 80),
           },
         ]
       : [],

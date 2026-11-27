@@ -1135,6 +1135,91 @@
   line-height: 1.45;
 }
 
+.tarotCustomPanel {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgb(94 246 255 / 38%);
+  border-left: 3px solid var(--cp-cyan);
+  background: rgb(9 20 28 / 86%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  animation: wbChipIn 200ms var(--ease-snap) both;
+}
+
+.tarotCustomHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.tarotCustomTitle {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.tarotCustomField {
+  display: grid;
+  gap: 4px;
+}
+
+.tarotCustomLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--cp-text-dim);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.tarotCustomLabel small {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.tarotCustomBox textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 4.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.tarotCustomCard {
+  border-color: rgb(94 246 255 / 38%);
+  background: rgb(8 20 28 / 90%);
+}
+
+.tarotCustomArt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 46px;
+  height: 70px;
+  border: 1px dashed rgb(94 246 255 / 55%);
+  background: rgb(5 12 18);
+  color: var(--cp-cyan);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.tarotCustomArt small {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-yellow);
+}
+
 .tarotGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

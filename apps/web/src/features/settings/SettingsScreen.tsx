@@ -24,12 +24,14 @@ import { PresetSettings } from "./PresetSettings";
 import { setNarrativePref } from "./prefs";
 import { useSpoilerView } from "./SpoilerBadge";
 import styles from "./settings.module.css";
+import { WorldbookSettings } from "./WorldbookSettings";
 
 type Tab = "profiles" | "presets" | "narrative" | "audio" | "context" | "feedback";
+type PresetSubTab = "preset" | "worldbook";
 
 const TABS: readonly { readonly id: Tab; readonly code: string; readonly label: string }[] = [
   { id: "profiles", code: "01", label: "模型连接" },
-  { id: "presets", code: "02", label: "酒馆预设" },
+  { id: "presets", code: "02", label: "预设与世界书" },
   { id: "narrative", code: "03", label: "叙事偏好" },
   { id: "audio", code: "04", label: "音频" },
   { id: "context", code: "05", label: "上下文（调试）" },
@@ -64,6 +66,7 @@ export function SettingsScreen() {
   const activeTheme = themeById(shellTheme.effectiveId);
   const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const presetsQuery = useQuery({ queryKey: ["presets"], queryFn: api.tavernPresets });
+  const worldbooksQuery = useQuery({ queryKey: ["worldbooks"], queryFn: api.worldbooks });
   const profilesReady = (() => {
     const data = profilesQuery.data;
     if (data?.status !== "ok") return false;
@@ -82,16 +85,36 @@ export function SettingsScreen() {
   })();
   const profilesLoaded = profilesQuery.data !== undefined;
   const activePreset = presetsQuery.data?.presets.find((p) => p.active);
+  const activeWorldbookCount = (worldbooksQuery.data?.worldbooks ?? []).filter(
+    (b) => b.enabled,
+  ).length;
 
   const tabParam = params.get("tab");
   const tab: Tab =
-    tabParam === "context" ||
-    tabParam === "narrative" ||
-    tabParam === "presets" ||
-    tabParam === "audio" ||
-    tabParam === "feedback"
-      ? tabParam
-      : "profiles";
+    tabParam === "worldbooks"
+      ? "presets"
+      : tabParam === "context" ||
+          tabParam === "narrative" ||
+          tabParam === "presets" ||
+          tabParam === "audio" ||
+          tabParam === "feedback"
+        ? tabParam
+        : "profiles";
+  const subParam = params.get("sub");
+  const presetSubTab: PresetSubTab =
+    tabParam === "worldbooks" || subParam === "worldbooks" ? "worldbook" : "preset";
+  const setPresetSubTab = (nextSub: PresetSubTab) => {
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        next.set("tab", "presets");
+        if (nextSub === "worldbook") next.set("sub", "worldbooks");
+        else next.delete("sub");
+        return next;
+      },
+      { replace: true, state: location.state },
+    );
+  };
   const backTarget = activeSaveId
     ? `/play/${activeSaveId}`
     : safeBackTarget(location.state, params.get("from"));
@@ -147,7 +170,7 @@ export function SettingsScreen() {
 
   const tabDot = (id: Tab): "ok" | "warn" | null => {
     if (id === "profiles" && profilesLoaded) return profilesReady ? "ok" : "warn";
-    if (id === "presets" && activePreset) return "ok";
+    if (id === "presets" && (activePreset || activeWorldbookCount > 0)) return "ok";
     if (id === "audio" && audioPrefs.muted) return "warn";
     if (id === "context" && spoilersOpen) return "warn";
     return null;
@@ -185,6 +208,12 @@ export function SettingsScreen() {
               <span className={styles.teleChip} data-tone="ok" title={activePreset.name}>
                 <span className={styles.teleDot} aria-hidden />
                 预设：{activePreset.name}
+              </span>
+            )}
+            {activeWorldbookCount > 0 && (
+              <span className={styles.teleChip} data-tone="ok">
+                <span className={styles.teleDot} aria-hidden />
+                世界书：{activeWorldbookCount} 本
               </span>
             )}
             {spoilersOpen && (
@@ -235,7 +264,38 @@ export function SettingsScreen() {
         {tab === "profiles" ? (
           <ModelSettings onDirtyChange={setDirty} />
         ) : tab === "presets" ? (
-          <PresetSettings />
+          <div className={styles.presetHub}>
+            <nav className={styles.subTabs} aria-label="酒馆预设与世界书切换">
+              <div className={styles.subTabGroup}>
+                <button
+                  type="button"
+                  className={styles.subTab}
+                  aria-pressed={presetSubTab === "preset"}
+                  onClick={() => setPresetSubTab("preset")}
+                >
+                  <span>酒馆预设</span>
+                  {activePreset && <span className={styles.subTabCount}>启用中</span>}
+                </button>
+                <button
+                  type="button"
+                  className={styles.subTab}
+                  aria-pressed={presetSubTab === "worldbook"}
+                  onClick={() => setPresetSubTab("worldbook")}
+                >
+                  <span>酒馆世界书</span>
+                  {activeWorldbookCount > 0 && (
+                    <span className={styles.subTabCount}>{activeWorldbookCount} 本</span>
+                  )}
+                </button>
+              </div>
+              <span className={styles.subTabHint}>
+                预设管文风与破甲，世界书管常驻与关键词设定；两者互不干扰
+              </span>
+            </nav>
+            <div className={styles.presetHubBody}>
+              {presetSubTab === "preset" ? <PresetSettings /> : <WorldbookSettings />}
+            </div>
+          </div>
         ) : tab === "narrative" ? (
           <NarrativeSettings onOpenContext={() => requestGo("context")} />
         ) : tab === "audio" ? (

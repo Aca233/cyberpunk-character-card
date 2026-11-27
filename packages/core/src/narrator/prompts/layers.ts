@@ -123,6 +123,8 @@ export interface PromptSlots {
   readonly recall?: string | undefined;
   /** 设定库：本机官方文本库里查到的原作资料，单独一块，只供参考；不是记忆，也不算已经发生的事 */
   readonly lore?: string | undefined;
+  /** 玩家导入的酒馆世界书（绿灯关键词动态命中的条目，放进 user 侧不击穿静态缓存） */
+  readonly worldbook?: string | undefined;
   /** 最近用过的写法，写正文时别再用 */
   readonly habits?: string | undefined;
   readonly input: string;
@@ -142,6 +144,7 @@ export function userMessage(slots: PromptSlots): string {
     decided.length > 0 ? `【本轮已定的事】\n${decided.join("\n")}` : undefined,
     slots.recall,
     slots.lore,
+    slots.worldbook,
     slots.habits,
     slots.input,
     ...(slots.after ?? []),

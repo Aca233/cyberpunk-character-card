@@ -38,7 +38,7 @@ import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
 import { currentTension } from "../systems/tension";
 import { type PlannedTrip, planTrip, tripFact, tripText, tripWorldOf } from "../systems/travel";
-import { WorldClockStateSchema, withSavedPlaces } from "../systems/world";
+import { locationCatalog, WorldClockStateSchema, withSavedPlaces } from "../systems/world";
 import { pendingUiActions } from "../ui-actions";
 import {
   type Choice,
@@ -150,6 +150,12 @@ import {
   type ValidationEntry,
   validateEntries,
 } from "./validation";
+import {
+  type ActiveWorldbook,
+  applyWorldbookDepth,
+  resolveWorldbooks,
+  worldbookDynamicSection,
+} from "./worldbook";
 
 /**
  * 一轮四步：① 判断（辅助模型，JSON Schema：记忆调度与定性物理/社会因果裁决）→ ② 拼上下文
@@ -377,6 +383,11 @@ export interface NarratorDeps {
    * 采样参数和正则也只用在这一步；判断、抽取、核对、修复、场外推演、摘要都不套
    */
   readonly preset?: TavernPreset | undefined;
+  /**
+   * 玩家导入并启用的酒馆世界书（可同时启用多本）：只在写正文那一步生效；
+   * 蓝灯常驻进静态 system 缓存层，绿灯关键词命中进 user 槽位，@D 深度条目先于酒馆预设叠加，不干扰预设破甲位置
+   */
+  readonly worldbooks?: readonly ActiveWorldbook[] | undefined;
   /** 预设宏里 {{user}} 换成什么：玩家角色名 */
   readonly userName?: string | undefined;
   /** 可选阶段断点：跳过已完成的大模型调用，从断点继续 */
@@ -1112,17 +1123,51 @@ export async function runNarratorTurn(
         );
     let loreSection = lore?.section;
     const preset = ooc ? undefined : deps.preset;
+    const macroCtx = {
+      user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
+      char: "叙事者",
+      lastUserMessage: plan.input.text,
+      roll: (sides: number) => deps.rng.roll(sides),
+    };
     // 宏只展开一次，预设的前置、深度条目及衔接说明都计入最终请求预算。
-    const expandedPreset = preset
-      ? presetMessages(preset, {
-          user: deps.userName ?? CharacterStateSchema.parse(world.slices.character).name ?? "玩家",
-          char: "叙事者",
-          lastUserMessage: plan.input.text,
-          roll: (sides) => deps.rng.roll(sides),
-        })
-      : undefined;
+    const expandedPreset = preset ? presetMessages(preset, macroCtx) : undefined;
     const presetTokens = expandedPreset
       ? applyExpandedPreset([], expandedPreset).reduce((n, m) => n + estimateTokens(m.content), 0)
+      : 0;
+    // 酒馆世界书（可同时启用多本）：仅在非场外提问时评估；蓝灯常驻进静态 system，绿灯动态进 user，@D 在预设之前插入
+    const resolvedWorldbook =
+      !ooc && deps.worldbooks && deps.worldbooks.length > 0
+        ? (() => {
+            const clockNow = WorldClockStateSchema.parse(world.slices.world);
+            const loc = clockNow.location
+              ? locationCatalog(withSavedPlaces(deps.data ?? {}, world)).get(clockNow.location)
+              : undefined;
+            const sceneTerms: string[] = [];
+            if (loc?.name) sceneTerms.push(loc.name);
+            const stage = { location: clockNow.location, sceneStartedAt: clockNow.sceneStartedAt };
+            for (const npc of Object.values(NpcStateSchema.parse(world.slices.npc).npcs)) {
+              if (!npc.alive || !onStage(npc, stage)) continue;
+              if (npc.name) sceneTerms.push(npc.name);
+              if (npc.alias) sceneTerms.push(npc.alias);
+            }
+            const recentTurnTexts = effectiveTurns(promptRecords).map((t) => {
+              const inputText =
+                typeof (t.input as { text?: unknown } | undefined)?.text === "string"
+                  ? (t.input as { text: string }).text
+                  : "";
+              return inputText ? `${inputText}\n${t.text}` : t.text;
+            });
+            return resolveWorldbooks(deps.worldbooks, {
+              inputText: plan.input.text,
+              recentTurnTexts,
+              sceneTerms,
+              macro: macroCtx,
+            });
+          })()
+        : undefined;
+    let dynamicWorldbookEntries = resolvedWorldbook ? [...resolvedWorldbook.dynamicEntries] : [];
+    const atDepthTokens = resolvedWorldbook
+      ? resolvedWorldbook.atDepth.reduce((n, e) => n + e.tokens, 0)
       : 0;
     const sampling = preset?.sampling ?? {};
     const replyCap = replyTokenCap(budget);
@@ -1158,18 +1203,25 @@ export async function runNarratorTurn(
         decided,
         recalled: [...recalled, ...expanded],
         lore: loreSection,
+        worldbookStaticBefore: resolvedWorldbook?.constantBefore,
+        worldbookStaticAfter: resolvedWorldbook?.constantAfter,
+        worldbookDynamic: worldbookDynamicSection(dynamicWorldbookEntries),
         history: hot,
         recapTokens,
       });
-    // 整份超出窗口时先撤可选装备参考，再按原顺序裁记忆材料；原文保留 MIN_HISTORY 轮。
+    // 整份超出窗口时先撤可选装备参考与低优先级动态世界书条目，再按原顺序裁记忆材料；原文保留 MIN_HISTORY 轮。
     let limit = budget.window - maxOutputTokens;
     const totalOf = (p: ReturnType<typeof build>) =>
-      presetTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
+      presetTokens + atDepthTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
     let prompt = build();
     for (let total = totalOf(prompt); total > limit; total = totalOf(prompt)) {
       if (includeNpcEquipment) {
         includeNpcEquipment = false;
         cuts.push("整份超出，先撤下新人物装备选型参考，保留记忆与历史");
+      } else if (dynamicWorldbookEntries.length > 0) {
+        const droppedWb = dynamicWorldbookEntries[0];
+        dynamicWorldbookEntries = dynamicWorldbookEntries.slice(1);
+        cuts.push(`整份超出，裁去低优先级世界书条目「${droppedWb?.entryName ?? "未命名"}」`);
       } else if (expanded.length > 0) {
         expanded = expanded.slice(0, -1);
         cuts.push("整份超出，扩展层少补一条");
@@ -1190,12 +1242,13 @@ export async function runNarratorTurn(
       } else {
         return {
           kind: "blocked",
-          reason: `当前规则、人物状态、最低限度历史与写作预设合计约 ${total} token，超过本次输入预算 ${limit}。请缩短写作预设或提高模型上下文窗口后重试；本轮尚未写入。`,
+          reason: `当前规则、人物状态、最低限度历史与写作预设/世界书合计约 ${total} token，超过本次输入预算 ${limit}。请缩短写作预设、停用部分常驻世界书条目或提高模型上下文窗口后重试；本轮尚未写入。`,
         };
       }
       prompt = build();
     }
     const used = prompt.parts ?? {};
+    const worldbookTokens = (used.worldbook ?? 0) + atDepthTokens;
     const budgetTrace: BudgetTrace = {
       window: budget.window,
       history: hot,
@@ -1208,6 +1261,9 @@ export async function runNarratorTurn(
           limit: part === "hot" ? budget.parts.hot + budget.parts.character : budget.parts[part],
         })),
         { part: "preset", label: "酒馆写作预设", tokens: presetTokens, limit: null },
+        ...(worldbookTokens > 0
+          ? [{ part: "worldbook", label: "酒馆世界书", tokens: worldbookTokens, limit: null }]
+          : []),
         { part: "other", label: "输入和其余", tokens: used.other ?? 0, limit: null },
         { part: "reply", label: BUDGET_LABELS.reply, tokens: 0, limit: maxOutputTokens },
       ],
@@ -1220,11 +1276,27 @@ export async function runNarratorTurn(
       lore && loreSection === undefined && lore.section !== undefined
         ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
         : lore?.trace;
-    // 酒馆预设（用户定的）：条目叠在本作提示词前面、本作规则在后；节律提示由用户消息尾端自适应处理，不破坏系统前缀缓存
-    const narrateMessages = expandedPreset
-      ? applyExpandedPreset(prompt.messages, expandedPreset)
+    // 先插入世界书 @D 深度条目，再叠加酒馆预设（保证预设的 head 与 depth:0 破甲位置 100% 不受干扰）
+    const withWorldbook = resolvedWorldbook
+      ? applyWorldbookDepth(prompt.messages, resolvedWorldbook.atDepth)
       : prompt.messages;
+    const narrateMessages = expandedPreset
+      ? applyExpandedPreset(withWorldbook, expandedPreset)
+      : withWorldbook;
     if (preset) b.notes.push(`写正文套用了酒馆预设「${preset.name}」`);
+    if (resolvedWorldbook && resolvedWorldbook.hits.length > 0) {
+      const constCount = resolvedWorldbook.hits.filter(
+        (h) => h.constant && h.position !== "at_depth",
+      ).length;
+      const dynCount = dynamicWorldbookEntries.length;
+      const depthCount = resolvedWorldbook.atDepth.length;
+      const keptCount = constCount + dynCount + depthCount;
+      if (keptCount > 0) {
+        b.notes.push(
+          `附加世界书命中 ${keptCount} 条（常驻 ${constCount} / 关键词 ${dynCount}${depthCount > 0 ? ` / 深度 ${depthCount}` : ""}）`,
+        );
+      }
+    }
 
     preparedData = {
       liveInput: live.input,

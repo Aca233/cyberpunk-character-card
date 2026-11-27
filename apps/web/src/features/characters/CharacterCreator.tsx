@@ -1,5 +1,6 @@
 import { buildVCharacterCard, RADAR_ANCHORS, type VGender, type VOriginKey } from "@cp/content";
 import {
+  acquaintanceRelationLabel,
   type Board,
   CASH_TIER_INFO,
   CASH_TIERS,
@@ -9,7 +10,7 @@ import {
   FLAW_MAX,
   type ImagePromptRequest,
   PAST_MAX,
-  RELATION_INFO,
+  PROSE_BLOCK_INFO,
   replacedNpcIdOf,
   SKILL_MAX,
   TAROT_CARDS,
@@ -182,6 +183,7 @@ export function CharacterCreator({
   const [hoveredBodyFocus, setHoveredBodyFocus] = useState<BodyFocusKey>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [tarotExpanded, setTarotExpanded] = useState(false);
+  const [customPersonalityOpen, setCustomPersonalityOpen] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [localSaveError, setLocalSaveError] = useState<string | null>(null);
   const [portraitModalOpen, setPortraitModalOpen] = useState(false);
@@ -190,6 +192,7 @@ export function CharacterCreator({
   const [localCyberware, setLocalCyberware] = useState(() => loadLocalCustomCyberware());
   const [localItems, setLocalItems] = useState(() => loadLocalCustomItems());
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const personalityRef = useRef<HTMLTextAreaElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
   const queryClient = useQueryClient();
 
@@ -260,12 +263,14 @@ export function CharacterCreator({
 
   const setTarot = (tarot: TarotCard) => {
     setLocalSaveError(null);
+    setCustomPersonalityOpen(false);
     onChange((current) => {
       const currentBoard = current.board ?? emptyBoard();
       const nextTarot = currentBoard.tarot === tarot ? undefined : tarot;
       const { tarot: _, ...rest } = currentBoard;
       return {
         ...current,
+        ...(nextTarot ? { personality: "", voice: "" } : {}),
         board: { ...rest, ...(nextTarot ? { tarot: nextTarot } : {}) },
       };
     });
@@ -275,10 +280,13 @@ export function CharacterCreator({
     const candidates = TAROT_CARDS.filter((id) => id !== board.tarot);
     const picked = candidates[Math.floor(Math.random() * candidates.length)] ?? TAROT_CARDS[0];
     setLocalSaveError(null);
+    setCustomPersonalityOpen(false);
     onChange((current) => {
       const currentBoard = current.board ?? emptyBoard();
       return {
         ...current,
+        personality: "",
+        voice: "",
         board: { ...currentBoard, tarot: picked },
       };
     });
@@ -452,6 +460,20 @@ export function CharacterCreator({
     ...board.skills.map((m) => m.label),
   ];
   const activeTarot = board.tarot ? TAROT_INFO[board.tarot] : null;
+  const hasCustomPersonality = card.personality.trim() !== "" || card.voice.trim() !== "";
+  const showCustomPersonality = !activeTarot && (customPersonalityOpen || hasCustomPersonality);
+  const selectCustomPersonality = () => {
+    setLocalSaveError(null);
+    if (board.tarot) {
+      onChange((current) => {
+        const currentBoard = current.board ?? emptyBoard();
+        const { tarot: _, ...rest } = currentBoard;
+        return { ...current, board: rest };
+      });
+    }
+    setCustomPersonalityOpen(true);
+    requestAnimationFrame(() => personalityRef.current?.focus());
+  };
 
   // 立绘提示词仅传入随身武器与义体，不将载具塞进随身装备
   const characterPromptRequest: ImagePromptRequest = {
@@ -461,9 +483,10 @@ export function CharacterCreator({
     pronoun: card.pronoun.trim() || "TA",
     origin: board.origin?.label ?? card.origin.trim(),
     look: card.look.trim(),
-    personality: activeTarot
+    personality: (activeTarot
       ? [activeTarot.vibe, card.personality.trim()].filter(Boolean).join("；")
-      : card.personality.trim(),
+      : card.personality.trim()
+    ).slice(0, 400),
     skills: selectedTraitNames.join("、") || card.skills.trim(),
     cyberware: mountedChromeNames,
     gear: weaponNames,
@@ -712,13 +735,20 @@ export function CharacterCreator({
                   </div>
                 </section>
 
-                <section className={wb.formCard} aria-label="2077 塔罗命牌">
+                <section className={wb.formCard} aria-label="2077 塔罗命牌与性格设定">
                   <div className={wb.subHeaderRow}>
                     <h3 className={wb.cardTitle}>
-                      夜之城命牌 · TAROT ARCHETYPE（{TAROT_CARDS.length} 张大阿卡那）
-                      {activeTarot ? ` · ${activeTarot.roman} ${activeTarot.label}` : " · 选填"}
+                      夜之城命牌与性格 · TAROT & PERSONALITY
+                      {activeTarot
+                        ? ` · ${activeTarot.roman} ${activeTarot.label}`
+                        : showCustomPersonality
+                          ? " · 自定义性格"
+                          : " · 选填"}
                     </h3>
                     <div className={wb.tarotToolbar}>
+                      <ActionButton onClick={selectCustomPersonality}>
+                        {showCustomPersonality ? "自定义性格（当前）" : "✦ 自定义性格"}
+                      </ActionButton>
                       <ActionButton onClick={drawRandomTarot}>随机抽牌</ActionButton>
                       {board.tarot && (
                         <ActionButton
@@ -754,17 +784,104 @@ export function CharacterCreator({
                         <p className={wb.tarotSelectedVibe}>{activeTarot.vibe}</p>
                       </div>
                     </div>
-                  ) : (
+                  ) : !showCustomPersonality ? (
                     <span className={wb.note}>
                       从 22 张 2077
-                      原作大阿卡那塔罗中抽选一张命牌，定调角色在街头与叙事中的气质偏向（可随时切换或取消）。
+                      原作大阿卡那塔罗中抽选一张命牌，或改选「自定义性格」手写主角性格与口吻（二选一，切换会自动替换）。
                     </span>
+                  ) : null}
+                  {showCustomPersonality && (
+                    <div className={wb.tarotCustomPanel}>
+                      <div className={wb.tarotCustomHead}>
+                        <span className={wb.tarotCustomTitle}>
+                          {"CUSTOM // 主角性格设定与说话口吻"}
+                        </span>
+                        <div className={wb.tarotToolbar}>
+                          {hasCustomPersonality && (
+                            <ActionButton
+                              onClick={() => {
+                                change({ personality: "", voice: "" });
+                                setCustomPersonalityOpen(false);
+                              }}
+                            >
+                              清空
+                            </ActionButton>
+                          )}
+                          {!hasCustomPersonality && (
+                            <ActionButton onClick={() => setCustomPersonalityOpen(false)}>
+                              收起
+                            </ActionButton>
+                          )}
+                        </div>
+                      </div>
+                      <label className={wb.tarotCustomField}>
+                        <span className={wb.tarotCustomLabel}>
+                          <span>主角性格设定</span>
+                          <small>
+                            {card.personality.length} / {PROSE_BLOCK_INFO.personality.max}
+                          </small>
+                        </span>
+                        <FrameBox className={wb.tarotCustomBox}>
+                          <textarea
+                            ref={personalityRef}
+                            rows={3}
+                            maxLength={PROSE_BLOCK_INFO.personality.max}
+                            value={card.personality}
+                            placeholder="写明主角的性格底色、价值信条、行事底线、高压下的真实反应与深层软肋…"
+                            onChange={(e) => change({ personality: e.target.value })}
+                          />
+                        </FrameBox>
+                      </label>
+                      <label className={wb.tarotCustomField}>
+                        <span className={wb.tarotCustomLabel}>
+                          <span>说话方式 / 口吻（选填）</span>
+                          <small>
+                            {card.voice.length} / {PROSE_BLOCK_INFO.voice.max}
+                          </small>
+                        </span>
+                        <FrameBox className={wb.compactBox}>
+                          <input
+                            maxLength={PROSE_BLOCK_INFO.voice.max}
+                            value={card.voice}
+                            placeholder="例如：冷淡简短、嘴硬心软、习惯带点公司腔调或街头黑话…"
+                            onChange={(e) => change({ voice: e.target.value })}
+                          />
+                        </FrameBox>
+                      </label>
+                    </div>
                   )}
                   <fieldset
                     className={wb.tarotGrid}
                     data-expanded={tarotExpanded || undefined}
-                    aria-label="选择 2077 塔罗命牌"
+                    aria-label="选择 2077 塔罗命牌或自定义性格"
                   >
+                    <button
+                      type="button"
+                      className={`${wb.tarotCard} ${wb.tarotCustomCard}`}
+                      aria-pressed={showCustomPersonality}
+                      onClick={() => {
+                        if (showCustomPersonality && !hasCustomPersonality) {
+                          setCustomPersonalityOpen(false);
+                        } else {
+                          selectCustomPersonality();
+                        }
+                      }}
+                    >
+                      <span className={wb.tarotCustomArt} aria-hidden>
+                        <span>✦</span>
+                        <small>CUSTOM</small>
+                      </span>
+                      <span className={wb.tarotMeta}>
+                        <span className={wb.tarotTitleRow}>
+                          <strong className={wb.tarotName}>自定义性格</strong>
+                          <span className={wb.tarotEn}>FREEFORM</span>
+                        </span>
+                        <span className={wb.tarotVibe}>
+                          {(!activeTarot && card.personality.trim()) ||
+                            "不选原作塔罗命牌，自由撰写主角性格、底线与说话口吻"}
+                        </span>
+                      </span>
+                    </button>
                     {TAROT_CARDS.map((id) => (
                       <TarotCardButton
                         key={id}
@@ -1339,6 +1456,7 @@ export function CharacterCreator({
                   <span className={wb.asideSub}>
                     {board.origin?.label || "待选出身"} · {card.pronoun.trim() || "未填代词"}
                     {activeTarot ? ` · ${activeTarot.label}` : ""}
+                    {!activeTarot && hasCustomPersonality ? " · 自定义性格" : ""}
                   </span>
                 </div>
 
@@ -1478,6 +1596,18 @@ export function CharacterCreator({
 
             {/* 精简构筑总览 */}
             <dl className={wb.asideList}>
+              {card.personality.trim() && (
+                <div>
+                  <dt>性格</dt>
+                  <dd>{card.personality.trim()}</dd>
+                </div>
+              )}
+              {card.voice.trim() && (
+                <div>
+                  <dt>口吻</dt>
+                  <dd>{card.voice.trim()}</dd>
+                </div>
+              )}
               <div>
                 <dt>履历</dt>
                 <dd>
@@ -1516,7 +1646,7 @@ export function CharacterCreator({
                   <dd>
                     {board.acquaintances
                       .slice(0, 3)
-                      .map((a) => `${a.name}（${RELATION_INFO[a.relation].label}）`)
+                      .map((a) => `${a.name}（${acquaintanceRelationLabel(a)}）`)
                       .join("、") + (board.acquaintances.length > 3 ? "…" : "")}
                   </dd>
                 </div>

@@ -9,6 +9,7 @@ import { ImageStore } from "./images";
 import { PresetStore } from "./presets";
 import { TurnHub } from "./turns";
 import { WorkshopStore } from "./workshop";
+import { WorldbookStore } from "./worldbooks";
 
 /**
  * 浏览器端纯静态运行时：使用 Hono 在页面内存里分发虚拟路由（app.fetch），
@@ -44,6 +45,7 @@ export async function createLocalBackend(
     saves: new IdbSaveStore(db),
     characters: new CharacterStore(docs),
     presets: new PresetStore(docs),
+    worldbooks: new WorldbookStore(docs),
     images: new ImageStore(docs),
     checkpoints: new TurnCheckpointStore(docs),
     embeddingCache: new EmbeddingCacheStore(docs),

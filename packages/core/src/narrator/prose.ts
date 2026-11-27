@@ -3,9 +3,9 @@ import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
 import {
   ACQUAINTANCE_NOTE_CHARS,
   type Acquaintance,
+  acquaintanceRelationLabel,
   BoardSchema,
   boardBrief,
-  RELATION_INFO,
 } from "../schemas/board";
 import {
   PROSE_BLOCK_INFO,
@@ -283,7 +283,7 @@ export function buildDraftPrompt(request: DraftRequest): LlmMessage[] {
     needs.length > 0
       ? [
           "要补“是什么事”的旧识（编号：名字，关系）：",
-          ...needs.map((a, i) => `${i + 1}：${a.name}，${RELATION_INFO[a.relation].label}`),
+          ...needs.map((a, i) => `${i + 1}：${a.name}，${acquaintanceRelationLabel(a)}`),
         ].join("\n")
       : "";
   const user = [

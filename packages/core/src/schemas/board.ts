@@ -404,7 +404,22 @@ export function resolveStartEddies(
   return baseEddies + CASH_TIER_INFO[kit.cashTier].eddiesDelta;
 }
 
-export const RELATIONS = ["nod", "friend", "owesYou", "youOwe", "ex", "grudge"] as const;
+export const RELATIONS = [
+  "family",
+  "lover",
+  "partner",
+  "mentor",
+  "boss",
+  "subordinate",
+  "friend",
+  "nod",
+  "owesYou",
+  "youOwe",
+  "ex",
+  "rival",
+  "grudge",
+  "custom",
+] as const;
 export const RelationKindSchema = z.enum(RELATIONS);
 export type RelationKind = z.infer<typeof RelationKindSchema>;
 
@@ -417,16 +432,25 @@ export interface RelationInfo {
 }
 
 export const RELATION_INFO: Readonly<Record<RelationKind, RelationInfo>> = {
-  nod: { label: "点头之交", note: true },
+  family: { label: "血亲 / 家人", note: true },
+  lover: { label: "恋人 / 伴侣", note: true },
+  partner: { label: "搭档 / 战友", note: true },
+  mentor: { label: "恩师 / 前辈", note: true },
+  boss: { label: "上司 / 雇主", note: true },
+  subordinate: { label: "下属 / 后辈", note: true },
   friend: { label: "老朋友", note: true },
+  nod: { label: "点头之交", note: true },
   owesYou: { label: "他欠你人情", ledger: "owesYou", note: true },
   youOwe: { label: "你欠他人情", ledger: "youOwe", note: true },
   ex: { label: "前任", note: true },
+  rival: { label: "对手 / 竞争者", note: true },
   grudge: { label: "旧仇", ledger: "grudge", note: true },
+  custom: { label: "自定义关系", note: true },
 };
 
 export const ACQUAINTANCE_MAX = 100;
 export const ACQUAINTANCE_NOTE_CHARS = 60;
+export const ACQUAINTANCE_LABEL_CHARS = 16;
 export const CUSTOM_NPCS_MAX = 60;
 export const NPC_OVERRIDES_MAX = 80;
 
@@ -436,6 +460,8 @@ export const AcquaintanceSchema = z.object({
   /** 显示用的名字快照；建档按 id 对人 */
   name: z.string().trim().min(1).max(20),
   relation: RelationKindSchema,
+  /** 具体关系称谓（可选；例如血亲填「母亲」「生父」，自定义填「监护人」「金主」等） */
+  customLabel: line(ACQUAINTANCE_LABEL_CHARS).optional(),
   /** 是什么事；不写由一键成稿补，补不上就按关系名写 */
   note: line(ACQUAINTANCE_NOTE_CHARS).default(""),
   /** 自定义/工坊旧识的身份简介（开局自动生成人物卡时使用） */
@@ -446,6 +472,14 @@ export const AcquaintanceSchema = z.object({
   catalogNpc: z.boolean().optional(),
 });
 export type Acquaintance = z.infer<typeof AcquaintanceSchema>;
+
+/** 统一读取旧识的关系称谓：优先采用玩家填写的具体称谓，否则回退关系类型默认标签 */
+export function acquaintanceRelationLabel(
+  a: Pick<Acquaintance, "relation" | "customLabel">,
+): string {
+  const custom = a.customLabel?.trim();
+  return custom || RELATION_INFO[a.relation].label;
+}
 
 export const BoardSchema = z.object({
   origin: BoardModuleSchema.nullable().default(null),
@@ -708,7 +742,7 @@ export function boardBrief(board: Board): string {
   }
   for (const a of board.acquaintances) {
     lines.push(
-      `- 旧识「${a.name}」${a.role ? `（${a.role}）` : ""}：${RELATION_INFO[a.relation].label}${a.note ? `；${a.note}` : ""}`,
+      `- 旧识「${a.name}」${a.role ? `（${a.role}）` : ""}：${acquaintanceRelationLabel(a)}${a.note ? `；${a.note}` : ""}`,
     );
   }
   return ["主板（能力是角色已经能做到的事，钩子是剧情可以用的线头）：", ...lines].join("\n");

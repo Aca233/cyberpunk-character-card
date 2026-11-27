@@ -20,3 +20,4 @@ export * from "./stages";
 export * from "./summary";
 export * from "./thought";
 export * from "./turn";
+export * from "./worldbook";

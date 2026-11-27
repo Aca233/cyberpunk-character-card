@@ -214,7 +214,12 @@ export function buildNarratorPrompt(
     ...(staticModules ? [staticModules] : []),
   ]);
   const activeModulesText = modulesBlock("narrate", dynamicModules);
-  const system = staticPlaces ? `${staticRules}\n\n${staticPlaces}` : staticRules;
+  const baseSystem = staticPlaces ? `${staticRules}\n\n${staticPlaces}` : staticRules;
+  const system = isOoc
+    ? baseSystem
+    : [extras.worldbookStaticBefore, baseSystem, extras.worldbookStaticAfter]
+        .filter((part): part is string => part !== undefined && part !== "")
+        .join("\n\n");
   const hasHardRuling =
     extras.decided?.some(
       (line) => line.startsWith("【条件与代价】") || line.startsWith("【物理/现实阻断】"),
@@ -272,6 +277,7 @@ export function buildNarratorPrompt(
     decided: extras.decided,
     recall,
     lore: extras.lore,
+    worldbook: isOoc ? undefined : extras.worldbookDynamic,
     habits: extras.hasPreset
       ? undefined
       : proseHabits(
@@ -286,16 +292,26 @@ export function buildNarratorPrompt(
   const tokens = (s: string | undefined) => (s === undefined ? 0 : estimateTokens(s));
   const moduleTokens = tokens(activeModulesText);
   const hotTokens = tokens(scene.join("\n\n")) + tokens((extras.decided ?? []).join("\n"));
+  const wbStaticTokens = isOoc
+    ? 0
+    : tokens(extras.worldbookStaticBefore) + tokens(extras.worldbookStaticAfter);
+  const wbDynamicTokens = isOoc ? 0 : tokens(extras.worldbookDynamic);
   const parts = {
-    rules: tokens(system) + moduleTokens,
+    rules: tokens(baseSystem) + moduleTokens,
     history,
     recap: tokens(recap),
     hot: hotTokens,
     expanded: tokens(recall),
     world: tokens(extras.lore),
+    worldbook: wbStaticTokens + wbDynamicTokens,
     other: Math.max(
       0,
-      tokens(content) - moduleTokens - hotTokens - tokens(recall) - tokens(extras.lore),
+      tokens(content) -
+        moduleTokens -
+        hotTokens -
+        tokens(recall) -
+        tokens(extras.lore) -
+        wbDynamicTokens,
     ),
   };
   return {

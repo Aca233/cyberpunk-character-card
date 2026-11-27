@@ -113,6 +113,7 @@ export function PeopleBody({
   onLocatePlace,
   onScan,
   onCompanion,
+  onSetRelation,
   onDraftAction,
 }: {
   readonly view: View;
@@ -122,6 +123,7 @@ export function PeopleBody({
   readonly onLocatePlace?: ((placeId: string) => void) | undefined;
   readonly onScan?: ((id: string) => void) | undefined;
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  readonly onSetRelation?: ((id: string, text: string) => void) | undefined;
   readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
   const people = useMemo(() => peopleDirectory(view), [view]);
@@ -351,6 +353,7 @@ export function PeopleBody({
           topSlot={topSlot}
           onScan={onScan}
           onCompanion={onCompanion}
+          onSetRelation={onSetRelation}
           onDraftAction={onDraftAction}
         />
       </section>

@@ -1407,3 +1407,135 @@
     font-size: 17px;
   }
 }
+
+/* 档案与关系内联编辑区 */
+.relationHeadRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.relationEditBtn {
+  padding: 1px 7px;
+  border: 1px solid rgb(94 246 255 / 35%);
+  background: rgb(94 246 255 / 8%);
+  color: var(--cp-cyan);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: var(--cp-cursor-hand);
+}
+
+.relationEditBtn:hover {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 16%);
+}
+
+.relationEditor {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid rgb(94 246 255 / 32%);
+  border-left: 2px solid var(--cp-cyan);
+  background: rgb(8 14 24 / 88%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+}
+
+.relationChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.relationChip {
+  padding: 2px 8px;
+  border: 1px solid rgb(94 246 255 / 22%);
+  background: rgb(14 20 30 / 80%);
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+}
+
+.relationChip:hover {
+  border-color: rgb(94 246 255 / 55%);
+  color: var(--cp-text);
+}
+
+.relationChip[aria-pressed="true"] {
+  border-color: var(--cp-cyan);
+  background: rgb(94 246 255 / 16%);
+  color: var(--cp-cyan);
+  font-weight: 700;
+}
+
+.relationInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid rgb(94 246 255 / 30%);
+  background: rgb(5 8 14 / 94%);
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.relationInput:focus {
+  outline: none;
+  border-color: var(--cp-cyan);
+}
+
+.relationEditorFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.relationCharCount {
+  color: var(--cp-text-dim);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.relationEditorActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.relationSaveBtn,
+.relationCancelBtn {
+  padding: 3px 10px;
+  border: 1px solid rgb(94 246 255 / 45%);
+  background: rgb(94 246 255 / 14%);
+  color: var(--cp-cyan);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: var(--cp-cursor-hand);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+}
+
+.relationSaveBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.relationCancelBtn {
+  border-color: rgb(255 255 255 / 18%);
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-weight: 500;
+}
+
+.relationCancelBtn:hover {
+  border-color: rgb(255 255 255 / 40%);
+  color: var(--cp-text);
+}

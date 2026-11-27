@@ -18,8 +18,10 @@ import { presetRoutes } from "./routes/presets";
 import { profileRoutes } from "./routes/profiles";
 import { saveRoutes } from "./routes/saves";
 import { workshopRoutes } from "./routes/workshop";
+import { worldbookRoutes } from "./routes/worldbooks";
 import { TurnHub } from "./turns";
 import type { WorkshopStore } from "./workshop";
+import type { WorldbookStore } from "./worldbooks";
 
 export interface AppDeps {
   readonly config: ConfigService;
@@ -33,6 +35,8 @@ export interface AppDeps {
   readonly rng?: Rng;
   /** 玩家导入的酒馆预设；不传时没有预设接口，写正文也不套预设 */
   readonly presets?: PresetStore | undefined;
+  /** 玩家导入的酒馆世界书；不传时没有世界书接口 */
+  readonly worldbooks?: WorldbookStore | undefined;
   /** 文生图存储；传了才开放 /api/images 与存档图片绑定 */
   readonly images?: ImageStore | undefined;
   /** 回合阶段断点存储；传了可跨刷新保存中间阶段结果 */
@@ -77,6 +81,7 @@ export function createApp(deps: AppDeps): Hono {
     rng: deps.rng ?? cryptoRng,
     log,
     presets: deps.presets,
+    worldbooks: deps.worldbooks,
     checkpoints,
     embeddingCache,
     images: deps.images,
@@ -136,6 +141,7 @@ export function createApp(deps: AppDeps): Hono {
       reranker,
       activePreset,
       allPresets,
+      allWorldbooks,
       workshopResult,
       charactersResult,
       savesResult,
@@ -147,6 +153,7 @@ export function createApp(deps: AppDeps): Hono {
       llm.resolveRerankerTarget(),
       deps.presets ? deps.presets.active().catch(() => undefined) : Promise.resolve(undefined),
       deps.presets ? deps.presets.list().catch(() => []) : Promise.resolve([]),
+      deps.worldbooks ? deps.worldbooks.list().catch(() => []) : Promise.resolve([]),
       deps.workshop
         ? deps.workshop
             .list()
@@ -319,6 +326,16 @@ export function createApp(deps: AppDeps): Hono {
         enabledRegexCount: p.preset.regex.filter((r) => r.enabled).length,
         warnings: p.warnings,
       })),
+      worldbooks: allWorldbooks.map((wb) => ({
+        id: wb.id,
+        name: wb.worldbook.name,
+        enabled: wb.enabled,
+        importedAt: wb.importedAt,
+        entryCount: wb.worldbook.entries.length,
+        enabledEntries: wb.worldbook.entries.filter((e) => e.enabled).length,
+        constantEntries: wb.worldbook.entries.filter((e) => e.enabled && e.constant).length,
+        warnings: wb.warnings,
+      })),
       workshop: workshopResult.ok
         ? {
             packs: workshopResult.packs.map((entry) => ({
@@ -376,6 +393,7 @@ export function createApp(deps: AppDeps): Hono {
   app.get("/api/glossary", (c) => c.json({ glossary }));
   app.route("/api/profiles", profileRoutes(deps.config));
   if (deps.presets) app.route("/api/presets", presetRoutes(deps.presets, clock));
+  if (deps.worldbooks) app.route("/api/worldbooks", worldbookRoutes(deps.worldbooks, clock));
   if (deps.images) {
     app.route("/api/images", imageRoutes(deps.images, imageRouter, llm, deps.config, clock));
     app.route("/api/saves", saveImageRoutes(deps.images));

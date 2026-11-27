@@ -6,7 +6,7 @@ import { InventoryStateSchema } from "../inventory";
 import { WorldClockStateSchema } from "../world";
 import { deathKnown } from "./apply";
 import { onStage } from "./prompt";
-import { NPC_GEAR_MAX, NpcStateSchema } from "./schema";
+import { NPC_GEAR_MAX, NpcStateSchema, RELATION_CHARS } from "./schema";
 
 /**
  * 点一下立刻扫描（用户定的，计划第十二节第 14 条）：在场的人名字格和档案里的「扫描」按钮。
@@ -31,6 +31,17 @@ export const NpcExchangeGearActionSchema = z.strictObject({
   id: z.string().min(1).max(64),
   action: z.enum(["give", "take"]),
   item: z.string().min(1).max(120),
+});
+
+/** 在人物档案里直接补充或改写与已结识 NPC 的关系定性（不调用模型，写入日志并即时同步给叙事 AI） */
+export const SetNpcRelationActionSchema = z.strictObject({
+  type: z.literal("setNpcRelation"),
+  id: z.string().min(1).max(64),
+  text: z
+    .string()
+    .trim()
+    .min(1, "关系描述不能为空")
+    .max(RELATION_CHARS, `关系描述最多 ${RELATION_CHARS} 字`),
 });
 
 /** 人物的界面操作：扫描与同行管理，统一由操作入口结算 */
@@ -144,6 +155,15 @@ export const npcActions = {
           reason: `从同行同伴${npc.name}处取回`,
         },
       ];
+    },
+  }),
+  setNpcRelation: defineAction({
+    schema: SetNpcRelationActionSchema,
+    commands: (action, { world }) => {
+      const npc = NpcStateSchema.parse(world.slices.npc).npcs[action.id];
+      if (!npc) return "没有这个人";
+      if (!npc.met) return `还没正式结识 ${npc.name}，暂不能设定关系`;
+      return [{ type: "relation", id: npc.id, text: action.text }];
     },
   }),
 };

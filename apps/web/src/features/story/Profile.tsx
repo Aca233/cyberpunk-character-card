@@ -1,4 +1,4 @@
-import { worldRules } from "@cp/core";
+import { npcRules, worldRules } from "@cp/core";
 import { type ReactNode, useState } from "react";
 import type { AssetId } from "../../assets";
 import type { GearArtId } from "../../assets/customArt";
@@ -1236,16 +1236,33 @@ function ScanTacticalView({
   );
 }
 
+const QUICK_RELATION_PREFIXES = [
+  "母亲",
+  "父亲",
+  "家人",
+  "恋人",
+  "搭档",
+  "恩师",
+  "上司",
+  "老友",
+  "对手",
+  "旧仇",
+] as const;
+
 /** 档案与关系页：统一使用 2077 CellFrame 诊断卡 + subRows 键值与时间轴行 */
 function DossierSection({
   npc,
   fixer,
   foe,
+  onSetRelation,
 }: {
   readonly npc: Npc;
   readonly fixer?: Fixer | undefined;
   readonly foe?: CombatFoe | undefined;
+  readonly onSetRelation?: ((id: string, text: string) => void) | undefined;
 }) {
+  const [editingRelation, setEditingRelation] = useState(false);
+  const [relationDraft, setRelationDraft] = useState(npc.relation ?? "");
   const unsettledLedger = npc.ledger.filter((e) => e.settled === null);
   const settledLedger = npc.ledger.filter((e) => e.settled !== null);
   const concerns = npc.arc?.concerns ?? [];
@@ -1295,6 +1312,14 @@ function DossierSection({
 
   const totalRecords =
     npc.ledger.length + npc.memories.length + npc.known.length + concerns.length + npc.ties.length;
+  const canEditRelation = Boolean(npc.met && onSetRelation);
+
+  const commitRelation = () => {
+    const trimmed = relationDraft.trim();
+    if (!trimmed || !onSetRelation) return;
+    onSetRelation(npc.id, trimmed.slice(0, npcRules.RELATION_CHARS));
+    setEditingRelation(false);
+  };
 
   return (
     <section className={styles.dossierStack} aria-label="档案与关系">
@@ -1303,13 +1328,97 @@ function DossierSection({
         <CellFrame />
         <div className={styles.cardHead}>
           <span className={styles.cardLabel}>RELATION {"//"} 关系与背景档案</span>
-          <span className={styles.cardValue} data-tone={relationTone}>
-            {relationSummaryTag}
+          <span className={styles.relationHeadRight}>
+            {canEditRelation && !editingRelation && (
+              <button
+                type="button"
+                className={styles.relationEditBtn}
+                onClick={() => {
+                  setRelationDraft(npc.relation ?? "");
+                  setEditingRelation(true);
+                }}
+              >
+                {npc.relation ? "修改关系" : "设定关系"}
+              </button>
+            )}
+            <span className={styles.cardValue} data-tone={relationTone}>
+              {relationSummaryTag}
+            </span>
           </span>
         </div>
-        <p className={styles.relationCopy} data-tone={relationTone}>
-          {npc.relation ?? "还说不上什么关系。"}
-        </p>
+        {editingRelation ? (
+          <div className={styles.relationEditor}>
+            <div className={styles.relationChips}>
+              {QUICK_RELATION_PREFIXES.map((label) => {
+                const active =
+                  relationDraft.startsWith(`${label}：`) ||
+                  relationDraft.startsWith(`${label}:`) ||
+                  relationDraft.trim() === label;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    className={styles.relationChip}
+                    aria-pressed={active}
+                    onClick={() =>
+                      setRelationDraft((cur) => {
+                        const rest = cur.replace(/^[^：:]{1,14}[：:]/, "").trim();
+                        const next = rest ? `${label}：${rest}` : `${label}：`;
+                        return next.slice(0, npcRules.RELATION_CHARS);
+                      })
+                    }
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              type="text"
+              className={styles.relationInput}
+              maxLength={npcRules.RELATION_CHARS}
+              value={relationDraft}
+              aria-label={`编辑与${npc.name}的关系`}
+              placeholder="例如：母亲：军用科技分部二把手，与我关系微妙却暗中照拂"
+              onChange={(e) => setRelationDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitRelation();
+                } else if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setEditingRelation(false);
+                }
+              }}
+            />
+            <div className={styles.relationEditorFoot}>
+              <span className={styles.relationCharCount}>
+                {relationDraft.trim().length} / {npcRules.RELATION_CHARS} · 下一轮叙事立即生效
+              </span>
+              <span className={styles.relationEditorActions}>
+                <button
+                  type="button"
+                  className={styles.relationSaveBtn}
+                  disabled={relationDraft.trim().length === 0}
+                  onClick={commitRelation}
+                >
+                  保存关系
+                </button>
+                <button
+                  type="button"
+                  className={styles.relationCancelBtn}
+                  onClick={() => setEditingRelation(false)}
+                >
+                  取消
+                </button>
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className={styles.relationCopy} data-tone={relationTone}>
+            {npc.relation ?? "还说不上什么关系。"}
+          </p>
+        )}
         {facts.length > 0 && (
           <div className={styles.subRows}>
             {facts.map(([label, value, rowTone]) => (
@@ -1425,6 +1534,7 @@ export function Profile({
   topSlot,
   onScan,
   onCompanion,
+  onSetRelation,
   onDraftAction,
 }: {
   readonly npc: Npc;
@@ -1439,6 +1549,7 @@ export function Profile({
   readonly topSlot?: ReactNode;
   readonly onScan?: ((id: string) => void) | undefined;
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  readonly onSetRelation?: ((id: string, text: string) => void) | undefined;
   readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
   const tabs = profileTabs(npc);
@@ -1525,7 +1636,9 @@ export function Profile({
             onDraftAction={onDraftAction}
           />
         )}
-        {tab === "dossier" && <DossierSection npc={npc} fixer={fixer} foe={foe} />}
+        {tab === "dossier" && (
+          <DossierSection npc={npc} fixer={fixer} foe={foe} onSetRelation={onSetRelation} />
+        )}
       </div>
     </article>
   );

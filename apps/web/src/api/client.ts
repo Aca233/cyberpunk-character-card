@@ -604,6 +604,90 @@ export interface PresetPatch {
   readonly useSampling?: boolean;
 }
 
+export type WorldbookPosition = "before" | "after" | "at_depth";
+export type WorldbookSelectiveLogic = 0 | 1 | 2 | 3;
+
+export interface WorldbookEntrySummary {
+  readonly id: string;
+  readonly name: string;
+  readonly enabled: boolean;
+  readonly constant: boolean;
+  readonly keys: readonly string[];
+  readonly secondaryKeys: readonly string[];
+  readonly selective: boolean;
+  readonly selectiveLogic: WorldbookSelectiveLogic;
+  readonly caseSensitive: boolean;
+  readonly matchWholeWords: boolean;
+  readonly order: number;
+  readonly position: WorldbookPosition;
+  readonly depth: number;
+  readonly role: "system" | "user" | "assistant";
+  readonly scanDepth: number | null;
+  readonly chars: number;
+}
+
+export interface WorldbookEntryDetail extends Omit<WorldbookEntrySummary, "chars"> {
+  readonly content: string;
+}
+
+export interface WorldbookSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly enabled: boolean;
+  readonly importedAt: string;
+  readonly warnings: readonly string[];
+  readonly scanDepth: number;
+  readonly recursiveScanning: boolean;
+  readonly entries: readonly WorldbookEntrySummary[];
+}
+
+export interface WorldbookEntryPatch {
+  readonly name?: string;
+  readonly content?: string;
+  readonly enabled?: boolean;
+  readonly constant?: boolean;
+  readonly keys?: readonly string[];
+  readonly secondaryKeys?: readonly string[];
+  readonly selective?: boolean;
+  readonly selectiveLogic?: WorldbookSelectiveLogic;
+  readonly caseSensitive?: boolean;
+  readonly matchWholeWords?: boolean;
+  readonly order?: number;
+  readonly position?: WorldbookPosition;
+  readonly depth?: number;
+  readonly role?: "system" | "user" | "assistant";
+  readonly scanDepth?: number | null;
+}
+
+export interface WorldbookNewEntryInput {
+  readonly name: string;
+  readonly content?: string;
+  readonly enabled?: boolean;
+  readonly constant?: boolean;
+  readonly keys?: readonly string[];
+  readonly secondaryKeys?: readonly string[];
+  readonly selective?: boolean;
+  readonly selectiveLogic?: WorldbookSelectiveLogic;
+  readonly caseSensitive?: boolean;
+  readonly matchWholeWords?: boolean;
+  readonly order?: number;
+  readonly position?: WorldbookPosition;
+  readonly depth?: number;
+  readonly role?: "system" | "user" | "assistant";
+  readonly scanDepth?: number | null;
+}
+
+export interface WorldbookPatch {
+  readonly name?: string;
+  readonly enabled?: boolean;
+  readonly scanDepth?: number;
+  readonly recursiveScanning?: boolean;
+  readonly entryToggles?: Readonly<Record<string, boolean>>;
+  readonly entryUpdates?: Readonly<Record<string, WorldbookEntryPatch>>;
+  readonly addEntry?: WorldbookNewEntryInput;
+  readonly removeEntryId?: string;
+}
+
 export type RoleKey = "narrator" | "aux" | "image" | "embedding" | "reranker";
 export type RoleModels = Readonly<Partial<Record<RoleKey, string>>>;
 export type RoleModelsPatch = Partial<Record<RoleKey, string | null>>;
@@ -857,6 +941,16 @@ export interface RuntimeDiagnosticsReport {
     readonly enabledRegexCount: number;
     readonly warnings: readonly string[];
   }[];
+  readonly worldbooks?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly enabled: boolean;
+    readonly importedAt: string;
+    readonly entryCount: number;
+    readonly enabledEntries: number;
+    readonly constantEntries: number;
+    readonly warnings: readonly string[];
+  }[];
   readonly workshop?: {
     readonly packs?: readonly {
       readonly id: string;
@@ -1025,6 +1119,30 @@ export const api = {
     ),
   deletePreset: (id: string) =>
     request<{ ok: true }>("DELETE", `/presets/${encodeURIComponent(id)}`),
+  /** 酒馆世界书（World Info / Lorebook）：支持多本同时启用、关键词触发、蓝灯常驻、@D 深度与标准 JSON 导出 */
+  worldbooks: () => request<{ worldbooks: WorldbookSummary[] }>("GET", "/worldbooks"),
+  importWorldbook: (input: { fileName: string; raw: unknown }) =>
+    request<{ worldbook: WorldbookSummary }>("POST", "/worldbooks", input),
+  createWorldbook: (name: string) =>
+    request<{ worldbook: WorldbookSummary }>("POST", "/worldbooks", { createBlank: true, name }),
+  exportWorldbook: (id: string) =>
+    request<{ fileName: string; data: Record<string, unknown> }>(
+      "GET",
+      `/worldbooks/${encodeURIComponent(id)}/export`,
+    ),
+  worldbookEntry: (id: string, entry: string) =>
+    request<{ entry: WorldbookEntryDetail }>(
+      "GET",
+      `/worldbooks/${encodeURIComponent(id)}/entries/${encodeURIComponent(entry)}`,
+    ),
+  updateWorldbook: (id: string, patch: WorldbookPatch) =>
+    request<{ worldbook: WorldbookSummary }>(
+      "PATCH",
+      `/worldbooks/${encodeURIComponent(id)}`,
+      patch,
+    ),
+  deleteWorldbook: (id: string) =>
+    request<{ ok: true }>("DELETE", `/worldbooks/${encodeURIComponent(id)}`),
   profiles: () => request<ProfilesOverview>("GET", "/profiles"),
   updateProfile: (name: string, patch: ProfilePatch) =>
     request<{ profile: PublicProfile }>("PUT", `/profiles/${encodeURIComponent(name)}`, patch),

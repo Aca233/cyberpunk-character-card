@@ -162,6 +162,10 @@ export interface PromptExtras {
   readonly recalled?: readonly Memory[] | undefined;
   /** 设定库查到的原作资料，已经拼成单独的引用块；只给写正文那一步 */
   readonly lore?: string | undefined;
+  /** 玩家导入的酒馆世界书：蓝灯常驻归入静态 system 缓存层，绿灯关键词动态命中放进 user 槽位 */
+  readonly worldbookStaticBefore?: string | undefined;
+  readonly worldbookStaticAfter?: string | undefined;
+  readonly worldbookDynamic?: string | undefined;
   /** 写正文带几轮原文（上下文预算定的）；没给按 HISTORY_TURNS */
   readonly history?: number | undefined;
   /** 【前情】的 token 额度；没给不截 */

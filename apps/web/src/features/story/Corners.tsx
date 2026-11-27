@@ -885,6 +885,7 @@ function PresentPerson({
   switchTargets,
   onScan,
   onCompanion,
+  onSetRelation,
   onDraftAction,
 }: {
   readonly person: Npc;
@@ -899,6 +900,7 @@ function PresentPerson({
   readonly switchTargets: readonly QuickSwitchTarget[];
   readonly onScan?: ((id: string) => void) | undefined;
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  readonly onSetRelation?: ((id: string, text: string) => void) | undefined;
   readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
   const s = person.body?.scan ?? null;
@@ -1264,6 +1266,7 @@ function PresentPerson({
           }
           onScan={hasOptics ? onScan : undefined}
           onCompanion={onCompanion}
+          onSetRelation={onSetRelation}
           onDraftAction={onDraftAction}
         />
       </Grow>
@@ -1445,6 +1448,7 @@ export function Present({
   onScanEnv,
   onToggleScan,
   onCompanion,
+  onSetRelation,
   onDraftAction,
 }: {
   readonly view: View;
@@ -1460,6 +1464,8 @@ export function Present({
   readonly onToggleScan?: (() => void) | undefined;
   /** 切换人物随行同行/暂别留守 */
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  /** 直接补充或修改已结识人物的关系定性 */
+  readonly onSetRelation?: ((id: string, text: string) => void) | undefined;
   /** 按扫描情报生成输入框草稿 */
   readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
@@ -1645,6 +1651,7 @@ export function Present({
                     switchTargets={switchTargets}
                     onScan={onScan}
                     onCompanion={onCompanion}
+                    onSetRelation={onSetRelation}
                     onDraftAction={onDraftAction}
                   />
                 ) : entry.foe ? (

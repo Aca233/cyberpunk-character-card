@@ -1564,6 +1564,11 @@ export function StoryScreen() {
               ? undefined
               : (id, following) => void act({ type: "npcCompanion", id, following }, "companion")
           }
+          onSetRelation={
+            busy || view.death || view.ended
+              ? undefined
+              : (id, text) => void act({ type: "setNpcRelation", id, text }, "relation")
+          }
           onDraftAction={draftAction}
         />
       ) : unreadTab === "shards" ? (
@@ -1731,6 +1736,11 @@ export function StoryScreen() {
               busy || view.death || view.ended
                 ? undefined
                 : (id, following) => void act({ type: "npcCompanion", id, following }, "companion")
+            }
+            onSetRelation={
+              busy || view.death || view.ended
+                ? undefined
+                : (id, text) => void act({ type: "setNpcRelation", id, text }, "relation")
             }
             onDraftAction={draftAction}
           />
@@ -2242,6 +2252,11 @@ export function StoryScreen() {
                       : (id, following) =>
                           void act({ type: "npcCompanion", id, following }, "companion")
                   }
+                  onSetRelation={
+                    busy || view.death || view.ended
+                      ? undefined
+                      : (id, text) => void act({ type: "setNpcRelation", id, text }, "relation")
+                  }
                   onDraftAction={draftAction}
                   onClose={() => setPerson(null)}
                 />
@@ -2368,6 +2383,7 @@ function PersonModal({
   onOpenChat,
   onScan,
   onCompanion,
+  onSetRelation,
   onDraftAction,
   onClose,
 }: {
@@ -2378,6 +2394,7 @@ function PersonModal({
   readonly onOpenChat?: (() => void) | undefined;
   readonly onScan?: ((id: string) => void) | undefined;
   readonly onCompanion?: ((id: string, following: boolean) => void) | undefined;
+  readonly onSetRelation?: ((id: string, text: string) => void) | undefined;
   readonly onDraftAction?: ((text: string) => void) | undefined;
   readonly onClose: () => void;
 }) {
@@ -2399,6 +2416,7 @@ function PersonModal({
             foe={foe}
             onScan={onScan}
             onCompanion={onCompanion}
+            onSetRelation={onSetRelation}
             onDraftAction={onDraftAction}
           />
           <div className={styles.journalActions}>

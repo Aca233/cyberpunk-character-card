@@ -1,12 +1,13 @@
 import {
+  ACQUAINTANCE_LABEL_CHARS,
   type Acquaintance,
+  acquaintanceRelationLabel,
   type Board,
   boardPeople,
   CUSTOM_NPCS_MAX,
   NPC_OVERRIDES_MAX,
   npcRules,
   RELATION_INFO,
-  RELATIONS,
   type RelationKind,
 } from "@cp/core";
 import { useEffect, useMemo, useState } from "react";
@@ -40,28 +41,61 @@ type NpcCircle = npcRules.NpcCircle;
  */
 
 const LEDGER_EFFECT_LABELS: Readonly<Record<string, string>> = {
-  owesYou: "记人情债（对方欠你一次）",
-  youOwe: "记人情债（你欠对方一次）",
-  grudge: "挂旧仇标记（见面自带敌意）",
+  owesYou: "开局自动记入人情账（对方欠你一次）",
+  youOwe: "开局自动记入人情账（你欠对方一次）",
+  grudge: "开局自动挂旧仇标记（见面自带敌意）",
 };
 
-/** 6 种关系的开局机制说明（纯事实关系与人情/仇怨账本） */
-function relationEffect(r: RelationKind): string {
-  const info = RELATION_INFO[r];
-  const parts: string[] = [];
-  if (info.ledger) {
-    parts.push(LEDGER_EFFECT_LABELS[info.ledger] ?? info.ledger);
-  }
-  if (info.note) {
-    parts.push(`写入关系「${info.label}」`);
-  }
-  return parts.join(" · ");
-}
+const RELATION_GROUPS: readonly {
+  readonly id: string;
+  readonly label: string;
+  readonly items: readonly RelationKind[];
+}[] = [
+  { id: "bond", label: "亲密羁绊", items: ["family", "lover", "partner", "friend", "mentor"] },
+  { id: "work", label: "往来人情", items: ["boss", "subordinate", "nod", "owesYou", "youOwe"] },
+  { id: "edge", label: "纠葛自定", items: ["ex", "rival", "grudge", "custom"] },
+];
+
+const LEDGER_TAG_SHORT: Readonly<Record<string, string>> = {
+  owesYou: "人情",
+  youOwe: "人情",
+  grudge: "仇",
+};
 
 /** 按关系类型提供快捷交集填充词条 */
 const RELATION_NOTE_CHIPS: Readonly<Record<RelationKind, readonly string[]>> = {
-  nod: ["在酒吧拼过一桌酒", "经中间人介绍打过照面", "在同一场地下交易见过"],
+  family: [
+    "从小把我带大，虽立场不同却暗中护着我",
+    "原生家庭破裂后各自谋生，久未联系",
+    "在夜之城相依为命，互为最后的底牌",
+  ],
+  lover: [
+    "刀口舔血的日子里彼此依靠，互相留着门禁密钥",
+    "在夜之城的霓虹暗角相恋，对彼此的底细了如指掌",
+    "表面各自跑单，私下约定干完大活一起离开夜之城",
+  ],
+  partner: [
+    "一起扛过几场硬仗，背靠背把后背交给对方",
+    "常年搭档跑单，分工默契从不抢功",
+    "同一个小队里活下来的老拍档",
+  ],
+  mentor: [
+    "初入夜之城时手把手带我上道、立规矩",
+    "传过我看家手艺，关键时刻点醒过我",
+    "虽已各奔前程，仍敬对方三分师徒情分",
+  ],
+  boss: [
+    "曾在其手下办过几件见不得光的差事",
+    "目前仍保持上下级或长期雇佣往来",
+    "对方手握资源与话语权，对我既提防又看重",
+  ],
+  subordinate: [
+    "我一手带出来的新人，干活利落听招呼",
+    "在我的地盘或项目里做事，欠我一份提拔",
+    "关键时刻能帮我跑腿放风的得力后辈",
+  ],
   friend: ["一起扛过一场差点栽掉的活", "低谷时借过我落脚和救命钱", "多年互相照应的过命交情"],
+  nod: ["在酒吧拼过一桌酒", "经中间人介绍打过照面", "在同一场地下交易见过"],
   owesYou: [
     "上次失手是我把对方从火场拉出来的",
     "替对方压下过一笔要命的黑料",
@@ -77,11 +111,30 @@ const RELATION_NOTE_CHIPS: Readonly<Record<RelationKind, readonly string[]>> = {
     "分得不算难看，但各自换了圈子",
     "互相还留着紧急联络频段",
   ],
+  rival: [
+    "同一个圈子里抢单抢地盘的老对手",
+    "棋逢对手，嘴上互不相让心里各有忌惮",
+    "几次任务撞车，彼此都想压对方一头",
+  ],
   grudge: [
     "一单分赃彻底翻脸，差点拔枪",
     "对方害我丢了关键门路和一笔大钱",
     "旧账一直没算清，见面只剩冷眼",
   ],
+  custom: [
+    "掌握着彼此关键秘密的特殊联系人",
+    "私下长期合作，各取所需互不越界",
+    "牵扯着一段不愿外扬的旧日渊源",
+  ],
+};
+
+/** 血亲与自定义关系的快捷称谓词条 */
+const RELATION_LABEL_CHIPS: Readonly<Partial<Record<RelationKind, readonly string[]>>> = {
+  family: ["母亲", "父亲", "姐姐", "哥哥", "妹妹", "弟弟", "养母", "养父", "血亲"],
+  lover: ["恋人", "伴侣", "未婚妻", "未婚夫", "秘密情人"],
+  mentor: ["师父", "引路人", "前辈", "教官"],
+  boss: ["直属上司", "大老板", "幕后雇主", "公司高管"],
+  custom: ["监护人", "金主", "线人", "主治医生", "义姐", "义兄", "房东"],
 };
 
 interface Person {
@@ -449,6 +502,18 @@ export function PeoplePicker({
       acquaintances: board.acquaintances.map((a) => (a.id === id ? { ...a, note } : a)),
     });
 
+  const setCustomLabel = (id: string, customLabel: string) =>
+    commit({
+      ...board,
+      acquaintances: board.acquaintances.map((a) => {
+        if (a.id !== id) return a;
+        const next = { ...a };
+        if (customLabel) next.customLabel = customLabel;
+        else delete next.customLabel;
+        return next;
+      }),
+    });
+
   const openEditorFor = async (person: Person) => {
     setEditorError(null);
     if (person.isCustom) {
@@ -623,7 +688,7 @@ export function PeoplePicker({
             </span>
             <small className={styles.peopleSub}>
               {a
-                ? `${RELATION_INFO[a.relation].label} · ${p.role}`
+                ? `${acquaintanceRelationLabel(a)} · ${p.role}`
                 : p.inBoardCustom
                   ? `入局人物 · ${p.role}`
                   : p.role}
@@ -688,7 +753,7 @@ export function PeoplePicker({
                   }}
                 >
                   <b>{item.name}</b>
-                  <small>{RELATION_INFO[item.relation].label}</small>
+                  <small>{acquaintanceRelationLabel(item)}</small>
                 </button>
                 <button
                   type="button"
@@ -985,70 +1050,152 @@ export function PeoplePicker({
               </div>
             )}
 
-            <fieldset className={styles.relations} aria-label={`和${current.name}的关系`}>
-              <button
-                type="button"
-                className={styles.relation}
-                aria-pressed={!a}
-                onClick={() => setRelation(current, "")}
-              >
-                <CellFrame />
-                <b className={styles.relationLabel}>
-                  {current.fromModule ? "沿用默认关系" : "暂无交集"}
-                </b>
-                <small className={styles.relationNote}>
-                  {isOwn && current.inBoardCustom
-                    ? "保留在夜之城世界中，但开局不相识"
-                    : "不写入额外初始关系"}
-                </small>
-              </button>
-              {RELATIONS.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  className={styles.relation}
-                  aria-pressed={a?.relation === r}
-                  data-tone={r === "grudge" ? "bad" : undefined}
-                  onClick={() => setRelation(current, r)}
-                >
-                  <CellFrame />
-                  <b className={styles.relationLabel}>{RELATION_INFO[r].label}</b>
-                  <small className={styles.relationNote}>{relationEffect(r)}</small>
-                </button>
-              ))}
-            </fieldset>
-
-            {a && (
-              <div className={styles.noteEditor}>
-                <label className={styles.field}>
-                  <span>
-                    过往交集或恩怨
-                    <small>{a.note.length} / 60</small>
+            <section className={styles.relPanel} aria-label={`和${current.name}的关系`}>
+              <div className={styles.relStatusBar} data-active={a ? "" : undefined}>
+                <div className={styles.relStatusMain}>
+                  <span className={styles.relStatusCode}>
+                    {a ? "RELATION // 已建联系" : "RELATION // 初始关系"}
                   </span>
-                  <FrameBox className={styles.compactBox}>
-                    <input
-                      maxLength={60}
-                      value={a.note}
-                      aria-label={`和${current.name}是什么事`}
-                      placeholder="写一句具体交集，或点下方快捷模板填入"
-                      onChange={(e) => setNote(current.id, e.target.value)}
-                    />
-                  </FrameBox>
-                </label>
-                <fieldset className={styles.quickNotes} aria-label="快捷交集模板">
-                  {RELATION_NOTE_CHIPS[a.relation].map((chip) => (
-                    <button
-                      key={chip}
-                      type="button"
-                      className={styles.quickNoteBtn}
-                      onClick={() => setNote(current.id, chip)}
-                    >
-                      ＋ {chip}
-                    </button>
-                  ))}
-                </fieldset>
+                  <strong className={styles.relStatusPreview}>
+                    {a
+                      ? a.note.trim()
+                        ? `${acquaintanceRelationLabel(a)}：${a.note.trim()}`
+                        : acquaintanceRelationLabel(a)
+                      : current.fromModule
+                        ? "沿用模块默认关系"
+                        : isOwn && current.inBoardCustom
+                          ? "暂不相识（保留在世界中自然偶遇）"
+                          : "暂无交集（点下方标签快速建立关系）"}
+                  </strong>
+                </div>
+                {a && (
+                  <ActionButton onClick={() => setRelation(current, "")}>清除关系</ActionButton>
+                )}
               </div>
-            )}
+
+              <div className={styles.relGroups}>
+                {RELATION_GROUPS.map((group) => (
+                  <div key={group.id} className={styles.relGroupRow}>
+                    <span className={styles.relGroupLabel}>{group.label}</span>
+                    <div className={styles.relPills}>
+                      {group.items.map((r) => {
+                        const info = RELATION_INFO[r];
+                        const ledgerBadge = info.ledger ? LEDGER_TAG_SHORT[info.ledger] : undefined;
+                        return (
+                          <button
+                            key={r}
+                            type="button"
+                            className={styles.relPill}
+                            aria-pressed={a?.relation === r}
+                            data-tone={
+                              r === "grudge" || r === "rival"
+                                ? "bad"
+                                : r === "custom"
+                                  ? "custom"
+                                  : undefined
+                            }
+                            onClick={() => setRelation(current, a?.relation === r ? "" : r)}
+                          >
+                            <span>{r === "custom" ? "✦ 自定义" : info.label}</span>
+                            {ledgerBadge && <em className={styles.relPillTag}>{ledgerBadge}</em>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {a && (
+                <div className={styles.relEditor}>
+                  {RELATION_INFO[a.relation].ledger && (
+                    <p
+                      className={styles.relLedgerTip}
+                      data-tone={a.relation === "grudge" ? "bad" : undefined}
+                    >
+                      {LEDGER_EFFECT_LABELS[RELATION_INFO[a.relation].ledger ?? ""]}
+                    </p>
+                  )}
+
+                  <div className={styles.relInputGrid}>
+                    <label className={styles.field}>
+                      <span>
+                        具体称谓{a.relation === "custom" ? " *" : "（可选）"}
+                        <small>
+                          {(a.customLabel ?? "").length}/{ACQUAINTANCE_LABEL_CHARS}
+                        </small>
+                      </span>
+                      <FrameBox className={styles.compactBox}>
+                        <input
+                          maxLength={ACQUAINTANCE_LABEL_CHARS}
+                          value={a.customLabel ?? ""}
+                          aria-label={`和${current.name}的具体关系称谓`}
+                          placeholder={
+                            a.relation === "family"
+                              ? "母亲、父亲、姐姐…"
+                              : a.relation === "custom"
+                                ? "母亲、监护人、金主…"
+                                : RELATION_INFO[a.relation].label
+                          }
+                          onChange={(e) => setCustomLabel(current.id, e.target.value)}
+                        />
+                      </FrameBox>
+                    </label>
+                    <label className={styles.field}>
+                      <span>
+                        过往交集或恩怨（可选）
+                        <small>{a.note.length}/60</small>
+                      </span>
+                      <FrameBox className={styles.compactBox}>
+                        <input
+                          maxLength={60}
+                          value={a.note}
+                          aria-label={`和${current.name}是什么事`}
+                          placeholder="一句具体渊源，或点下方词条快速填入"
+                          onChange={(e) => setNote(current.id, e.target.value)}
+                        />
+                      </FrameBox>
+                    </label>
+                  </div>
+
+                  {RELATION_LABEL_CHIPS[a.relation] && (
+                    <div className={styles.relChipRow}>
+                      <span className={styles.relChipKey}>称谓</span>
+                      <div className={styles.relChipList}>
+                        {RELATION_LABEL_CHIPS[a.relation]?.map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            className={styles.relChip}
+                            aria-pressed={(a.customLabel ?? "").trim() === chip}
+                            onClick={() => setCustomLabel(current.id, chip)}
+                          >
+                            {chip}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={styles.relChipRow}>
+                    <span className={styles.relChipKey}>模板</span>
+                    <div className={styles.relChipList}>
+                      {RELATION_NOTE_CHIPS[a.relation].map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          className={styles.relChip}
+                          aria-pressed={a.note === chip}
+                          onClick={() => setNote(current.id, chip)}
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
           </section>
         )}
       </div>
