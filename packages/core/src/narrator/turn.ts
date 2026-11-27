@@ -836,6 +836,13 @@ export async function runNarratorTurn(
       .slice(-2)
       .map((t) => t.text)
       .join("\n");
+    if (plan.kind === "action" && !legacyOoc && deps.embedder && pool.length > 0) {
+      deps.onStage?.({
+        stage: "prepare",
+        label: "检索旧记忆（向量）",
+        detail: `匹配 ${pool.length} 条记忆片段`,
+      });
+    }
     const vectorScores =
       plan.kind === "action" && !legacyOoc
         ? await computeVectorScores(deps.embedder, pool, plan.input.text, deps.signal)
@@ -846,6 +853,13 @@ export async function runNarratorTurn(
             .slice(0, RERANK_TOP_K)
             .map((s) => s.entry)
         : [];
+    if (coarseForRerank.length > 0) {
+      deps.onStage?.({
+        stage: "prepare",
+        label: "精排旧记忆（重排）",
+        detail: `精排前 ${coarseForRerank.length} 条候选记忆`,
+      });
+    }
     const rerankScores =
       coarseForRerank.length > 0
         ? await computeRerankScores(deps.reranker, coarseForRerank, plan.input.text, deps.signal)

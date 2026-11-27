@@ -16,7 +16,11 @@ const DEFAULT_BASE: Readonly<Record<"openai" | "ollama", string>> = {
   ollama: "http://127.0.0.1:11434/v1",
 };
 
-const RERANK_TIMEOUT_MS = 15_000;
+const RERANK_TURN_TIMEOUT_MS = 6_000;
+const RERANK_PROBE_TIMEOUT_MS = 15_000;
+const RERANK_COOLDOWN_MS = 60_000;
+
+const rerankCooldownUntil = new Map<string, number>();
 
 export type RerankProviderType = "openai" | "ollama";
 
@@ -48,7 +52,7 @@ async function rerankStrict(
   model: string,
   query: string,
   documents: readonly string[],
-  options?: RerankOptions,
+  options?: RerankOptions & { readonly timeoutMs?: number | undefined },
 ): Promise<readonly RerankResult[]> {
   if (documents.length === 0 || query.trim() === "") return [];
   if (!isRerankProviderType(profile.type)) {
@@ -61,7 +65,7 @@ async function rerankStrict(
   }
 
   const callerSignal = toAbortSignal(options?.signal);
-  const timeoutSignal = AbortSignal.timeout(RERANK_TIMEOUT_MS);
+  const timeoutSignal = AbortSignal.timeout(options?.timeoutMs ?? RERANK_TURN_TIMEOUT_MS);
   const signal = callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
   const topN =
     options?.topN !== undefined
@@ -137,9 +141,11 @@ export function createReranker(
   onWarn?: (message: string) => void,
 ): Reranker | undefined {
   const cleanModel = model.trim();
+  const url = rerankUrl(profile);
   if (!cleanModel || !isRerankProviderType(profile.type)) return undefined;
-  if (!rerankUrl(profile)) return undefined;
+  if (!url) return undefined;
   if (profile.type === "openai" && !apiKey) return undefined;
+  const cooldownKey = `${url}|${cleanModel}`;
 
   return {
     async rerank(
@@ -148,12 +154,22 @@ export function createReranker(
       options?: RerankOptions,
     ): Promise<readonly RerankResult[]> {
       if (documents.length === 0 || query.trim() === "") return [];
+      const blockedUntil = rerankCooldownUntil.get(cooldownKey);
+      if (blockedUntil !== undefined && blockedUntil > Date.now()) {
+        return [];
+      }
       try {
-        return await rerankStrict(profile, apiKey, cleanModel, query, documents, options);
+        const res = await rerankStrict(profile, apiKey, cleanModel, query, documents, {
+          ...options,
+          timeoutMs: RERANK_TURN_TIMEOUT_MS,
+        });
+        rerankCooldownUntil.delete(cooldownKey);
+        return res;
       } catch (error) {
         if (error instanceof AbortedError || options?.signal?.aborted) throw new AbortedError();
+        rerankCooldownUntil.set(cooldownKey, Date.now() + RERANK_COOLDOWN_MS);
         onWarn?.(
-          `语义重排不可用，本轮回退一阶段检索：${error instanceof Error ? error.message : String(error)}`,
+          `语义重排不可用，本轮回退一阶段检索（冷却 60s）：${error instanceof Error ? error.message : String(error)}`,
         );
         return [];
       }
@@ -169,6 +185,8 @@ export async function probeReranker(
   signal?: AbortSignalLike,
 ): Promise<{ readonly topScore: number; readonly count: number; readonly model: string }> {
   const cleanModel = model.trim();
+  const url = rerankUrl(profile);
+  if (url) rerankCooldownUntil.delete(`${url}|${cleanModel}`);
   const ranked = await rerankStrict(
     profile,
     apiKey,
@@ -178,7 +196,7 @@ export async function probeReranker(
       "义体医生维克多在诊所地下室给玩家校准岐路司义眼。",
       "今晚海伍德街头下起了酸雨，霓虹招牌忽明忽暗。",
     ],
-    { topN: 2, signal },
+    { topN: 2, signal, timeoutMs: RERANK_PROBE_TIMEOUT_MS },
   );
   const topScore = ranked.reduce((best, r) => Math.max(best, r.score), 0);
   return { topScore, count: ranked.length, model: cleanModel };

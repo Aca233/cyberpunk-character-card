@@ -17,9 +17,17 @@ const DEFAULT_BASE: Readonly<Record<"openai" | "ollama" | "gemini", string>> = {
   gemini: "https://generativelanguage.googleapis.com/v1beta",
 };
 
-const EMBEDDING_TIMEOUT_MS = 15_000;
+/** 常规回合向量检索单批超时（超时即降级规则检索，避免卡死首字等待）；连接测试仍用较长超时 */
+const EMBEDDING_TURN_TIMEOUT_MS = 6_000;
+const EMBEDDING_PROBE_TIMEOUT_MS = 15_000;
+/** 连续网络失败/超时后的短暂冷却期，避免不可用向量端点每轮白等超时 */
+const EMBEDDING_COOLDOWN_MS = 60_000;
 /** 默认每批 16 条：兼顾主流中转站与部分模型 16/20/25 条的单批上限，减少首轮 400 重拆 */
 const EMBEDDING_BATCH_SIZE = 16;
+/** 批次并发度：在确定单批大小后并行发送，冷启动提速 3 倍 */
+const EMBEDDING_CONCURRENCY = 3;
+
+const embedCooldownUntil = new Map<string, number>();
 
 /** 识别上游 HTTP 400 明确提示“单批输入条数超限”的报错文案 */
 const BATCH_LIMIT_HINT_RE =
@@ -204,7 +212,11 @@ async function embedStrict(
   apiKey: string | undefined,
   model: string,
   texts: readonly string[],
-  options: { readonly signal?: AbortSignalLike | undefined; readonly task?: EmbedTask | undefined },
+  options: {
+    readonly signal?: AbortSignalLike | undefined;
+    readonly task?: EmbedTask | undefined;
+    readonly timeoutMs?: number | undefined;
+  },
 ): Promise<readonly (readonly number[])[]> {
   if (texts.length === 0) return [];
   if (!isEmbeddingProviderType(profile.type)) {
@@ -219,44 +231,73 @@ async function embedStrict(
   }
 
   const callerSignal = toAbortSignal(options.signal);
-  const results: (readonly number[])[] = [];
-  let batchSize = EMBEDDING_BATCH_SIZE;
-  let start = 0;
-
-  while (start < texts.length) {
+  const timeoutMs = options.timeoutMs ?? EMBEDDING_TURN_TIMEOUT_MS;
+  const runChunk = async (chunk: readonly string[]): Promise<readonly (readonly number[])[]> => {
     if (callerSignal?.aborted) throw new AbortedError();
-    const chunk = texts.slice(start, start + batchSize);
-    const timeoutSignal = AbortSignal.timeout(EMBEDDING_TIMEOUT_MS);
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
     try {
-      const vectors =
-        profile.type === "gemini"
-          ? await embedGeminiBatch(url, model, apiKey as string, chunk, options.task, signal)
-          : await embedOpenAiBatch(url, model, apiKey, chunk, signal);
-      results.push(...vectors);
-      start += chunk.length;
+      return profile.type === "gemini"
+        ? await embedGeminiBatch(url, model, apiKey as string, chunk, options.task, signal)
+        : await embedOpenAiBatch(url, model, apiKey, chunk, signal);
     } catch (error) {
       if (callerSignal?.aborted) throw new AbortedError();
-      if (error instanceof UpstreamError) {
-        if (error.status === 400 && chunk.length > 1) {
-          const nextLimit = extractBatchLimit(error.message, chunk.length);
-          if (nextLimit !== undefined && nextLimit < chunk.length) {
-            batchSize = nextLimit;
-            continue;
-          }
-        }
-        throw error;
-      }
+      if (error instanceof UpstreamError) throw error;
       if (error instanceof Error && error.name === "TimeoutError") {
         throw new UpstreamError("向量嵌入请求超时");
       }
       throw new UpstreamError(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  let batchSize = EMBEDDING_BATCH_SIZE;
+  let firstVectors: readonly (readonly number[])[] | undefined;
+  while (firstVectors === undefined) {
+    const chunk = texts.slice(0, batchSize);
+    try {
+      firstVectors = await runChunk(chunk);
+    } catch (error) {
+      if (error instanceof UpstreamError && error.status === 400 && chunk.length > 1) {
+        const nextLimit = extractBatchLimit(error.message, chunk.length);
+        if (nextLimit !== undefined && nextLimit < chunk.length) {
+          batchSize = nextLimit;
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+
+  if (texts.length <= batchSize) return firstVectors;
+
+  const restChunks: (readonly string[])[] = [];
+  for (let start = batchSize; start < texts.length; start += batchSize) {
+    restChunks.push(texts.slice(start, start + batchSize));
+  }
+  const restResults: (readonly (readonly number[])[])[] = new Array(restChunks.length);
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(EMBEDDING_CONCURRENCY, restChunks.length) },
+    async () => {
+      while (cursor < restChunks.length) {
+        const idx = cursor;
+        cursor += 1;
+        const chunk = restChunks[idx];
+        if (!chunk) break;
+        restResults[idx] = await runChunk(chunk);
+      }
+    },
+  );
+  await Promise.all(workers);
+
+  const results: (readonly number[])[] = [...firstVectors];
+  for (const batch of restResults) {
+    if (batch) results.push(...batch);
   }
   return results;
 }
 
-/** 构造可供回合检索使用的容错向量客户端；单次请求失败时返回空数组并降级规则检索 */
+/** 构造可供回合检索使用的容错向量客户端；单次请求失败或超时时快速降级规则检索并短暂冷却 */
 export function createEmbedder(
   profile: Profile,
   apiKey: string | undefined,
@@ -267,6 +308,7 @@ export function createEmbedder(
   if (!cleanModel || !isEmbeddingProviderType(profile.type)) return undefined;
   if (!embeddingsUrl(profile, cleanModel)) return undefined;
   if ((profile.type === "openai" || profile.type === "gemini") && !apiKey) return undefined;
+  const cooldownKey = embeddingModelKey(profile, cleanModel);
 
   return {
     async embed(
@@ -275,12 +317,22 @@ export function createEmbedder(
     ): Promise<readonly (readonly number[])[]> {
       if (texts.length === 0) return [];
       const opts = normalizeOptions(signalOrOptions);
+      const blockedUntil = embedCooldownUntil.get(cooldownKey);
+      if (blockedUntil !== undefined && blockedUntil > Date.now()) {
+        return [];
+      }
       try {
-        return await embedStrict(profile, apiKey, cleanModel, texts, opts);
+        const res = await embedStrict(profile, apiKey, cleanModel, texts, {
+          ...opts,
+          timeoutMs: EMBEDDING_TURN_TIMEOUT_MS,
+        });
+        embedCooldownUntil.delete(cooldownKey);
+        return res;
       } catch (error) {
         if (error instanceof AbortedError || opts.signal?.aborted) throw new AbortedError();
+        embedCooldownUntil.set(cooldownKey, Date.now() + EMBEDDING_COOLDOWN_MS);
         onWarn?.(
-          `向量检索不可用，本轮降级为规则检索：${error instanceof Error ? error.message : String(error)}`,
+          `向量检索不可用，本轮降级为规则检索（冷却 60s）：${error instanceof Error ? error.message : String(error)}`,
         );
         return [];
       }
@@ -296,9 +348,11 @@ export async function probeEmbedding(
   signal?: AbortSignalLike,
 ): Promise<{ readonly dimensions: number; readonly model: string }> {
   const cleanModel = model.trim();
+  embedCooldownUntil.delete(embeddingModelKey(profile, cleanModel));
   const vectors = await embedStrict(profile, apiKey, cleanModel, ["夜之城连接测试"], {
     signal,
     task: "query",
+    timeoutMs: EMBEDDING_PROBE_TIMEOUT_MS,
   });
   const first = vectors[0];
   if (!first || first.length === 0) {

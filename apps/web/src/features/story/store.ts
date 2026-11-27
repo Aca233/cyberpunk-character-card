@@ -200,6 +200,9 @@ export const useStory = create<StoryState>()((set, get) => {
         if (!current()) return;
         switch (event.type) {
           case "started":
+            set((s) =>
+              s.stage?.local ? { stage: { ...s.stage, detail: "回合已建立，正在准备上下文" } } : s,
+            );
             return;
           case "stage": {
             if (get().stopping) return;

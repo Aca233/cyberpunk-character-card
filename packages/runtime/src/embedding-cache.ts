@@ -129,15 +129,14 @@ export class EmbeddingCacheStore {
         if (opts.task === "query") {
           return upstream.embed(texts, opts);
         }
-        return this.lock.run(saveId, async () => {
+        const hashes = texts.map(hashEmbeddingText);
+        // 仅在读写本地桶时持锁，绝不在上游网络请求期间持锁（避免后台预热阻塞下一轮实时检索）
+        const { missingHashes, missingTexts } = await this.lock.run(saveId, async () => {
           if (opts.signal?.aborted) throw new AbortedError();
           const bucket = await this.loadBucket(saveId, modelKey);
           const now = Date.now();
-          const hashes = texts.map(hashEmbeddingText);
-
-          // 找出缓存未命中的唯一文本（同批次去重）
-          const missingHashes: string[] = [];
-          const missingTexts: string[] = [];
+          const mHashes: string[] = [];
+          const mTexts: string[] = [];
           const seenMissing = new Set<string>();
           for (let i = 0; i < texts.length; i += 1) {
             const hash = hashes[i];
@@ -150,14 +149,24 @@ export class EmbeddingCacheStore {
             }
             if (!seenMissing.has(hash)) {
               seenMissing.add(hash);
-              missingHashes.push(hash);
-              missingTexts.push(text);
+              mHashes.push(hash);
+              mTexts.push(text);
             }
           }
+          return { missingHashes: mHashes, missingTexts: mTexts };
+        });
 
-          if (missingTexts.length > 0) {
-            const fresh = await upstream.embed(missingTexts, opts);
-            if (fresh.length !== missingTexts.length) return [];
+        let fresh: readonly (readonly number[])[] | undefined;
+        if (missingTexts.length > 0) {
+          fresh = await upstream.embed(missingTexts, opts);
+          if (fresh.length !== missingTexts.length) return [];
+        }
+
+        return this.lock.run(saveId, async () => {
+          if (opts.signal?.aborted) throw new AbortedError();
+          const bucket = await this.loadBucket(saveId, modelKey);
+          const now = Date.now();
+          if (fresh && missingHashes.length > 0) {
             let wrote = false;
             for (let i = 0; i < missingHashes.length; i += 1) {
               const hash = missingHashes[i];
@@ -168,7 +177,6 @@ export class EmbeddingCacheStore {
             }
             if (wrote) await this.persistBucket(saveId, bucket);
           }
-
           const resolved: (readonly number[])[] = [];
           for (const hash of hashes) {
             const entry = bucket.entries.get(hash);

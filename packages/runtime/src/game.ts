@@ -227,6 +227,8 @@ function addUsage(a: TurnUsage | undefined, b: TurnUsage): TurnUsage | undefined
  */
 export class GameService {
   private readonly locks = new KeyedMutex();
+  /** 后台异步向量预热的取消句柄：新一轮提交时立即中止，避免争抢资源或阻塞 */
+  private readonly prewarmControllers = new Map<string, AbortController>();
   /** 确认绑定本次输入、存档版本和完整报价；重启或状态改变后需重新确认。 */
   private readonly pendingSpends = new Map<
     string,
@@ -234,6 +236,13 @@ export class GameService {
   >();
 
   constructor(private readonly deps: GameDeps) {}
+
+  private cancelPrewarm(saveId: string): void {
+    const prev = this.prewarmControllers.get(saveId);
+    if (!prev) return;
+    this.prewarmControllers.delete(saveId);
+    prev.abort();
+  }
 
   private runtime(meta: SaveMeta) {
     return workshopRuntime(
@@ -462,6 +471,7 @@ export class GameService {
   }
 
   submit(id: string, request: TurnRequest): Promise<Reply> {
+    this.cancelPrewarm(id);
     const { hub } = this.deps;
     return this.locks.run(id, async (): Promise<Reply> => {
       const { meta, world, records } = await this.load(id);
@@ -1662,7 +1672,7 @@ export class GameService {
       }
       hub.push(run, { type: "done", ...saved, ...(usage ? { usage } : {}) });
       if (embedder && !turn.draft && !turn.ooc) {
-        void this.prewarmEmbeddings(run.saveId, embedder);
+        void this.prewarmEmbeddings(run.saveId, embedder, turn.world, records);
       }
     } catch (error) {
       const savedHint = latestCheckpoint
@@ -1861,16 +1871,27 @@ export class GameService {
     return replay(await this.snapshotFor(id, meta, records), records);
   }
 
-  /** 回合落盘后的后台异步向量预热：提前为新增记忆文档计算并持久化向量，减少下一轮 judge 首字前等待 */
-  private async prewarmEmbeddings(saveId: string, embedder: Embedder): Promise<void> {
+  /** 回合落盘后的后台异步向量预热：不持存档锁，新一轮提交时立即中止，提前缓存新增记忆文档向量 */
+  private async prewarmEmbeddings(
+    saveId: string,
+    embedder: Embedder,
+    world: WorldState,
+    records: readonly LogRecord[],
+  ): Promise<void> {
+    this.cancelPrewarm(saveId);
+    const controller = new AbortController();
+    this.prewarmControllers.set(saveId, controller);
     try {
-      const { world, records } = await this.locks.run(saveId, () => this.load(saveId));
       const pool = memoryPool(world, records, HISTORY_TURNS);
-      if (pool.length === 0) return;
+      if (pool.length === 0 || controller.signal.aborted) return;
       const docTexts = pool.map((e) => `${e.title}\n${e.text}`.slice(0, 600));
-      await embedder.embed(docTexts, { task: "document" });
+      await embedder.embed(docTexts, { task: "document", signal: controller.signal });
     } catch {
-      // 后台预热完全尽力而为，失败静默忽略，不影响玩家体验
+      // 后台预热完全尽力而为，取消或失败静默忽略，不影响玩家体验
+    } finally {
+      if (this.prewarmControllers.get(saveId) === controller) {
+        this.prewarmControllers.delete(saveId);
+      }
     }
   }
 
