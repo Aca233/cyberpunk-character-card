@@ -3,8 +3,9 @@ import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { memoryRecords } from "../../systems/memory";
 import { registry } from "../../systems/registry";
+import { staticPlacesSection } from "../../systems/world";
 import { ExtractDocSchema } from "../block";
-import { commandDoc, schemaDoc } from "../doc";
+import { COMMAND_DOC_LEGEND, commandDoc, schemaDoc } from "../doc";
 import { extractCatalogData, extractCatalogDetails, worldObjectsIndexSection } from "./catalogs";
 import {
   ALWAYS_ON_MODULE_IDS,
@@ -17,6 +18,7 @@ import {
   type PromptExtras,
   situation,
   stageModules,
+  staticBaseData,
   tablesOf,
 } from "./context";
 import { BOOKKEEPING_BASE, modulesBlock, systemMessage, userMessage } from "./layers";
@@ -105,7 +107,7 @@ export function extractRules(): string {
     extractCore = [
       BOOKKEEPING_BASE,
       EXTRACT_STAGE,
-      `【输出格式】\n只输出一个 JSON 对象，不要解释，不要代码块。\n${schemaDoc(ExtractDocSchema)}\n- 字段后的问号表示可以不写，括号里是说明。`,
+      `【输出格式】\n只输出一个 JSON 对象，不要解释，不要代码块。\n${schemaDoc(ExtractDocSchema)}\n${COMMAND_DOC_LEGEND}`,
       `changes 可用的指令：\n${commands.join("\n")}`,
       `例：\n${EXTRACT_EXAMPLE}`,
     ].join("\n\n");
@@ -134,7 +136,7 @@ export function buildExtractPrompt(
           world,
           view,
           data,
-          `${plan.input.text}\n${narrative}`,
+          [plan.input.text, narrative, tradePlans ?? ""].join("\n"),
           modules.some((m) => m.id === "hacking"),
         );
   // 常驻抽取模块放在可缓存 system 层；只有本轮按状态动态激活的模块才放进 user 层
@@ -162,15 +164,10 @@ export function buildExtractPrompt(
     ],
     reminder: "（只输出抽取的 JSON 对象。）",
   });
-  // 系统层放纯静态抽取规则 + 纯静态常驻模块 + 纯静态基础目录表（剥离动态模块与存档独立物件），
+  // 系统层放纯静态抽取规则 + 纯静态常驻模块 + 纯静态基础目录表（物品/义体/固定地点），
   // 让抽取系统提示词跨回合稳定命中提示缓存，并把每轮未缓存的用户消息压到最小。
-  const staticData =
-    extras.data &&
-    "baseData" in extras.data &&
-    extras.data.baseData &&
-    typeof extras.data.baseData === "object"
-      ? (extras.data.baseData as Readonly<Record<string, unknown>>)
-      : extras.data;
+  const staticData = staticBaseData(extras.data);
+  const staticPlaces = staticPlacesSection(staticData);
   const staticRules = systemMessage("extract", [
     extractRules(),
     ...(staticModulesText ? [staticModulesText] : []),
@@ -180,7 +177,11 @@ export function buildExtractPrompt(
     messages: [
       {
         role: "system",
-        content: [staticRules, ...tablesOf(view, { ...extras, data: staticData })].join("\n\n"),
+        content: [
+          staticRules,
+          ...tablesOf(view, { ...extras, data: staticData }),
+          ...(staticPlaces ? [staticPlaces] : []),
+        ].join("\n\n"),
       },
       { role: "user", content },
     ],

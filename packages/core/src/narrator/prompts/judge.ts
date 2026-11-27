@@ -1,9 +1,12 @@
 import { projectState } from "../../game";
+import type { LlmMessage } from "../../kernel/ports";
 import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { CARRY_AND_WEAPON_RULES } from "../../systems/inventory/prompt";
 import { memoryRecords } from "../../systems/memory";
 import { registry } from "../../systems/registry";
+import { staticPlacesSection } from "../../systems/world";
+import { historyTurns } from "../budget";
 import { schemaDoc } from "../doc";
 import { JudgeDocSchema, type Memory } from "../stages";
 import {
@@ -18,6 +21,7 @@ import {
   recapFor,
   situation,
   stageModules,
+  staticBaseData,
 } from "./context";
 import { BASE_RULES, modulesBlock, systemMessage, userMessage } from "./layers";
 
@@ -100,7 +104,11 @@ function judgeOutput(): string {
   return output;
 }
 
-/** ① 判断：一条系统消息加一条用户消息，只输出 JSON */
+/** 判断步步长对齐后的最近原文上限与估算预算：在 3–6 轮间按 HISTORY_STRIDE 固定起点，使前情与近期原文稳定命中 KV 缓存 */
+const JUDGE_HISTORY_MAX = Math.max(JUDGE_TURNS, 6);
+const JUDGE_HISTORY_TOKENS = 8_000;
+
+/** ① 判断：静态系统层 + 独立可缓存前情/步长对齐近期原文 + 本轮动态用户消息，只输出 JSON */
 export function buildJudgePrompt(
   world: WorldState,
   records: readonly LogRecord[],
@@ -114,15 +122,13 @@ export function buildJudgePrompt(
   const modules = stageModules(world, plan.input, extras);
   const isOoc = plan.input.mode === "ooc";
   const staticModules = isOoc ? undefined : staticJudgeModules();
+  const staticPlaces = isOoc ? undefined : staticPlacesSection(staticBaseData(extras.data));
   const dynamicModules = isOoc ? modules : modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
-  const recent = view.turns
-    .slice(-JUDGE_TURNS)
-    .map((t) => `${formatInput(t.input)}\n${t.text}`)
-    .join("\n\n");
+  const judgeHot = historyTurns(records, JUDGE_HISTORY_TOKENS, JUDGE_HISTORY_MAX);
+  const recentTurns = judgeHot > 0 ? view.turns.slice(-judgeHot) : [];
+  const recap = recapFor(world, records, judgeHot);
   const activeModulesText = modulesBlock("judge", dynamicModules);
   const content = userMessage({
-    recap: recapFor(world, records, JUDGE_TURNS),
-    recent: recent === "" ? undefined : `【最近几轮】\n${recent}`,
     modules: activeModulesText,
     scene: situation(world, records, view, plan, { ...extras, opening }, "judge"),
     recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.slice(0, JUDGE_RECALL_CANDIDATES).map(briefRecallLine).join("\n") : "（没有）"}`,
@@ -135,20 +141,30 @@ export function buildJudgePrompt(
     ],
     reminder: "（只输出判断的 JSON 对象。）",
   });
-  // 系统层保持 100% 静态可缓存前缀（核心守则 + 常驻模块）；仅动态场景规则模块放进用户消息
-  const system = systemMessage("judge", [
+  // 系统层保持 100% 静态可缓存前缀（核心守则 + 常驻模块 + 固定地点表）；
+  // 【前情】与步长对齐的【最近几轮】各自拆作独立 system 前缀块（不污染 assistant 角色，避免弱模型放弃 JSON 输出），
+  // 让 OpenAI / Gemini / Anthropic 都能跨多轮命中静态规则、前情与近期原文前缀缓存。
+  const staticRules = systemMessage("judge", [
     BASE_RULES,
     JUDGE_STAGE,
     CARRY_AND_WEAPON_RULES,
     judgeOutput(),
     ...(staticModules ? [staticModules] : []),
   ]);
+  const system = staticPlaces ? `${staticRules}\n\n${staticPlaces}` : staticRules;
+  const messages: LlmMessage[] = [{ role: "system", content: system }];
+  if (recap) messages.push({ role: "system", content: recap });
+  for (const [idx, turn] of recentTurns.entries()) {
+    const header = idx === 0 ? "【最近几轮】\n" : "【最近几轮·续】\n";
+    messages.push({
+      role: "system",
+      content: `${header}${formatInput(turn.input)}\n${turn.text}`,
+    });
+  }
+  messages.push({ role: "user", content });
   return {
-    rules: system.length + (activeModulesText?.length ?? 0),
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content },
-    ],
+    rules: staticRules.length + (activeModulesText?.length ?? 0),
+    messages,
     modules: modules.map((m) => m.id),
   };
 }

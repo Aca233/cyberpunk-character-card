@@ -758,16 +758,12 @@ function projectOffers(records: readonly LogRecord[]) {
 /** 别人眼里的你搬进了 npc 系统，这里转出保持导出名不变 */
 export { type Looks, perceivedLine } from "./systems/npc";
 
-/**
- * 玩家能看到的状态。只放界面要显示的东西：
- * 去重用的已结算事件、已用检定 id、换装防刷的次数记录、被丢弃的指令都不出现
- */
-export function projectState(
+const EMPTY_DATA: Readonly<Record<string, unknown>> = Object.freeze({});
+
+function computePlayerView(
   world: WorldState,
   records: readonly LogRecord[],
-  /** 静态数据表；带物品表和地点表时给出中文名 */
-  data: Readonly<Record<string, unknown>> = {},
-  /** 最新一条记录之前的世界；给了才出系统通知，没给时 events 是空的 */
+  data: Readonly<Record<string, unknown>>,
   before?: WorldState,
 ) {
   const views = registry.project({ world, records, data });
@@ -998,7 +994,46 @@ export function projectState(
   };
 }
 
-export type PlayerView = ReturnType<typeof projectState>;
+export type PlayerView = ReturnType<typeof computePlayerView>;
+
+const projectStateCache = new WeakMap<
+  WorldState,
+  WeakMap<readonly LogRecord[], WeakMap<object, PlayerView>>
+>();
+
+/**
+ * 玩家能看到的状态。只放界面要显示的东西：
+ * 去重用的已结算事件、已用检定 id、换装防刷的次数记录、被丢弃的指令都不出现；
+ * 同回合不可变 (world, records, data) 且不计算事件差异时弱缓存，避免三阶段与裁剪循环重复投影。
+ */
+export function projectState(
+  world: WorldState,
+  records: readonly LogRecord[],
+  /** 静态数据表；带物品表和地点表时给出中文名 */
+  data: Readonly<Record<string, unknown>> = EMPTY_DATA,
+  /** 最新一条记录之前的世界；给了才出系统通知，没给时 events 是空的 */
+  before?: WorldState,
+): PlayerView {
+  if (before === undefined) {
+    const hit = projectStateCache.get(world)?.get(records)?.get(data);
+    if (hit !== undefined) return hit;
+  }
+  const view = computePlayerView(world, records, data, before);
+  if (before === undefined) {
+    let byRecords = projectStateCache.get(world);
+    if (!byRecords) {
+      byRecords = new WeakMap();
+      projectStateCache.set(world, byRecords);
+    }
+    let byData = byRecords.get(records);
+    if (!byData) {
+      byData = new WeakMap();
+      byRecords.set(records, byData);
+    }
+    byData.set(data, view);
+  }
+  return view;
+}
 
 /** 路线面板提交前的检查：走不了时返回原因 */
 export function travelBlock(

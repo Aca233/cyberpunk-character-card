@@ -105,8 +105,8 @@ export const CORE_COMMANDS = [
 ] as const;
 
 /**
- * 所有非 OOC 回合固定常驻激活的规则模块 id（判断 / 正文 / 抽取共用）：
- * 归入 system 静态前缀层以便跨回合稳定命中 KV 缓存，仅动态激活模块留在 user 消息。
+ * 所有非 OOC 回合固定或准常驻激活的规则模块 id（判断 / 正文 / 抽取共用）：
+ * 归入 system 静态前缀层以便跨回合稳定命中 KV 缓存，仅低频动态场景模块留在 user 消息。
  */
 export const ALWAYS_ON_MODULE_IDS: ReadonlySet<string> = new Set([
   "economy",
@@ -123,7 +123,20 @@ export const ALWAYS_ON_MODULE_IDS: ReadonlySet<string> = new Set([
   "chronicle",
   "arcs",
   "shards",
+  "safehouse",
+  "cyberpsychosis",
+  "merchant",
 ]);
+
+/** 剥离存档运行期扩展对象，还原纯静态内容包数据（供 system 层静态目录表稳定命中缓存）。 */
+export function staticBaseData(
+  data: Readonly<Record<string, unknown>> | undefined,
+): Readonly<Record<string, unknown>> | undefined {
+  if (data && "baseData" in data && data.baseData && typeof data.baseData === "object") {
+    return data.baseData as Readonly<Record<string, unknown>>;
+  }
+  return data;
+}
 
 export type NarratorPlan = { readonly kind: "action"; readonly input: TurnInput };
 
@@ -165,14 +178,34 @@ export interface PromptExtras {
   readonly includeCatalogDetails?: boolean | undefined;
 }
 
+const EMPTY_SUMMARY_DATA: Readonly<Record<string, unknown>> = Object.freeze({});
+const stateSummaryCache = new WeakMap<
+  WorldState,
+  WeakMap<readonly LogRecord[], WeakMap<object, string>>
+>();
+
 export function stateSummary(
   world: WorldState,
   records: readonly LogRecord[],
-  data: Readonly<Record<string, unknown>> = {},
+  data: Readonly<Record<string, unknown>> = EMPTY_SUMMARY_DATA,
 ): string {
+  const hit = stateSummaryCache.get(world)?.get(records)?.get(data);
+  if (hit !== undefined) return hit;
   // 各系统交自己的几行，按 order 穿插排好；这里只负责投影和拼接
   const views = registry.project({ world, records, data });
-  return registry.status({ views }).join("\n");
+  const rendered = registry.status({ views }).join("\n");
+  let byRecords = stateSummaryCache.get(world);
+  if (!byRecords) {
+    byRecords = new WeakMap();
+    stateSummaryCache.set(world, byRecords);
+  }
+  let byData = byRecords.get(records);
+  if (!byData) {
+    byData = new WeakMap();
+    byRecords.set(records, byData);
+  }
+  byData.set(data, rendered);
+  return rendered;
 }
 
 export function formatInput(input: TurnInput): string {

@@ -77,11 +77,11 @@ let state = "";
 const last = prompt.messages.length - 1;
 prompt.messages.forEach((m, i) => {
   const content = String(m.content);
-  if (i !== 0 && i !== last) {
+  if (m.role !== "system" && i !== last) {
     history += tokens(content);
     return;
   }
-  const where = i === 0 ? "系统" : "最后一条";
+  const where = m.role === "system" ? "系统" : "最后一条";
   for (const block of content.split(/\n\n(?=【)/)) {
     const title = block.startsWith("【")
       ? block.slice(0, block.indexOf("】") + 1)

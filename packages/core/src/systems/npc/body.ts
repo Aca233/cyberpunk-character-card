@@ -24,6 +24,7 @@ import {
   PROTECTION_COVERAGE_LABELS,
   PROTECTION_LEVEL_LABELS,
   rarityOf,
+  summarizeAbility,
   summarizeGearEffects,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
@@ -626,8 +627,22 @@ export function chromeDetails(ids: readonly string[], data: Data): ChromeDetail[
   });
 }
 
-function chromeText(list: readonly ChromeDetail[]): string {
+function chromeText(
+  list: readonly ChromeDetail[],
+  stage?: "judge" | "narrate" | "extract",
+): string {
   if (list.length === 0) return "没有";
+  if (stage === "extract") {
+    return list.map((c) => `${c.name}[${c.id}]`).join("、");
+  }
+  if (stage === "judge") {
+    return list
+      .map((c) => {
+        const summary = summarizeAbility(c.ability, 36);
+        return summary ? `${c.name}（${c.slot}：${summary}）` : c.name;
+      })
+      .join("、");
+  }
   return list
     .map((c) => (c.ability ? `${c.name}（${c.slot}：${c.ability.replace(/。$/, "")}）` : c.name))
     .join("、");
@@ -666,8 +681,13 @@ function injurySummaryText(injuries: readonly NpcInjuryView[]): string {
     .join("；");
 }
 
-/** 完整卡上的一行身体：定性伤势与具体创口、衣着/武器/随身物品、义体（带部位和效果）、人性阶段；不输出 RPG 阶层或属性数字 */
-export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: number): string {
+/** 完整卡上的一行身体：定性伤势与具体创口、衣着/武器/随身物品、义体（按阶段给完整描写/硬条件摘要/ID）、人性阶段 */
+export function bodyLine(
+  npc: Pick<Npc, "body" | "vitals">,
+  data: Data,
+  now: number,
+  stage?: "judge" | "narrate" | "extract",
+): string {
   const body = filledBody(npc.body);
   const v = currentVitals(npc, data, now);
   const injuries = projectInjuries(v.injuries);
@@ -696,7 +716,7 @@ export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
   if (belongings.length > 0) {
     segments.push(`随身物品：${belongings.map((item) => item.name).join("、")}`);
   }
-  segments.push(`义体：${chromeText(chrome)}`, `人性状态：${STAGE_LABELS[neuralStage(v)]}`);
+  segments.push(`义体：${chromeText(chrome, stage)}`, `人性状态：${STAGE_LABELS[neuralStage(v)]}`);
   return segments.join("；");
 }
 

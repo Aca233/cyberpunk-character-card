@@ -117,11 +117,11 @@ export function merchantEntranceText(
         .flatMap((site) => site.locations),
     );
     const radar = Array.isArray(data.radar) ? (data.radar as RadarAnchor[]) : [];
-    for (const hit of radarAround(
+    const hits = radarAround(
       { ...data, radar: radar.filter((row) => candidates.has(row.id)) },
       locationForTravel(data, clock.location),
-    ))
-      nearbyIds.add(hit.id);
+    );
+    for (const hit of hits.slice(0, 6)) nearbyIds.add(hit.id);
   }
   const selected = sites.filter((site) => {
     if (
@@ -140,22 +140,30 @@ export function merchantEntranceText(
     );
   });
   if (selected.length === 0) return undefined;
+  const mediaRequested = mediaInput.test(input);
   const lines = selected.map((site) => {
     const places = site.locations.map((id) => {
       const place = locationForTravel(data, id);
       return `${id}${place ? ` ${place.name}（${place.district}）` : ""}`;
     });
-    const works = site.braindanceWorks.map((id) =>
-      workLabels.has(id) ? `${id}「${workLabels.get(id)}」` : id,
-    );
-    const bdCap = site.braindanceDevice?.playback
-      ? site.braindanceDevice.analysis.length > 0
-        ? `；超梦设备：专业调谐工作站（支持${site.braindanceDevice.analysis.join("/")}三层编辑分析）`
-        : "；超梦设备：商业试看设备（仅支持沉浸回放，三层编辑分析需专业头环或丽姿酒吧地下室工作站）"
-      : "";
-    const playback = site.services.includes("bd-session")
-      ? `${bdCap}；店内固定片单 ${works.join("、") || "尚无已登记作品"}；片单来源 ${site.source}`
-      : bdCap;
+    const atSite = site.locations.includes(clock.location ?? "");
+    const showBd = atSite || mediaRequested;
+    const works =
+      showBd && site.services.includes("bd-session")
+        ? site.braindanceWorks.map((id) =>
+            workLabels.has(id) ? `${id}「${workLabels.get(id)}」` : id,
+          )
+        : [];
+    const bdCap =
+      showBd && site.braindanceDevice?.playback
+        ? site.braindanceDevice.analysis.length > 0
+          ? `；超梦设备：专业调谐工作站（支持${site.braindanceDevice.analysis.join("/")}三层分析）`
+          : "；超梦设备：商业试看设备（仅沉浸回放，不支持三层分析）"
+        : "";
+    const playback =
+      showBd && site.services.includes("bd-session")
+        ? `${bdCap}；店内片单 ${works.join("、") || "暂无"}`
+        : bdCap;
     return `- ${site.merchant} ${names.get(site.merchant)?.name ?? "已登记经营者"}（${KIND_LABELS[site.kind]}）；地点 ${places.join(" / ")}；服务 ${site.services.join("、") || "无通用付费服务"}${playback}`;
   });
   const tail =

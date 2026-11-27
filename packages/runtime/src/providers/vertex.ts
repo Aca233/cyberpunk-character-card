@@ -2,6 +2,7 @@ import type { LlmClient } from "@cp/core";
 import { z } from "zod";
 import type { Profile } from "../config";
 import { geminiClient } from "./gemini";
+import type { GeminiCacheEndpoint } from "./gemini-cache";
 import { UpstreamError } from "./http";
 import { relayFetch } from "./relay";
 
@@ -259,9 +260,36 @@ export function vertexModelsUrl(baseUrl: string | undefined, apiKey: string | un
   return root.toString();
 }
 
+/** 仅带完整 projects/{p}/locations/{l} 路径的 Vertex 端点支持显式 cachedContents；快捷模式返回 undefined 走隐式缓存 */
+export function vertexCacheEndpoint(
+  profile: Pick<Profile, "baseUrl" | "model">,
+  apiKey: string | undefined,
+): GeminiCacheEndpoint | undefined {
+  let root: URL;
+  try {
+    root = new URL(vertexCollectionRoot(profile.baseUrl, apiKey));
+  } catch {
+    return undefined;
+  }
+  const m = /^(.*\/projects\/([^/]+)\/locations\/([^/]+))\/publishers\/([^/]+)$/u.exec(
+    root.pathname,
+  );
+  if (!m) return undefined;
+  const [, locPrefix, project, location, publisher] = m;
+  const cacheUrl = new URL(root.toString());
+  cacheUrl.pathname = `${locPrefix}/cachedContents`;
+  const isExpress = Boolean(apiKey && !parseServiceAccount(apiKey));
+  return {
+    collectionUrl: cacheUrl.toString(),
+    resourceModel: `projects/${project}/locations/${location}/publishers/${publisher}/models/${cleanVertexModel(profile)}`,
+    ...(isExpress && apiKey ? { apiKeyQuery: apiKey } : {}),
+  };
+}
+
 export function vertexClient(profile: Profile, apiKey: string): LlmClient {
   return geminiClient(profile, apiKey, {
     urlFor: (p, key) => vertexModelUrl(p, key, "streamGenerateContent"),
     headersFor: (_p, key, signal) => vertexAuthHeaders(key, signal),
+    cacheEndpointFor: (p, key) => vertexCacheEndpoint(p, key),
   });
 }

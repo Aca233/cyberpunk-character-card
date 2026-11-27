@@ -49,10 +49,15 @@ interface AnthropicEvent {
   };
 }
 
+interface AnthropicCacheControl {
+  readonly type: "ephemeral";
+  readonly ttl?: "5m" | "1h";
+}
+
 interface AnthropicTextBlock {
   readonly type: "text";
   readonly text: string;
-  readonly cache_control?: { readonly type: "ephemeral" };
+  readonly cache_control?: AnthropicCacheControl;
 }
 
 interface AnthropicImageBlock {
@@ -71,7 +76,11 @@ interface AnthropicTurn {
   content: string | AnthropicContentBlock[];
 }
 
-const EPHEMERAL = { type: "ephemeral" } as const;
+function cacheControlFor(profile: Profile): AnthropicCacheControl | undefined {
+  if (profile.promptCacheMode === "off") return undefined;
+  if (profile.cacheTtl === "1h") return { type: "ephemeral", ttl: "1h" };
+  return { type: "ephemeral" };
+}
 
 export function anthropicMessagesUrl(profile: Profile): string {
   const base = (profile.baseUrl ?? DEFAULT_BASE).replace(/\/+$/, "");
@@ -82,23 +91,33 @@ export function anthropicMessagesUrl(profile: Profile): string {
 
 /**
  * Anthropic 要求 system 单独顶层传入，且 messages 只能是交替的 user/assistant，首条须为 user。
- * 为提升 Prompt Caching 命中率：
- * - system 拆成内容块数组并在最后一块打 cache_control（静态规则 + 静态表整段缓存）；
- * - 若有多轮历史对话（turns.length >= 3），在倒数第二条（历史末尾）再打第二个 cache_control 断点，
- *   让历史对话前缀也能跨轮复用缓存。
+ * 为最大化 Prompt Caching 命中率（总断点数始终 ≤ 3，低于 Anthropic 4 断点上限）：
+ * - 静态 system（规则、常驻模块、静态目录表与前置预设）合并为首块并打断点 1；
+ * - 半静态 system（【前情】摘要与 judge 步长对齐的【最近几轮】逐轮块）保持独立文本块，
+ *   分别在【前情】与末条近期块上打断点，使同场景与同步长内稳定命中缓存且不击穿静态块；
+ * - 若有多轮历史对话（turns.length >= 3），在倒数第二条（历史末尾）再打历史断点。
  */
+const SEMI_STATIC_SYSTEM_PREFIX = /^(?:【前情】|【最近几轮)/;
+
 function buildMessages(
   messages: readonly LlmMessage[],
   jsonMode: boolean,
+  cacheControl: AnthropicCacheControl | undefined,
 ): {
   readonly system?: AnthropicTextBlock[];
   readonly messages: AnthropicTurn[];
 } {
-  const systems: string[] = [];
+  const staticSystems: string[] = [];
+  const semiStaticSystems: string[] = [];
   const turns: { role: "user" | "assistant"; content: string; images: LlmMessageImage[] }[] = [];
   for (const m of messages) {
     if (m.role === "system") {
-      if (m.content.trim() !== "") systems.push(m.content);
+      if (m.content.trim() === "") continue;
+      if (semiStaticSystems.length > 0 || SEMI_STATIC_SYSTEM_PREFIX.test(m.content)) {
+        semiStaticSystems.push(m.content);
+      } else {
+        staticSystems.push(m.content);
+      }
       continue;
     }
     const msgImages = m.role === "user" && m.images?.length ? [...m.images] : [];
@@ -113,19 +132,40 @@ function buildMessages(
   if (turns.length === 0 || turns[0]?.role !== "user") {
     turns.unshift({ role: "user", content: "请开始。", images: [] });
   }
-  const systemText = [
-    ...systems,
+  const staticText = [
+    ...staticSystems,
     ...(jsonMode ? ["只输出合法 JSON 对象，不要包含解释文字或 Markdown 代码块围栏。"] : []),
   ]
     .filter(Boolean)
     .join("\n\n");
-  const system: AnthropicTextBlock[] | undefined = systemText
-    ? [{ type: "text", text: systemText, cache_control: EPHEMERAL }]
-    : undefined;
+  const systemBlocks: AnthropicTextBlock[] = [];
+  if (staticText) {
+    systemBlocks.push(
+      cacheControl
+        ? { type: "text", text: staticText, cache_control: cacheControl }
+        : { type: "text", text: staticText },
+    );
+  }
+  const hasHistoryBreakpoint = cacheControl !== undefined && turns.length >= 3;
+  const recapIndex = semiStaticSystems.findIndex((text) => text.startsWith("【前情】"));
+  const lastSemiIndex = semiStaticSystems.length - 1;
+  for (const [idx, text] of semiStaticSystems.entries()) {
+    // 【前情】独立打断点（跨历史滑窗仍能命中）；无对话历史断点时（如 judge）再在最后一块近期原文打断点
+    const markRecap = cacheControl !== undefined && idx === recapIndex;
+    const markRecentTail =
+      cacheControl !== undefined && !hasHistoryBreakpoint && idx === lastSemiIndex;
+    systemBlocks.push(
+      (markRecap || markRecentTail) && cacheControl
+        ? { type: "text", text, cache_control: cacheControl }
+        : { type: "text", text },
+    );
+  }
+  const system: AnthropicTextBlock[] | undefined =
+    systemBlocks.length > 0 ? systemBlocks : undefined;
 
   // 多轮对话时把历史最后一条（倒数第 2 条）标为缓存断点，最新一条 user 动态上下文紧随其后
   const outTurns: AnthropicTurn[] = turns.map((turn, index) => {
-    const isCacheBreakpoint = turns.length >= 3 && index === turns.length - 2;
+    const isCacheBreakpoint = hasHistoryBreakpoint && index === turns.length - 2;
     if (turn.images.length > 0) {
       const blocks: AnthropicContentBlock[] = [
         ...turn.images.map(
@@ -137,15 +177,15 @@ function buildMessages(
         {
           type: "text",
           text: turn.content || "请观察图片。",
-          ...(isCacheBreakpoint ? { cache_control: EPHEMERAL } : {}),
+          ...(isCacheBreakpoint && cacheControl ? { cache_control: cacheControl } : {}),
         },
       ];
       return { role: turn.role, content: blocks };
     }
-    return isCacheBreakpoint
+    return isCacheBreakpoint && cacheControl
       ? {
           role: turn.role,
-          content: [{ type: "text", text: turn.content, cache_control: EPHEMERAL }],
+          content: [{ type: "text", text: turn.content, cache_control: cacheControl }],
         }
       : { role: turn.role, content: turn.content };
   });
@@ -164,6 +204,7 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
       const { system, messages } = buildMessages(
         request.messages,
         request.responseFormat?.type === "json",
+        cacheControlFor(profile),
       );
       const body: Record<string, unknown> = {
         model: profile.model,

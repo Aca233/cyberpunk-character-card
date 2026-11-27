@@ -95,11 +95,25 @@ export function turnTokens(input: unknown, text: string): number {
   return estimateTokens(inputText(input)) + estimateTokens(text) + 8;
 }
 
-/** 对话历史分块滑窗步长：超过上限后按块推进起始轮次，让连续多轮共享完全一致的历史前缀以命中 KV 缓存 */
+/** 对话历史分块滑窗默认步长：超过上限后按块推进起始轮次，让连续多轮共享完全一致的历史前缀以命中 KV 缓存 */
 export const HISTORY_STRIDE = 4;
 
-/** 写正文带最近几轮原文：至少 MIN_HISTORY 轮，再往前补到预算用完，最多 max 轮；超出后按 HISTORY_STRIDE 分块滑窗以保前缀缓存 */
-export function historyTurns(records: readonly LogRecord[], tokens: number, max: number): number {
+/** 大窗口（≥128K）采用更宽的滑窗步长与上限，拉高历史前缀缓存命中周期（75% → 83.3%）并保留更长原文记忆 */
+export function historyStrideFor(window: number = DEFAULT_WINDOW): number {
+  return window >= LARGE_WINDOW ? 6 : HISTORY_STRIDE;
+}
+
+export function historyMaxFor(window: number = DEFAULT_WINDOW, baseMax = 12): number {
+  return window >= LARGE_WINDOW ? Math.max(baseMax, 16) : baseMax;
+}
+
+/** 写正文带最近几轮原文：至少 MIN_HISTORY 轮，再往前补到预算用完，最多 max 轮；超出后按步长分块滑窗以保前缀缓存 */
+export function historyTurns(
+  records: readonly LogRecord[],
+  tokens: number,
+  max: number,
+  stride: number = HISTORY_STRIDE,
+): number {
   const turns = effectiveTurns(records);
   let used = 0;
   let n = 0;
@@ -112,13 +126,28 @@ export function historyTurns(records: readonly LogRecord[], tokens: number, max:
     n += 1;
   }
   if (n < turns.length && n > MIN_HISTORY) {
-    // 把窗口起点向上对齐到 HISTORY_STRIDE 的整数倍，使连续最多 HISTORY_STRIDE 轮拥有相同起始轮次与前缀
+    // 把窗口起点向上对齐到 stride 的整数倍，使连续最多 stride 轮拥有相同起始轮次与前缀
     const rawStart = turns.length - n;
-    const alignedStart = Math.ceil(rawStart / HISTORY_STRIDE) * HISTORY_STRIDE;
+    const alignedStart = Math.ceil(rawStart / stride) * stride;
     const alignedCount = turns.length - alignedStart;
     if (alignedCount >= MIN_HISTORY) return alignedCount;
   }
   return n;
+}
+
+/** 紧窗口预算裁剪时按步长推进历史起点，尽量保持相邻回合的历史前缀对齐（最低保底 MIN_HISTORY 轮） */
+export function stepDownHistory(
+  records: readonly LogRecord[],
+  currentHot: number,
+  stride: number = HISTORY_STRIDE,
+): number {
+  if (currentHot <= MIN_HISTORY) return MIN_HISTORY;
+  const total = effectiveTurns(records).length;
+  const currentStart = Math.max(0, total - currentHot);
+  const nextAlignedStart = (Math.floor(currentStart / stride) + 1) * stride;
+  const alignedCount = total - nextAlignedStart;
+  if (alignedCount >= MIN_HISTORY && alignedCount < currentHot) return alignedCount;
+  return Math.max(MIN_HISTORY, currentHot - 1);
 }
 
 /** 一条旧记忆在【调出的旧记忆】里大约多少 token */

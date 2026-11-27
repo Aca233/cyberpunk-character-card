@@ -57,10 +57,13 @@ import {
   type BudgetTrace,
   contextBudget,
   fitMemories,
+  historyMaxFor,
+  historyStrideFor,
   historyTurns,
   MIN_HISTORY,
   memoryTokens,
   replyTokenCap,
+  stepDownHistory,
 } from "./budget";
 import {
   type ExtractedCheckpointData,
@@ -822,8 +825,10 @@ export async function runNarratorTurn(
     let judge: JudgeShape = {};
     // 上下文预算：原文带几轮、【前情】多少额度先定下，候选池按同一组数去重
     const budget = contextBudget(deps.contextWindow);
+    const historyStride = historyStrideFor(budget.window);
+    const historyMax = historyMaxFor(budget.window, HISTORY_TURNS);
     const promptRecords = memoryRecords(world, records);
-    let hot = historyTurns(promptRecords, budget.parts.history, HISTORY_TURNS);
+    let hot = historyTurns(promptRecords, budget.parts.history, historyMax, historyStride);
     let recapTokens = budget.parts.recap;
     const pool =
       plan.kind === "action" && !legacyOoc ? memoryPool(world, records, hot, recapTokens) : [];
@@ -1161,8 +1166,8 @@ export async function runNarratorTurn(
         loreSection = undefined;
         cuts.push("整份超出，不带设定资料");
       } else if (hot > MIN_HISTORY) {
-        hot -= 1;
-        cuts.push(`整份超出，原文少带一轮（剩 ${hot} 轮）`);
+        hot = stepDownHistory(promptRecords, hot, historyStride);
+        cuts.push(`整份超出，原文按缓存步长收紧（剩 ${hot} 轮）`);
       } else if (maxOutputTokens > budget.parts.reply) {
         maxOutputTokens = Math.max(budget.parts.reply, budget.window - total);
         limit = budget.window - maxOutputTokens;

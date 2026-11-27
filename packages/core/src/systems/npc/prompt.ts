@@ -272,7 +272,7 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
   }
 
   if (stage.data !== undefined && stage.now !== undefined) {
-    lines.push(`  ${bodyLine(npc, stage.data, stage.now)}`);
+    lines.push(`  ${bodyLine(npc, stage.data, stage.now, stage.stage)}`);
     if (npc.vitals?.scannedAt !== undefined && npc.vitals.scannedAt !== null) {
       if (isExtract) {
         lines.push("  【玩家已用义眼扫描此人】");

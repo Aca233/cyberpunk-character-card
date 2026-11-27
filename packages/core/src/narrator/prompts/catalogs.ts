@@ -13,6 +13,7 @@ import {
   formatWeaponWithMods,
   InventoryStateSchema,
   itemCatalog,
+  summarizeAbility,
   withWorldObjects,
 } from "../../systems/inventory";
 import { NpcStateSchema, onStage } from "../../systems/npc";
@@ -65,7 +66,7 @@ function mentioned(text: string, ...names: readonly (string | undefined)[]): boo
   });
 }
 
-/** 抽取不负责创作：只展开随身、现场人物、现场货架和本轮提及物件的能力。 */
+/** 抽取不负责创作：只按简短摘要展开随身、战利品、在场人物提及或本轮明确谈及物件的能力；未提及的整店货架不展开。 */
 export function extractCatalogDetails(
   world: WorldState,
   view: PlayerView,
@@ -88,18 +89,7 @@ export function extractCatalogDetails(
   for (const npc of Object.values(NpcStateSchema.parse(world.slices.npc).npcs)) {
     if (!onStage(npc, stage) && !mentioned(query, npc.id, npc.name, npc.alias)) continue;
     for (const id of npc.body?.gear ?? []) itemIds.add(id);
-    for (const id of npc.body?.cyberware ?? []) chromeIds.add(id);
   }
-  for (const shop of view.shops) {
-    for (const item of shop.shelf) {
-      itemIds.add(item.id);
-      if (item.baseId) itemIds.add(item.baseId);
-      for (const modId of Object.values(item.weaponState?.mods ?? {})) {
-        if (modId) itemIds.add(modId);
-      }
-    }
-  }
-  for (const part of view.ripperdoc?.shelf ?? []) chromeIds.add(part.id);
 
   const combat = CombatStateSchema.safeParse(world.slices.combat);
   if (combat.success) {
@@ -169,13 +159,15 @@ export function extractCatalogDetails(
         continue;
       }
     }
-    if (item.ability) {
-      details.push(`- ${item.id} ${displayName}：${item.ability}`);
+    const summary = summarizeAbility(item.ability, 48);
+    if (summary) {
+      details.push(`- ${item.id} ${displayName}：${summary}`);
     }
   }
   for (const part of cyberwareCatalog(data).values()) {
     if (chromeIds.has(part.id) || mentioned(query, part.id, part.name)) {
-      details.push(`- ${part.id} ${part.name}：${part.ability}`);
+      const summary = summarizeAbility(part.ability, 48);
+      if (summary) details.push(`- ${part.id} ${part.name}：${summary}`);
     }
   }
   const sections: string[] = [];

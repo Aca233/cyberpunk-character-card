@@ -22,6 +22,7 @@ import {
   cityRules,
   collectPresentedContentMedia,
   commerceRules,
+  type Embedder,
   effectiveTurns,
   extractEdgeLedgerState,
   HISTORY_TURNS,
@@ -1660,6 +1661,9 @@ export class GameService {
         this.deps.log(`存档 ${run.saveId} 第 ${saved.seq} 轮修了 ${turn.repairs} 次指令格式`);
       }
       hub.push(run, { type: "done", ...saved, ...(usage ? { usage } : {}) });
+      if (embedder && !turn.draft && !turn.ooc) {
+        void this.prewarmEmbeddings(run.saveId, embedder);
+      }
     } catch (error) {
       const savedHint = latestCheckpoint
         ? "（已完成的前置步骤已保存，点重试可直接从断点继续）"
@@ -1855,6 +1859,19 @@ export class GameService {
     records: readonly LogRecord[],
   ): Promise<WorldState> {
     return replay(await this.snapshotFor(id, meta, records), records);
+  }
+
+  /** 回合落盘后的后台异步向量预热：提前为新增记忆文档计算并持久化向量，减少下一轮 judge 首字前等待 */
+  private async prewarmEmbeddings(saveId: string, embedder: Embedder): Promise<void> {
+    try {
+      const { world, records } = await this.locks.run(saveId, () => this.load(saveId));
+      const pool = memoryPool(world, records, HISTORY_TURNS);
+      if (pool.length === 0) return;
+      const docTexts = pool.map((e) => `${e.title}\n${e.text}`.slice(0, 600));
+      await embedder.embed(docTexts, { task: "document" });
+    } catch {
+      // 后台预热完全尽力而为，失败静默忽略，不影响玩家体验
+    }
   }
 
   /** 调用方持有这个存档的锁 */

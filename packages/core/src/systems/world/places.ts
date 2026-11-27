@@ -685,9 +685,30 @@ function placeLine(id: string, name: string, tags: readonly (string | undefined)
   return `- ${id}：${name}${shown.length > 0 ? `（${shown.join("，")}）` : ""}`;
 }
 
+const staticPlacesCache = new WeakMap<object, string>();
+
+/** 纯静态固定地点索引：不含「你在这里」等每轮变化标记，供三阶段系统提示词跨回合稳定命中 KV 缓存。 */
+export function staticPlacesSection(data: Data | undefined): string | undefined {
+  if (!data || data.locations === undefined) return undefined;
+  const raw = data.locations;
+  if (typeof raw === "object" && raw !== null) {
+    const hit = staticPlacesCache.get(raw);
+    if (hit !== undefined) return hit;
+  }
+  const areas = areasOf(data);
+  const lines: string[] = [];
+  for (const def of locationCatalog(data).values()) {
+    lines.push(placeLine(def.id, def.name, [def.district, kindLabel(areas, def.kind), def.note]));
+  }
+  if (lines.length === 0) return undefined;
+  const rendered = `【夜之城固定地点表】\n以下为夜之城内置已知地点（静态参考，当前所在位置以【当前状态】为准；查找某类店铺、出行目的地或记账 location 时优先复用下表 id）：\n${lines.join("\n")}`;
+  if (typeof raw === "object" && raw !== null) staticPlacesCache.set(raw, rendered);
+  return rendered;
+}
+
 /**
- * 【地点】（用户定的"统一为地点"，2026-11-02）：原作固定地点全列，加玩家附近 1500 米内最近的 10 个、
- * 最近去过的 20 个，去重；现在的位置是表外中文名时提醒写成新地点
+ * 【周边与新建地点】：固定地点底座已静态缓存于系统层，这里只放随位置与存档动态变化的
+ * 附近 1500 米雷达、存档新建地点（最近 20 处）及表外位置提醒。
  */
 export function placesText(
   clock: Pick<WorldClockState, "location" | "places">,
@@ -700,20 +721,8 @@ export function placesText(
   const seen = new Set<string>();
   const lines: string[] = [];
   const here = (id: string) => (id === clock.location ? "你在这里" : undefined);
-  for (const def of locationCatalog(data).values()) {
-    if (saved.has(def.id) || seen.has(def.id)) continue;
-    seen.add(def.id);
-    lines.push(
-      placeLine(def.id, def.name, [
-        def.district,
-        kindLabel(areas, def.kind),
-        def.note,
-        here(def.id),
-      ]),
-    );
-  }
   for (const hit of radarAround(data, hereOf(data, clock))) {
-    if (seen.has(hit.id)) continue;
+    if (seen.has(hit.id) || hit.id === clock.location) continue;
     seen.add(hit.id);
     const def = locationForTravel(data, hit.id);
     const near = hit.dir === "就在旁边" ? "就在旁边" : `${hit.dir} ${hit.meters} 米`;
@@ -735,16 +744,16 @@ export function placesText(
   const loc = clock.location;
   if (stage === "extract" && loc !== null && !locationCatalog(data).has(loc) && !saved.has(loc)) {
     lines.push(
-      `现在的位置「${loc}」不在【地点】里：这一轮 world 的 location 写成 {"name": "${loc}", "in": "城区"}（in 必填），代码会记下来。`,
+      `现在的位置「${loc}」不在【夜之城固定地点表】或已登记地点里：这一轮 world 的 location 写成 {"name": "${loc}", "in": "城区"}（in 必填），代码会记下来。`,
     );
   }
   if (lines.length === 0) return undefined;
   const header =
     stage === "narrate"
-      ? "夜之城已知及周边地点（要找某类店铺优先从表里挑，不要凭空编店名）："
+      ? "当前位置周边（1500 米内）及本存档已去过的新地点（全城固定地点见系统层【夜之城固定地点表】）："
       : stage === "judge"
-        ? "已知及周边地点（出行目的地或交易前到店填对应 id）："
-        : "能去的地方（代码记的）；id 写进 world 的 location、meet 的 location：";
+        ? "周边及本存档已登记地点（全城固定地点见系统层【夜之城固定地点表】）："
+        : "周边及本存档已登记地点 id（全城固定地点见系统层【夜之城固定地点表】）：";
   return `${header}\n${lines.join("\n")}`;
 }
 

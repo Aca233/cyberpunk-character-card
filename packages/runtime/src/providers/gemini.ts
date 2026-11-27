@@ -2,6 +2,12 @@ import type { AbortSignalLike, LlmClient, LlmEvent, LlmRequest, LlmUsage } from 
 import { z } from "zod";
 import type { Profile } from "../config";
 import {
+  type GeminiCacheEndpoint,
+  geminiCacheEndpoint,
+  invalidateGeminiCachedContent,
+  resolveGeminiCachedContent,
+} from "./gemini-cache";
+import {
   AbortedError,
   errorDetail,
   post,
@@ -221,12 +227,33 @@ function sanitizeGeminiSchema(
   return out;
 }
 
-/** system 单独传入；assistant 转成 model，其余对话保留顺序。 */
-export function geminiBody(profile: Profile, request: LlmRequest) {
-  const system = request.messages
-    .filter((m) => m.role === "system")
-    .map((m) => m.content)
-    .join("\n\n");
+const SEMI_STATIC_SYSTEM_PREFIX = /^(?:【前情】|【最近几轮)/;
+
+/** 拆分纯静态系统前缀与半静态前缀（【前情】/【最近几轮】），便于显式 cachedContents 只锁纯静态段 */
+function splitGeminiSystems(request: LlmRequest): {
+  readonly staticSystem: string;
+  readonly semiStaticSystem: string;
+} {
+  const staticParts: string[] = [];
+  const semiParts: string[] = [];
+  for (const m of request.messages) {
+    if (m.role !== "system" || m.content.trim() === "") continue;
+    if (semiParts.length > 0 || SEMI_STATIC_SYSTEM_PREFIX.test(m.content)) {
+      semiParts.push(m.content);
+    } else {
+      staticParts.push(m.content);
+    }
+  }
+  return {
+    staticSystem: staticParts.join("\n\n"),
+    semiStaticSystem: semiParts.join("\n\n"),
+  };
+}
+
+/** system 单独传入；assistant 转成 model，其余对话保留顺序。使用显式 cachedContent 时省略已缓存的 systemInstruction。 */
+export function geminiBody(profile: Profile, request: LlmRequest, cachedContent?: string) {
+  const { staticSystem, semiStaticSystem } = splitGeminiSystems(request);
+  const fullSystem = [staticSystem, semiStaticSystem].filter(Boolean).join("\n\n");
   const contents = request.messages
     .filter((m) => m.role !== "system")
     .map((m) => {
@@ -248,6 +275,18 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
       };
     });
   if (contents.length === 0) throw new UpstreamError("Gemini 请求里没有对话内容");
+  // 使用显式 cachedContent 时，API 不允许同时再传 systemInstruction；若存在【前情】/【最近几轮】等半静态段，
+  // 顺次挂到首条对话内容之前（不改动预设与历史顺序）。
+  if (cachedContent && semiStaticSystem !== "") {
+    if (contents[0]?.role === "user") {
+      contents[0] = {
+        role: "user",
+        parts: [{ text: semiStaticSystem }, ...contents[0].parts],
+      };
+    } else {
+      contents.unshift({ role: "user", parts: [{ text: semiStaticSystem }] });
+    }
+  }
   const maxOutputTokens = request.maxOutputTokens ?? profile.maxOutputTokens;
   const temperature = request.temperature ?? profile.temperature;
   const responseSchema =
@@ -256,7 +295,11 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
       : undefined;
   return {
     contents,
-    ...(system !== "" ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    ...(cachedContent
+      ? { cachedContent }
+      : fullSystem !== ""
+        ? { systemInstruction: { parts: [{ text: fullSystem }] } }
+        : {}),
     generationConfig: {
       candidateCount: 1,
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
@@ -298,7 +341,7 @@ export function geminiBody(profile: Profile, request: LlmRequest) {
 
 const blockedMessage = "Gemini 拦截了这段内容，请修改输入后重试";
 
-/** 同协议端点的传输钩子；Vertex 用它换地址构造和请求头认证 */
+/** 同协议端点的传输钩子；Vertex 用它换地址构造、请求头认证与显式缓存端点 */
 export interface GeminiTransport {
   urlFor?: ((profile: Profile, apiKey: string) => string) | undefined;
   headersFor?:
@@ -307,6 +350,9 @@ export interface GeminiTransport {
         apiKey: string,
         signal?: AbortSignal,
       ) => Record<string, string> | Promise<Record<string, string>>)
+    | undefined;
+  cacheEndpointFor?:
+    | ((profile: Profile, apiKey: string) => GeminiCacheEndpoint | undefined)
     | undefined;
 }
 
@@ -318,26 +364,57 @@ export function geminiClient(
   const urlFor = transport?.urlFor ?? ((p: Profile) => geminiStreamUrl(p));
   const headersFor =
     transport?.headersFor ?? ((_p: Profile, key: string) => ({ "x-goog-api-key": key }));
+  const cacheEndpointFor =
+    transport?.cacheEndpointFor ?? ((p: Profile) => geminiCacheEndpoint(p, DEFAULT_BASE));
   const provider = `方案「${profile.name}」`;
   return {
     async *stream(request: LlmRequest, signalLike?: AbortSignalLike): AsyncGenerator<LlmEvent> {
       const signal = toAbortSignal(signalLike);
       if (signal?.aborted) throw new AbortedError();
-      const res = await post(
+      const headers = await headersFor(profile, apiKey, signal ?? undefined);
+      const { staticSystem } = splitGeminiSystems(request);
+      const cachedContent = await resolveGeminiCachedContent(
+        profile,
+        cacheEndpointFor(profile, apiKey),
+        headers,
+        staticSystem,
+        signal ?? undefined,
+      );
+      let res = await post(
         provider,
         urlFor(profile, apiKey),
-        await headersFor(profile, apiKey, signal ?? undefined),
-        geminiBody(profile, request),
+        headers,
+        geminiBody(profile, request, cachedContent),
         signal,
       );
       if (!res.ok) {
-        const detail = await errorDetail(res);
+        let detail = await errorDetail(res);
         if (signal?.aborted) throw new AbortedError();
-        if (detail.code && BLOCK_REASONS.has(detail.code.toUpperCase())) {
-          yield { type: "blocked", reason: blockedMessage };
-          return;
+        if (
+          cachedContent &&
+          (res.status === 400 || res.status === 404) &&
+          /cached.?content|not found|expired/i.test(detail.message)
+        ) {
+          invalidateGeminiCachedContent(cachedContent);
+          res = await post(
+            provider,
+            urlFor(profile, apiKey),
+            headers,
+            geminiBody(profile, request),
+            signal,
+          );
+          if (!res.ok) {
+            detail = await errorDetail(res);
+            if (signal?.aborted) throw new AbortedError();
+          }
         }
-        throw statusError(provider, res.status, detail.message);
+        if (!res.ok) {
+          if (detail.code && BLOCK_REASONS.has(detail.code.toUpperCase())) {
+            yield { type: "blocked", reason: blockedMessage };
+            return;
+          }
+          throw statusError(provider, res.status, detail.message);
+        }
       }
       if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status, true);
       const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";

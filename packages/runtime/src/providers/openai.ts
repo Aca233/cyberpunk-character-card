@@ -68,16 +68,41 @@ function normalizeErrorField(value: unknown): string {
   return "";
 }
 
-/** 仅向官方 OpenAI 端点附加 prompt_cache_key，避免部分第三方兼容中转站报 unknown field */
-function supportsPromptCacheKey(profile: Profile): boolean {
-  if (profile.type !== "openai") return false;
-  if (!profile.baseUrl) return true;
+function hostOf(profile: Profile): string | undefined {
+  if (!profile.baseUrl) return profile.type === "openai" ? "api.openai.com" : undefined;
   try {
-    return new URL(profile.baseUrl).hostname === "api.openai.com";
+    return new URL(profile.baseUrl).hostname.toLowerCase();
   } catch {
-    return false;
+    return undefined;
   }
 }
+
+function isOfficialOpenAi(profile: Profile): boolean {
+  return profile.type === "openai" && hostOf(profile) === "api.openai.com";
+}
+
+function isOpenRouter(profile: Profile): boolean {
+  return profile.type === "openai" && hostOf(profile) === "openrouter.ai";
+}
+
+/** 仅向官方 OpenAI 或用户显式开启 promptCacheMode:"on" 的非 Claude 端点附加 prompt_cache_key */
+function supportsPromptCacheKey(profile: Profile): boolean {
+  if (profile.type !== "openai" || profile.promptCacheMode === "off") return false;
+  if (isOfficialOpenAi(profile)) return true;
+  return profile.promptCacheMode === "on" && !/claude/i.test(profile.model);
+}
+
+/** OpenRouter 或用户显式开启的中转站 Claude 模型支持在 OpenAI 兼容消息块上透传 cache_control（不改消息顺序与预设深度） */
+function relayClaudeCacheControl(
+  profile: Profile,
+): { readonly type: "ephemeral"; readonly ttl?: "1h" } | undefined {
+  if (profile.type !== "openai" || profile.promptCacheMode === "off") return undefined;
+  if (!/claude/i.test(profile.model)) return undefined;
+  if (profile.promptCacheMode !== "on" && !isOpenRouter(profile)) return undefined;
+  return profile.cacheTtl === "1h" ? { type: "ephemeral", ttl: "1h" } : { type: "ephemeral" };
+}
+
+const SEMI_STATIC_SYSTEM_PREFIX = /^(?:【前情】|【最近几轮)/;
 
 export function chatCompletionsUrl(profile: Profile): string {
   const base = profile.baseUrl ?? DEFAULT_BASE[profile.type === "ollama" ? "ollama" : "openai"];
@@ -111,9 +136,36 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
       if (signal?.aborted) throw new AbortedError();
       const maxTokens = request.maxOutputTokens ?? profile.maxOutputTokens;
       const temperature = request.temperature ?? profile.temperature;
+      const relayCache = relayClaudeCacheControl(profile);
+      // 严禁重排消息顺序或修改预设注入深度；只在原位为静态 system 末尾、半静态前情与历史末尾附带 cache_control。
+      let lastStaticSystemIdx = -1;
+      let recapSystemIdx = -1;
+      let lastRecentSystemIdx = -1;
+      if (relayCache) {
+        let inSemi = false;
+        for (let i = 0; i < request.messages.length; i += 1) {
+          const msg = request.messages[i];
+          if (msg?.role !== "system" || msg.content.trim() === "") continue;
+          if (!inSemi && !SEMI_STATIC_SYSTEM_PREFIX.test(msg.content)) {
+            lastStaticSystemIdx = i;
+          } else {
+            inSemi = true;
+            if (recapSystemIdx < 0 && msg.content.startsWith("【前情】")) recapSystemIdx = i;
+            lastRecentSystemIdx = i;
+          }
+        }
+      }
+      const nonSystemCount = request.messages.filter((m) => m.role !== "system").length;
+      const historyTailIdx = relayCache && nonSystemCount >= 3 ? request.messages.length - 2 : -1;
       const body = {
         model: profile.model,
-        messages: request.messages.map((m: LlmMessage) => {
+        messages: request.messages.map((m: LlmMessage, idx: number) => {
+          const markCache =
+            relayCache !== undefined &&
+            (idx === lastStaticSystemIdx ||
+              idx === recapSystemIdx ||
+              (historyTailIdx < 0 && idx === lastRecentSystemIdx) ||
+              idx === historyTailIdx);
           if (m.role === "user" && m.images?.length) {
             return {
               role: m.role,
@@ -122,8 +174,18 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
                   type: "image_url" as const,
                   image_url: { url: `data:${img.mimeType};base64,${img.data}` },
                 })),
-                { type: "text" as const, text: m.content },
+                {
+                  type: "text" as const,
+                  text: m.content,
+                  ...(markCache ? { cache_control: relayCache } : {}),
+                },
               ],
+            };
+          }
+          if (markCache) {
+            return {
+              role: m.role,
+              content: [{ type: "text" as const, text: m.content, cache_control: relayCache }],
             };
           }
           return { role: m.role, content: m.content };
@@ -139,6 +201,9 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
           : {}),
         ...(request.cacheKey && supportsPromptCacheKey(profile)
           ? { prompt_cache_key: request.cacheKey }
+          : {}),
+        ...(isOfficialOpenAi(profile) && profile.cacheTtl === "24h"
+          ? { prompt_cache_retention: "24h" }
           : {}),
       };
       const headers: Record<string, string> = apiKey ? { authorization: `Bearer ${apiKey}` } : {};

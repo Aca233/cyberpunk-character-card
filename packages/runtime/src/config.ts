@@ -46,6 +46,10 @@ const tunables = {
   imageProtocol: ImageProtocolSchema.optional(),
   /** ComfyUI 自定义 API 工作流模板 JSON（可选，留空用内置文生图工作流） */
   comfyWorkflow: z.string().max(100_000).optional(),
+  /** 提示缓存协议模式：auto 按官方/已知端点自动启用，on 显式开启（含 Gemini/Vertex cachedContents 与中转站透传），off 关闭显式标记 */
+  promptCacheMode: z.enum(["auto", "on", "off"]).optional(),
+  /** 提示缓存保留时长：Anthropic 支持 5m/1h，OpenAI 官方支持 24h，Gemini 显式缓存支持 30m(default)/1h */
+  cacheTtl: z.enum(["default", "5m", "1h", "24h"]).optional(),
 };
 
 const ProfileBase = z.strictObject({

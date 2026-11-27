@@ -8,6 +8,7 @@ import { InventoryStateSchema } from "../../systems/inventory/schema";
 import { memoryRecords } from "../../systems/memory";
 import { NpcStateSchema } from "../../systems/npc/schema";
 import { registry } from "../../systems/registry";
+import { staticPlacesSection } from "../../systems/world";
 import { examplesSection } from "../examples";
 import type { Memory } from "../stages";
 import {
@@ -23,6 +24,7 @@ import {
   recapFor,
   situation,
   stageModules,
+  staticBaseData,
 } from "./context";
 import {
   BASE_CONSTRAINTS,
@@ -205,13 +207,14 @@ export function buildNarratorPrompt(
   // 动态激活的场景模块（战斗、潜网、超梦、精神病等）放进本轮用户消息，最大化前缀缓存命中率。
   const isOoc = plan.input.mode === "ooc";
   const staticModules = isOoc ? undefined : staticNarrateModules();
+  const staticPlaces = isOoc ? undefined : staticPlacesSection(staticBaseData(extras.data));
   const dynamicModules = isOoc ? modules : modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
   const staticRules = systemMessage("narrate", [
     coreRules(extras.hasPreset),
     ...(staticModules ? [staticModules] : []),
   ]);
   const activeModulesText = modulesBlock("narrate", dynamicModules);
-  const system = staticRules;
+  const system = staticPlaces ? `${staticRules}\n\n${staticPlaces}` : staticRules;
   const hasHardRuling =
     extras.decided?.some(
       (line) => line.startsWith("【条件与代价】") || line.startsWith("【物理/现实阻断】"),
@@ -222,8 +225,12 @@ export function buildNarratorPrompt(
     (extras.intensity === "climax" || hasHardRuling)
       ? narrateTablesOf(view, extras)
       : [];
-  const messages: LlmMessage[] = [{ role: "system", content: system }];
   const hot = extras.history ?? HISTORY_TURNS;
+  const recap = recapFor(world, records, hot, extras.recapTokens);
+  // 【前情】仅在收场或滑窗跨场时变动，独立置为第二条 system 消息放在对话历史之前，
+  // 使其随历史前缀一起命中各家 KV 缓存（不再埋在每轮变化的最后一条 user 消息中）。
+  const messages: LlmMessage[] = [{ role: "system", content: system }];
+  if (recap) messages.push({ role: "system", content: recap });
   let history = 0;
   for (const turn of hot > 0 ? view.turns.slice(-hot) : []) {
     const input = formatInput(turn.input);
@@ -250,7 +257,6 @@ export function buildNarratorPrompt(
         : [],
     ),
   ].filter((n) => n !== "");
-  const recap = recapFor(world, records, hot, extras.recapTokens);
   const scene = situation(world, records, view, plan, { ...extras, opening }, "narrate");
   const recall = recalledSection(extras.recalled);
   const pacingHint = extras.hasPreset
@@ -261,7 +267,6 @@ export function buildNarratorPrompt(
       ? undefined
       : npcEquipmentReference(world, extras.data);
   const content = userMessage({
-    recap,
     modules: activeModulesText,
     scene,
     decided: extras.decided,
@@ -290,12 +295,7 @@ export function buildNarratorPrompt(
     world: tokens(extras.lore),
     other: Math.max(
       0,
-      tokens(content) -
-        moduleTokens -
-        tokens(recap) -
-        hotTokens -
-        tokens(recall) -
-        tokens(extras.lore),
+      tokens(content) - moduleTokens - hotTokens - tokens(recall) - tokens(extras.lore),
     ),
   };
   return {
