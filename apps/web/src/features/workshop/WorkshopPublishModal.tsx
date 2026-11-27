@@ -535,6 +535,7 @@ export function WorkshopPublishModal({
   return (
     <Dialog
       title={initialPack ? `发布 / 更新「${initialPack.title}」` : "发布或创作工坊作品"}
+      wide
       onClose={() => {
         if (!busy && !aiGenerate.isPending) onClose();
       }}

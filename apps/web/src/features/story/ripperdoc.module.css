@@ -2,17 +2,22 @@
 
 .clinicModal {
   width: min(1160px, calc(100vw - 32px));
-  max-height: calc(100vh - 36px);
+  max-height: calc(100dvh - 36px);
   display: grid;
   animation: clinicIn var(--dur-modal) var(--ease-snap) both;
 }
 
 .clinicShell {
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  max-height: calc(100vh - 104px);
+  height: calc(100dvh - 116px);
+  max-height: calc(100dvh - 116px);
   min-height: 0;
+}
+
+.clinicShell > * {
+  flex: none;
 }
 
 .clinicTop {
@@ -20,16 +25,16 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
-  padding-bottom: 10px;
+  gap: 8px 16px;
+  padding-bottom: 8px;
   border-bottom: 1px solid rgb(94 246 255 / 20%);
 }
 
 .docProfile {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex: 1 1 24rem;
+  gap: 10px;
+  flex: 1 1 20rem;
   min-width: 0;
 }
 
@@ -38,8 +43,8 @@
   isolation: isolate;
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   overflow: hidden;
   --box-fill: var(--cp-surface-strong);
@@ -268,6 +273,7 @@
 }
 
 .clinicSplit {
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: minmax(0, 1.38fr) minmax(300px, 1fr);
   gap: 14px;

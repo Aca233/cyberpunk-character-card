@@ -44,9 +44,11 @@ export function Dialog({
         className={styles.dialog}
         data-wide={wide ? "" : undefined}
       >
-        <Panel line={color}>
+        <Panel line={color} className={styles.panel}>
           <div className={styles.layout}>
-            {!wide && <Asset id="fluff.attentionFill" height={56} tint={color} />}
+            {!wide && (
+              <Asset id="fluff.attentionFill" height={56} tint={color} className={styles.icon} />
+            )}
             <div className={styles.content}>
               <h2 className={styles.title} style={{ color }}>
                 {title}

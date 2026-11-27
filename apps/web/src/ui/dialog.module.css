@@ -9,8 +9,10 @@
 }
 
 .dialog {
+  display: flex;
+  flex-direction: column;
   width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   animation: dialogSnapIn 240ms var(--ease-snap) both;
 }
 
@@ -18,18 +20,45 @@
   width: min(820px, calc(100vw - 32px));
 }
 
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.panel > :last-child {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .layout {
   display: flex;
+  flex: 1 1 auto;
   gap: 18px;
-  align-items: flex-start;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.icon {
+  flex: none;
+  align-self: flex-start;
 }
 
 .content {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .title {
+  flex: none;
   margin: 0 0 8px;
   font-family: var(--font-ui);
   font-size: 22px;
@@ -37,18 +66,27 @@
 }
 
 .text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
   color: var(--cp-text);
   font-size: var(--fs-ui);
   line-height: 1.7;
   overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cp-red-dim) transparent;
 }
 
 .actions {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgb(255 255 255 / 8%);
 }
 
 @keyframes dialogBackdropIn {

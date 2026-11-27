@@ -575,7 +575,6 @@ export function Ripperdoc({
                   })()}
                 </div>
                 <div className={rip.docMeta}>
-                  <p className={rip.docNote}>{doc.note}</p>
                   <p
                     className={rip.docMetaLine}
                     data-warn={
