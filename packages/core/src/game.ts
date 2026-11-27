@@ -12,7 +12,8 @@ import {
 import type { WorldState } from "./kernel/world";
 import { looseCyberwareView } from "./loose-cyberware-view";
 import { currentOffers } from "./narrator/pending";
-import { customCyberwareDefs, resolveStartEddies } from "./schemas/board";
+import { customCyberwareDefs, customItemDefs, resolveStartEddies } from "./schemas/board";
+import { replacedNpcIdOf } from "./schemas/character";
 import type { SaveMeta } from "./schemas/save";
 import { type TurnInput, TurnInputSchema } from "./schemas/turn";
 import type { arcCardsView } from "./systems/arcs";
@@ -260,8 +261,10 @@ export interface OpeningJob {
 }
 
 /** 开局发的东西：有行装时用行装，旧存档和没选行装时用开场自带的 */
+type KitGearEntry = GameOpening["gear"][number] & { readonly count?: number | undefined };
+
 interface Kit {
-  readonly gear: GameOpening["gear"];
+  readonly gear: readonly KitGearEntry[];
   readonly eddies?: number | undefined;
   readonly cyberware?: readonly string[] | undefined;
   readonly vehicles?: readonly string[] | undefined;
@@ -334,7 +337,7 @@ function applyBoardKit(
 ): Kit {
   if (!boardKit) return base;
   const eddies = resolveStartEddies(base.eddies ?? 0, boardKit);
-  const gear = [...base.gear];
+  const gear: KitGearEntry[] = [...base.gear];
   const usedSlots = new Set<number>(gear.flatMap((g) => (g.slot !== undefined ? [g.slot] : [])));
   const validItems = content.items ? new Set(content.items.map((i) => i.id)) : null;
   for (const weaponId of boardKit.weapons) {
@@ -346,6 +349,19 @@ function applyBoardKit(
       gear.push({ id: weaponId, equip: true, slot: freeSlot });
     } else {
       gear.push({ id: weaponId, equip: false });
+    }
+  }
+  for (const entry of boardKit.items ?? []) {
+    if (validItems && !validItems.has(entry.id)) continue;
+    const count = Math.max(1, Math.min(20, Math.floor(entry.count ?? 1)));
+    const existingIdx = gear.findIndex((g) => g.id === entry.id);
+    if (existingIdx >= 0) {
+      const prev = gear[existingIdx];
+      if (prev) {
+        gear[existingIdx] = { ...prev, count: (prev.count ?? 1) + count };
+      }
+    } else {
+      gear.push({ id: entry.id, equip: false, count });
     }
   }
   const validVehicles = content.vehicles ? new Set(content.vehicles.map((v) => v.id)) : null;
@@ -366,7 +382,14 @@ function applyBoardKit(
 function openingCommands(opening: GameOpening, start: number, kit: Kit = opening): unknown[] {
   const reason = `开局：${opening.title}`;
   return [
-    ...kit.gear.map((g) => ({ type: "item", action: "gain", id: g.id, reason })),
+    ...kit.gear.flatMap((g) =>
+      Array.from({ length: Math.max(1, g.count ?? 1) }, () => ({
+        type: "item",
+        action: "gain",
+        id: g.id,
+        reason,
+      })),
+    ),
     ...kit.gear
       .filter((g) => g.equip)
       .map((g) => ({
@@ -411,22 +434,35 @@ export function newGameWorld(
     return found;
   });
   const castIds = opening?.cast ?? content.defaultCast;
-  // 捏人选成旧识的原作人物：不在开场人物里的也放进来
-  const acquaintances = meta.board?.acquaintances ?? [];
+  // 若玩家扮演原作人物（例如 V），开局自动跳过对应 NPC 及其自指旧识/关系，绝不刷出两个 V
+  const replacedNpcId = replacedNpcIdOf(meta.character);
+  // 捏人选成旧识或主动改写过卡面的原作人物：不在开场人物里的也放进来
+  const acquaintances = (meta.board?.acquaintances ?? []).filter((a) => a.id !== replacedNpcId);
+  const npcOverrideMap = new Map(
+    (meta.board?.npcOverrides ?? [])
+      .filter((card) => card.id !== replacedNpcId)
+      .map((card) => [card.id, card] as const),
+  );
   const inCast = (id: string) =>
-    castIds === undefined || castIds.includes(id) || acquaintances.some((a) => a.id === id);
+    id !== replacedNpcId &&
+    (castIds === undefined ||
+      castIds.includes(id) ||
+      acquaintances.some((a) => a.id === id) ||
+      npcOverrideMap.has(id));
   const cast = (content.npcs ?? []).filter((c) => inCast(c.id));
-  /** 旧识按关系表盖过原作人物卡的开局好感，记成见过，带上关系笔记和人情 */
+  /** 先应用角色级原作卡面覆写，再按旧识关系表盖过开局见面状态、关系笔记与人情账本 */
   const castSeed = (card: (typeof cast)[number]) => {
+    const overridden = npcOverrideMap.get(card.id);
+    const merged = overridden ? { ...card, ...overridden, id: card.id, canon: card.canon } : card;
     const a = acquaintances.find((x) => x.id === card.id);
     return a
       ? {
-          ...card,
+          ...merged,
           met: true,
           ...(a.relation ? { relation: a.relation } : {}),
           ledger: a.ledger,
         }
-      : card;
+      : merged;
   };
   const base = registry.initialWorld(meta.startTime);
   const clock = WorldClockStateSchema.parse(base.slices.world);
@@ -450,8 +486,16 @@ export function newGameWorld(
   );
   const effectiveCyberware =
     extraCyberware.length > 0 ? [...baseCyberware, ...extraCyberware] : content.cyberware;
+  const baseItems = content.items ?? [];
+  const extraItems = customItemDefs(
+    meta.board?.kit?.customItems,
+    new Set(baseItems.map((i) => i.id)),
+  );
+  const effectiveItems = extraItems.length > 0 ? [...baseItems, ...extraItems] : content.items;
+  const effectiveContent: GameContent =
+    extraItems.length > 0 ? { ...content, items: [...baseItems, ...extraItems] } : content;
   const rawKit = opening && (loadouts.length > 0 ? mergeKits(loadouts) : opening);
-  const adjustedKit = rawKit && applyBoardKit(rawKit, meta.board?.kit, content);
+  const adjustedKit = rawKit && applyBoardKit(rawKit, meta.board?.kit, effectiveContent);
   const validCyberware = effectiveCyberware ? new Set(effectiveCyberware.map((c) => c.id)) : null;
   // 主板的义体在开局行装之后装：先根据部位上限筛掉会被顶掉的自带件
   const boardCyberware = (meta.board?.cyberware ?? []).filter(
@@ -462,7 +506,7 @@ export function newGameWorld(
   const kit =
     adjustedKit && resolveStartKit(adjustedKit, boardCyberware, boardSides, effectiveCyberware);
   const boardPeople = (meta.board?.people ?? []).filter(
-    (p) => !cast.some((c) => c.id === p.id || c.name === p.name),
+    (p) => p.id !== replacedNpcId && !cast.some((c) => c.id === p.id || c.name === p.name),
   );
   const seededNpcIds = new Set<string>([...cast.map((c) => c.id), ...boardPeople.map((p) => p.id)]);
   const initialContacts = new Set<string>([
@@ -515,7 +559,7 @@ export function newGameWorld(
       // 开局地点在地图上选择（用户定的，2026-10-30）：沿用 world 的地点解析，不另编坐标
       ...(content.mapData ?? {}),
       ...(content.locations ? { locations: content.locations } : {}),
-      ...(content.items ? { items: content.items } : {}),
+      ...(effectiveItems ? { items: effectiveItems } : {}),
       ...(effectiveCyberware ? { cyberware: effectiveCyberware } : {}),
       ...(content.shops ? { shops: content.shops } : {}),
       ...(content.ripperdocs ? { ripperdocs: content.ripperdocs } : {}),
@@ -768,6 +812,8 @@ export function projectState(
     inventory: carried.inventory,
     /** 装着的义体，按装上的先后 */
     cyberware: views.cyberware as ReturnType<typeof cyberwareView>,
+    /** 玩家随身持有的未安装义体实物 */
+    cyberwareParts: views.cyberwareParts as ReturnType<typeof cyberwarePartsView>,
     /** 网络接入仓定性信息、潜网和当前地点已攻破内网；没装接入仓是 null */
     hacking: views.hacking as ReturnType<typeof hackingView>,
     /** 地图上的地点和到每个地点的路线；路线面板照这里显示，结算用同一套算法 */

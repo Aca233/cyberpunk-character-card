@@ -34,6 +34,7 @@
    - [apps/web/src/features/workshop/WorkshopScreen.tsx](file:///c:/cyberpunk-character-card/apps/web/src/features/workshop/WorkshopScreen.tsx) 与 [workshop.module.css](file:///c:/cyberpunk-character-card/apps/web/src/features/workshop/workshop.module.css)：
      - 新增「社区广场」主视图（搜索、按条目类型筛选、按热门/最新/最近更新排序、查看详情条目、一键下载并安装/更新到本地）；
      - 为本地内容包新增「上传到社区 / 更新云端版本」流程、一次性管理密钥保存与复制弹窗、手动输入管理密钥下架/更新支持。
+
 - **验收与上线配置说明**
   - 已补充**内容包封面图（16:9 自动压缩 WebP ≤ 180 KB）**：新增 `workshop_covers` D1 表、`GET/PUT/DELETE /api/community-workshop/packs/:id/cover` 二进制接口（魔数严格校验 WebP/PNG/JPEG 拒绝 SVG、`X-Content-Type-Options: nosniff`、`immutable` 强缓存、下架内容包时级联删除封面）、发布弹窗自动压缩预览与社区广场 16:9 封面缩略图展示。
   - 通过 Biome、全部 5 个包 + `tsconfig.node.json` 类型检查、`check-data` 及社区接口端到端冒烟验证。

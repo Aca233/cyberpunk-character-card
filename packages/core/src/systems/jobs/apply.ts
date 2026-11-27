@@ -4,6 +4,8 @@ import { formatGameTime } from "../world";
 import type {
   Job,
   JobAccept,
+  JobCrew,
+  JobCrewStatus,
   JobEnd,
   JobNote,
   JobOffer,
@@ -14,6 +16,13 @@ import type {
 } from "./schema";
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
+
+export const JOB_CREW_STATUS_LABELS: Readonly<Record<JobCrewStatus, string>> = {
+  joined: "已入伙",
+  paid: "已分账",
+  shorted: "被克扣",
+  left: "已离队",
+};
 
 export const JOB_OUTCOME_LABELS: Readonly<Record<JobOutcome, string>> = {
   clean: "干净完成",
@@ -116,6 +125,7 @@ export function offerJob(
     paid: null,
     summary: null,
     humanityAtAccept: null,
+    crew: [],
     settlement: null,
   });
   return {
@@ -149,7 +159,81 @@ export function noteJob(draft: Draft<JobsState>, command: JobNote): ApplyOutcome
   return { ok: true };
 }
 
-/** 记录约定结果和实际到款；不按任务结局自动兑换声望或好感。 */
+/** 合伙搭档的人物卡核验信息 */
+export interface CrewCandidate {
+  readonly name: string;
+  readonly alive: boolean;
+  readonly met: boolean;
+  readonly hasGrudge: boolean;
+}
+
+const JOB_CREW_MAX = 6;
+const JOB_CREW_CUT_TOTAL_MAX = 90;
+
+/** 委托小队入伙或离队：校验人物存活、已结识、无未解死仇且总分成不超 90% */
+export function crewJob(
+  draft: Draft<JobsState>,
+  command: JobCrew,
+  candidateOf: (id: string) => CrewCandidate | undefined,
+): ApplyOutcome {
+  const job = find(draft, command.id);
+  if (!job) return fail(`没有委托 ${command.id}`);
+  if (!isOpen(job)) return fail(`委托 ${job.title} 已经结束，不能调整小队成员`);
+  if (!job.crew) job.crew = [];
+
+  if (command.action === "leave") {
+    const member = job.crew.find((m) => m.npc === command.npc && m.status === "joined");
+    if (!member) return fail(`${command.npc} 当前不在委托「${job.title}」小队中`);
+    member.status = "left";
+    return { ok: true, notes: [`${member.name} 退出委托「${job.title}」小队`] };
+  }
+
+  const person = candidateOf(command.npc);
+  if (!person) return fail(`没有人物 ${command.npc}，请先建卡再安排入伙`);
+  if (!person.alive) return fail(`${person.name}已经死了，无法入伙`);
+  if (!person.met) return fail(`尚未结识 ${person.name}，先在剧情里碰面谈妥再入伙`);
+  if (person.hasGrudge) return fail(`${person.name}对玩家还记着未解的仇，不会合伙干活`);
+
+  const cutPercent = command.cutPercent ?? 0;
+  const role = command.role ?? "搭档";
+  const existing = job.crew.find((m) => m.npc === command.npc);
+  const otherCut = job.crew
+    .filter((m) => m.status === "joined" && m.npc !== command.npc)
+    .reduce((sum, m) => sum + m.cutPercent, 0);
+  if (otherCut + cutPercent > JOB_CREW_CUT_TOTAL_MAX) {
+    return fail(
+      `小队总分成比例不能超过 ${JOB_CREW_CUT_TOTAL_MAX}%（当前其余成员已占 ${otherCut}%）`,
+    );
+  }
+
+  if (existing) {
+    existing.name = person.name;
+    existing.role = role;
+    existing.cutPercent = cutPercent;
+    existing.status = "joined";
+    existing.paid = null;
+  } else {
+    if (job.crew.length >= JOB_CREW_MAX) {
+      return fail(`单笔委托小队最多登记 ${JOB_CREW_MAX} 名搭档`);
+    }
+    job.crew.push({
+      npc: command.npc,
+      name: person.name,
+      role,
+      cutPercent,
+      paid: null,
+      status: "joined",
+    });
+  }
+
+  const cutText = cutPercent > 0 ? `，约定分成 ${cutPercent}%` : "（义气帮忙，不分账）";
+  return {
+    ok: true,
+    notes: [`${person.name} 入伙委托「${job.title}」：${role}${cutText}`],
+  };
+}
+
+/** 记录约定结果和实际到款：有入伙搭档时按约定分成自动扣减并入账玩家净到手，故意克扣则自动在原 npc 账本记欠账。 */
 export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
@@ -169,13 +253,62 @@ export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): A
   job.closedAt = now;
   job.paid = paid;
   job.summary = command.summary;
+
   const notes = [`委托${label}：${job.title}`];
-  const emit: Command[] =
-    paid > 0
-      ? [{ type: "money", delta: paid, reason: `委托报酬：${job.title}`, event: `job:${job.id}` }]
-      : [];
+  const emit: Command[] = [];
+  const overrides = new Map((command.crewPayouts ?? []).map((p) => [p.npc, p.paid] as const));
+
+  let totalCrewPaid = 0;
+  const splitParts: string[] = [];
+  for (const member of job.crew ?? []) {
+    if (member.status !== "joined") continue;
+    const expected = Math.floor((paid * member.cutPercent) / 100);
+    const hasOverride = overrides.has(member.npc);
+    const actual = hasOverride ? (overrides.get(member.npc) ?? 0) : paid > 0 ? expected : 0;
+    member.paid = actual;
+    totalCrewPaid += actual;
+
+    if (paid > 0 && actual < expected) {
+      const owe = expected - actual;
+      member.status = "shorted";
+      splitParts.push(`${member.name}实分 ${actual} €（少给 ${owe} €）`);
+      emit.push(
+        {
+          type: "ledger",
+          id: member.npc,
+          kind: "youOwe",
+          text: `委托「${job.title}」约定分成 ${expected} 欧元，实付 ${actual} 欧元（尚欠 ${owe} 欧元）`.slice(
+            0,
+            120,
+          ),
+        },
+        {
+          type: "memory",
+          id: member.npc,
+          text: `合伙完成委托「${job.title}」时被少分了 ${owe} 欧元分成`.slice(0, 120),
+        },
+      );
+    } else {
+      member.status = "paid";
+      if (actual > 0) splitParts.push(`${member.name} ${actual} €（${member.cutPercent}%）`);
+    }
+  }
+
+  const playerNet = Math.max(0, paid - totalCrewPaid);
+  if (playerNet > 0) {
+    const moneyReason =
+      totalCrewPaid > 0
+        ? `委托净报酬：${job.title}（总 ${paid} €，搭档分成 ${totalCrewPaid} €）`
+        : `委托报酬：${job.title}`;
+    emit.push({ type: "money", delta: playerNet, reason: moneyReason, event: `job:${job.id}` });
+  }
+  if (splitParts.length > 0) {
+    notes.push(`小队分账：${splitParts.join("、")}；玩家净到手 ${playerNet} 欧元`);
+  }
+
   job.settlement = {
     humanity: null,
+    playerNet,
   };
   return { ok: true, notes, emit };
 }

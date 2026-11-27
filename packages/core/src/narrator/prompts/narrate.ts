@@ -7,9 +7,11 @@ import { CARRY_AND_WEAPON_RULES } from "../../systems/inventory/prompt";
 import { InventoryStateSchema } from "../../systems/inventory/schema";
 import { memoryRecords } from "../../systems/memory";
 import { NpcStateSchema } from "../../systems/npc/schema";
+import { registry } from "../../systems/registry";
 import { examplesSection } from "../examples";
 import type { Memory } from "../stages";
 import {
+  ALWAYS_ON_MODULE_IDS,
   activeOpening,
   boostNote,
   formatInput,
@@ -67,6 +69,15 @@ export const DEFAULT_NARRATE_STYLE = `【默认正文表达】
 export const NARRATE_OUTPUT = "【输出】\n只输出正文本身：纯文本，不加标题、标签、JSON 和编号选项。";
 
 const narrateCore = new Map<boolean, string>();
+let narrateStaticModulesText: string | undefined;
+
+function staticNarrateModules(): string | undefined {
+  if (narrateStaticModulesText === undefined) {
+    const fixed = registry.rules.filter((m) => ALWAYS_ON_MODULE_IDS.has(m.id));
+    narrateStaticModulesText = modulesBlock("narrate", fixed) ?? "";
+  }
+  return narrateStaticModulesText === "" ? undefined : narrateStaticModulesText;
+}
 
 /** 预设负责文笔；本作始终提供世界边界与输出协议，无预设时补默认表达和示例。 */
 export function coreRules(hasPreset = false): string {
@@ -190,11 +201,27 @@ export function buildNarratorPrompt(
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = stageModules(world, plan.input, extras);
-  // 系统层只放跨回合完全不变的静态核心规则与静态剧情素材表，动态激活的场景模块放进本轮用户消息，
-  // 防止某轮切换模块时把系统提示词连同整段对话历史的前缀缓存一并打穿。
-  const staticRules = systemMessage("narrate", [coreRules(extras.hasPreset)]);
-  const activeModulesText = modulesBlock("narrate", modules);
-  const system = [staticRules, ...narrateTablesOf(view, extras)].join("\n\n");
+  // 系统层放跨回合不变的静态核心规则 + 常驻规则模块（非 OOC）+ 静态剧情素材表，
+  // 动态激活的场景模块（战斗、潜网、超梦、精神病等）放进本轮用户消息，最大化前缀缓存命中率。
+  const isOoc = plan.input.mode === "ooc";
+  const staticModules = isOoc ? undefined : staticNarrateModules();
+  const dynamicModules = isOoc ? modules : modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
+  const staticRules = systemMessage("narrate", [
+    coreRules(extras.hasPreset),
+    ...(staticModules ? [staticModules] : []),
+  ]);
+  const activeModulesText = modulesBlock("narrate", dynamicModules);
+  const system = staticRules;
+  const hasHardRuling =
+    extras.decided?.some(
+      (line) => line.startsWith("【条件与代价】") || line.startsWith("【物理/现实阻断】"),
+    ) ?? false;
+  const dramaTables =
+    !extras.hasPreset &&
+    plan.input.mode !== "ooc" &&
+    (extras.intensity === "climax" || hasHardRuling)
+      ? narrateTablesOf(view, extras)
+      : [];
   const messages: LlmMessage[] = [{ role: "system", content: system }];
   const hot = extras.history ?? HISTORY_TURNS;
   let history = 0;
@@ -247,7 +274,7 @@ export function buildNarratorPrompt(
           names,
         ),
     input: formatInput(plan.input),
-    after: [equipment, boostNote(view, plan, "narrate")],
+    after: [...dramaTables, equipment, boostNote(view, plan, "narrate")],
     reminder: pacingHint ? `（${pacingHint}只写正文，纯文本。）` : "（只写正文，纯文本。）",
   });
   messages.push({ role: "user", content });

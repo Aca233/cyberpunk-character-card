@@ -52,6 +52,7 @@ export function Ripperdoc({
   onRemove,
   onRepay,
   onRepair,
+  onPayChromeCare,
   onClose,
 }: {
   readonly view: View;
@@ -62,12 +63,17 @@ export function Ripperdoc({
     | ((
         id: string,
         credit: boolean,
-        options?: { readonly armSide?: cyberwareRules.ArmSide; readonly replace?: string },
+        options?: {
+          readonly armSide?: cyberwareRules.ArmSide;
+          readonly replace?: string;
+          readonly forNpc?: string;
+        },
       ) => Promise<void>)
     | undefined;
   readonly onRemove?: ((id: string) => Promise<void>) | undefined;
   readonly onRepay?: (() => Promise<void>) | undefined;
   readonly onRepair?: ((id: string) => Promise<void>) | undefined;
+  readonly onPayChromeCare?: (() => Promise<void>) | undefined;
   readonly onClose: () => void;
 }) {
   const [catFilter, setCatFilter] = useState<CategoryFilter>(initialCategory);
@@ -99,6 +105,9 @@ export function Ripperdoc({
     readonly replaceName?: string;
   } | null>(null);
   const [working, setWorking] = useState(false);
+  const [installForNpcId, setInstallForNpcId] = useState<string>("");
+  const companions = useMemo(() => view.npcs.filter((n) => n.following && n.alive), [view.npcs]);
+  const targetCompanion = companions.find((n) => n.id === installForNpcId) ?? null;
 
   const eddies = view.money.eddies;
   const brokenCount = view.cyberware.filter((c) => c.broken).length;
@@ -165,10 +174,15 @@ export function Ripperdoc({
     return { side, replaceId, replaceName, check };
   };
 
-  const availableCredit = Math.max(0, doc.credit - (doc.debt?.amount ?? 0));
+  const creditFrozen = Boolean(doc.debt?.overdue);
+  const availableCredit = creditFrozen ? 0 : Math.max(0, doc.credit - (doc.debt?.amount ?? 0));
   const creditable = (item: ShelfItem) =>
-    availableCredit > 0 && item.net - eddies <= availableCredit;
-  const shortReason = doc.credit > 0 ? "欧元和剩余可赊额度不足" : "欧元不够";
+    !creditFrozen && availableCredit > 0 && item.net - eddies <= availableCredit;
+  const shortReason = creditFrozen
+    ? "存在逾期欠款，须先还清才能继续赊账"
+    : doc.credit > 0
+      ? "欧元和剩余可赊额度不足"
+      : "欧元不够";
   const owed = confirming ? Math.max(0, confirming.item.net - eddies) : 0;
 
   useLayer(onClose, !confirming);
@@ -562,10 +576,23 @@ export function Ripperdoc({
                 </div>
                 <div className={rip.docMeta}>
                   <p className={rip.docNote}>{doc.note}</p>
-                  <p className={rip.docMetaLine} data-warn={doc.blackMarket || undefined}>
+                  <p
+                    className={rip.docMetaLine}
+                    data-warn={
+                      doc.blackMarket ||
+                      doc.mood?.factor === null ||
+                      (doc.mood?.factor !== undefined && doc.mood.factor > 1) ||
+                      undefined
+                    }
+                  >
                     {[
                       doc.blackMarket ? "黑市货源 · −20%（无保修）" : "认证诊所",
-                      doc.credit > 0 ? `剩余可赊 ${money(availableCredit)} 欧元` : null,
+                      doc.mood ? doc.mood.label : null,
+                      doc.credit > 0
+                        ? creditFrozen
+                          ? "逾期冻结赊账"
+                          : `剩余可赊 ${money(availableCredit)} 欧元`
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -589,15 +616,25 @@ export function Ripperdoc({
 
             <NeuralLoadBar load={currentLoad} />
 
+            {doc.mood?.lock && (
+              <div className={rip.debtBanner} role="alert">
+                <CellFrame />
+                <Asset id="notify.warning" height={18} tint="var(--cp-red)" />
+                <span className={rip.debtText}>{doc.mood.lock}</span>
+              </div>
+            )}
+
             {doc.debt && (
               <div className={rip.debtBanner} role="status">
                 <CellFrame />
                 <Asset id="notify.warning" height={18} tint="var(--cp-red)" />
                 <span className={rip.debtText}>
                   欠 {doc.name} <b>{money(doc.debt.amount)}</b> 欧元，
-                  {doc.debt.due === "未约定期限"
-                    ? "未约定还款期限"
-                    : `最早还款期限：${doc.debt.due}`}
+                  {doc.debt.overdue
+                    ? `已逾期（原期限：${doc.debt.due}），须先还清才能继续赊账`
+                    : doc.debt.due === "未约定期限"
+                      ? "未约定还款期限"
+                      : `最早还款期限：${doc.debt.due}`}
                 </span>
                 <Button
                   small
@@ -607,6 +644,40 @@ export function Ripperdoc({
                   onClick={() => onRepay && void run(onRepay)}
                 >
                   还清欠款
+                </Button>
+              </div>
+            )}
+
+            {view.money.chromeCare && (
+              <div className={rip.debtBanner} role="status">
+                <CellFrame />
+                <Asset
+                  id={view.money.chromeCare.overdue ? "notify.warning" : "map.poi.ripperdoc"}
+                  height={18}
+                  tint={view.money.chromeCare.overdue ? "var(--cp-red)" : "var(--cp-cyan)"}
+                />
+                <span className={rip.debtText}>
+                  {view.money.chromeCare.label}：
+                  {view.money.chromeCare.overdue
+                    ? "已逾期，高压义体接口易排异发抖"
+                    : `距下次校准还有 ${view.money.chromeCare.daysLeft} 天`}
+                  （诊所参考价 <b>{money(view.money.chromeCare.cost)}</b> 欧元，校准后稳固 14 天）
+                </span>
+                <Button
+                  small
+                  primary={view.money.chromeCare.overdue || view.money.chromeCare.dueSoon}
+                  disabled={
+                    !onPayChromeCare ||
+                    working ||
+                    Boolean(doc.mood?.lock) ||
+                    eddies < view.money.chromeCare.cost
+                  }
+                  reason={
+                    doc.mood?.lock ?? (eddies < view.money.chromeCare.cost ? "欧元不够" : undefined)
+                  }
+                  onClick={() => onPayChromeCare && void run(onPayChromeCare)}
+                >
+                  {working ? "校准中…" : "上椅校准"}
                 </Button>
               </div>
             )}
@@ -690,6 +761,29 @@ export function Ripperdoc({
               </div>
 
               <div className={rip.filterRow}>
+                {catFilter !== "installed" && companions.length > 0 && (
+                  <div className={rip.rarityRow} style={{ marginRight: 8 }}>
+                    <button
+                      type="button"
+                      className={rip.filterChip}
+                      aria-pressed={!targetCompanion}
+                      onClick={() => setInstallForNpcId("")}
+                    >
+                      给自己装
+                    </button>
+                    {companions.map((comp) => (
+                      <button
+                        key={comp.id}
+                        type="button"
+                        className={rip.filterChip}
+                        aria-pressed={targetCompanion?.id === comp.id}
+                        onClick={() => setInstallForNpcId(comp.id)}
+                      >
+                        给 {comp.name} 装
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className={rip.rarityRow}>
                   <button
                     type="button"
@@ -984,7 +1078,11 @@ export function Ripperdoc({
 
       {confirming && (
         <Dialog
-          title={`装上${confirming.item.name}？`}
+          title={
+            targetCompanion
+              ? `为同行同伴 ${targetCompanion.name} 安装${confirming.item.name}？`
+              : `装上${confirming.item.name}？`
+          }
           tone="info"
           onClose={() => setConfirming(null)}
           actions={
@@ -995,23 +1093,29 @@ export function Ripperdoc({
                   working ||
                   !onBuy ||
                   confirming.item.locked !== null ||
-                  (owed > 0 && !creditable(confirming.item))
+                  (targetCompanion
+                    ? eddies < confirming.item.price
+                    : owed > 0 && !creditable(confirming.item))
                 }
                 onClick={() =>
                   onBuy &&
                   void run(() =>
-                    onBuy(confirming.item.id, owed > 0, {
-                      ...(confirming.armSide ? { armSide: confirming.armSide } : {}),
-                      ...(confirming.replace ? { replace: confirming.replace } : {}),
-                    }),
+                    targetCompanion
+                      ? onBuy(confirming.item.id, false, { forNpc: targetCompanion.id })
+                      : onBuy(confirming.item.id, owed > 0, {
+                          ...(confirming.armSide ? { armSide: confirming.armSide } : {}),
+                          ...(confirming.replace ? { replace: confirming.replace } : {}),
+                        }),
                   )
                 }
               >
                 {working
                   ? "装着呢…"
-                  : owed > 0
-                    ? `付 ${money(eddies)}，赊 ${money(owed)}`
-                    : `付 ${money(confirming.item.net)} 欧元`}
+                  : targetCompanion
+                    ? `付 ${money(confirming.item.price)} 欧元给 ${targetCompanion.name} 装`
+                    : owed > 0
+                      ? `付 ${money(eddies)}，赊 ${money(owed)}`
+                      : `付 ${money(confirming.item.net)} 欧元`}
               </Button>
               <Button onClick={() => setConfirming(null)}>再想想</Button>
             </>

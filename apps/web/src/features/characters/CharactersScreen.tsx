@@ -1,13 +1,14 @@
 import {
   type CharacterCard,
   CharacterCardSchema,
+  type npcRules,
   TAROT_INFO,
   WorkshopCharacterExportSchema,
 } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { api, type CharacterEntry } from "../../api/client";
+import { api, type CanonNpcBrief, type CharacterEntry } from "../../api/client";
 import type { AssetId } from "../../assets";
 import { useCharactersPreload } from "../../assets/usePreload";
 import { ActionButton } from "../../ui/ActionButton";
@@ -20,7 +21,26 @@ import { useCardTilt } from "../../ui/useCardTilt";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { ShellBackdrop } from "../theme";
 import { CharacterCreator } from "./CharacterCreator";
-import { clearDraft, emptyBoard, loadDraft, saveDraft } from "./creator";
+import {
+  clearDraft,
+  emptyBoard,
+  LOCAL_CYBERWARE_EVENT,
+  LOCAL_ITEMS_EVENT,
+  loadDraft,
+  loadLocalCustomCyberware,
+  loadLocalCustomItems,
+  loadLocalCustomNpcs,
+  loadLocalNpcOverrides,
+  mergeCreatorCatalog,
+  removeLocalCustomNpc,
+  removeLocalNpcOverride,
+  saveDraft,
+  saveLocalCustomNpc,
+  saveLocalNpcOverride,
+  subscribeLocalCustomNpcs,
+} from "./creator";
+import { NpcCreatorWorkbench, type NpcWorkbenchMode } from "./NpcCreatorWorkbench";
+import { NpcRosterPanel } from "./NpcRosterPanel";
 import wb from "./workbench.module.css";
 
 interface Editor {
@@ -29,6 +49,15 @@ interface Editor {
   readonly card: CharacterCard;
   readonly original: string;
   /** 切换角色才换会话，保存拿到 id 时不换，避免打断建档 */
+  readonly session: string;
+}
+
+type RosterTab = "characters" | "npcs";
+
+interface NpcEditorState {
+  readonly mode: NpcWorkbenchMode;
+  readonly initial?: npcRules.NpcCard | undefined;
+  readonly hasOverride?: boolean | undefined;
   readonly session: string;
 }
 
@@ -161,22 +190,137 @@ export function CharactersScreen() {
   } | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [libraryQuery, setLibraryQuery] = useState("");
+  const [rosterTab, setRosterTab] = useState<RosterTab>("characters");
+  const [npcEditor, setNpcEditor] = useState<NpcEditorState | null>(null);
+  const [loadingNpcId, setLoadingNpcId] = useState<string | null>(null);
+  const [deletingNpc, setDeletingNpc] = useState<npcRules.NpcCard | null>(null);
+  const [localCustomNpcs, setLocalCustomNpcs] = useState<readonly npcRules.NpcCard[]>(() =>
+    loadLocalCustomNpcs(),
+  );
+  const [localNpcOverrides, setLocalNpcOverrides] = useState<readonly npcRules.NpcCard[]>(() =>
+    loadLocalNpcOverrides(),
+  );
+  const [localChrome, setLocalChrome] = useState(() => loadLocalCustomCyberware());
+  const [localItems, setLocalItems] = useState(() => loadLocalCustomItems());
   const [launching, setLaunching] = useState(false);
   const [draftSaved, setDraftSaved] = useState(true);
+
+  useEffect(
+    () =>
+      subscribeLocalCustomNpcs(() => {
+        setLocalCustomNpcs(loadLocalCustomNpcs());
+        setLocalNpcOverrides(loadLocalNpcOverrides());
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    const syncChrome = () => setLocalChrome(loadLocalCustomCyberware());
+    const syncItems = () => setLocalItems(loadLocalCustomItems());
+    window.addEventListener(LOCAL_CYBERWARE_EVENT, syncChrome);
+    window.addEventListener(LOCAL_ITEMS_EVENT, syncItems);
+    return () => {
+      window.removeEventListener(LOCAL_CYBERWARE_EVENT, syncChrome);
+      window.removeEventListener(LOCAL_ITEMS_EVENT, syncItems);
+    };
+  }, []);
+
+  const npcBoardData = useMemo(
+    () =>
+      boardData.data
+        ? mergeCreatorCatalog(boardData.data, [], [], localChrome, localItems)
+        : undefined,
+    [boardData.data, localChrome, localItems],
+  );
 
   const preloadCard = useMemo(() => editor?.card ?? blankCard(), [editor]);
   useCharactersPreload(preloadCard, characters.data, client);
 
   useLayer(() => setShowLibrary(false), showLibrary && !destination && !deleting);
 
-  // 支持从主菜单携带 ?new=1 或 ?id=<characterId> 直达对应动作
+  // 支持从主菜单携带 ?new=1 / ?id=<characterId> / ?tab=npcs / ?newNpc=1 / ?npc=<npcId> 直达对应动作
   const paramNew = params.get("new");
   const paramId = params.get("id");
+  const paramTab = params.get("tab");
+  const paramNewNpc = params.get("newNpc");
+  const paramNpc = params.get("npc");
   useEffect(() => {
     if (paramNew === "1") {
       if (handledParamRef.current === "new") return;
       handledParamRef.current = "new";
+      setNpcEditor(null);
       setEditor((cur) => cur ?? editorFor(blankCard()));
+      setParams({}, { replace: true });
+      return;
+    }
+    if (paramNewNpc === "1") {
+      if (handledParamRef.current === "newNpc") return;
+      handledParamRef.current = "newNpc";
+      setEditor(null);
+      setRosterTab("npcs");
+      setNpcEditor({ mode: "create", session: newSession() });
+      setParams({}, { replace: true });
+      return;
+    }
+    if (paramNpc) {
+      if (handledParamRef.current === `npc:${paramNpc}`) return;
+      const customMatched = loadLocalCustomNpcs().find((c) => c.id === paramNpc);
+      if (customMatched) {
+        handledParamRef.current = `npc:${paramNpc}`;
+        setEditor(null);
+        setRosterTab("npcs");
+        setNpcEditor({ mode: "edit-custom", initial: customMatched, session: newSession() });
+        setParams({}, { replace: true });
+        return;
+      }
+      if (!boardData.data) return;
+      handledParamRef.current = `npc:${paramNpc}`;
+      setEditor(null);
+      setRosterTab("npcs");
+      const overrideMatched = loadLocalNpcOverrides().find((c) => c.id === paramNpc);
+      if (overrideMatched) {
+        setNpcEditor({
+          mode: "edit-canon",
+          initial: overrideMatched,
+          hasOverride: true,
+          session: newSession(),
+        });
+        setParams({}, { replace: true });
+        return;
+      }
+      const canonBrief = boardData.data.npcs.find((n) => n.id === paramNpc);
+      if (!canonBrief) {
+        setShareNotice({ tone: "error", text: "未找到该 NPC 档案，已回到人物库" });
+        setParams({}, { replace: true });
+        return;
+      }
+      setLoadingNpcId(canonBrief.id);
+      void api
+        .characterBoardNpc(canonBrief.id)
+        .then((full) => {
+          setNpcEditor({
+            mode: "edit-canon",
+            initial: full,
+            hasOverride: false,
+            session: newSession(),
+          });
+        })
+        .catch((err) => {
+          setShareNotice({
+            tone: "error",
+            text: err instanceof Error ? err.message : "读取人物档案失败",
+          });
+        })
+        .finally(() => {
+          setLoadingNpcId(null);
+        });
+      setParams({}, { replace: true });
+      return;
+    }
+    if (paramTab === "npcs") {
+      if (handledParamRef.current === "tab:npcs") return;
+      handledParamRef.current = "tab:npcs";
+      setRosterTab("npcs");
       setParams({}, { replace: true });
       return;
     }
@@ -191,7 +335,16 @@ export function CharactersScreen() {
       setShareNotice({ tone: "error", text: "未找到该角色档案，已回到角色库" });
     }
     setParams({}, { replace: true });
-  }, [paramNew, paramId, characters.data, setParams]);
+  }, [
+    paramNew,
+    paramId,
+    paramTab,
+    paramNewNpc,
+    paramNpc,
+    characters.data,
+    boardData.data,
+    setParams,
+  ]);
 
   const modified = editor ? isCardModified(editor.card, editor.original, editor.sample) : false;
   const dirty = modified;
@@ -321,9 +474,22 @@ export function CharactersScreen() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  // NPC 工作台按 Esc 返回人物档案库（未在弹窗/输入框内时）
+  useEffect(() => {
+    if (npcEditor === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector("[role=dialog], [role=alertdialog]")) return;
+      if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select")) return;
+      setNpcEditor(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [npcEditor]);
+
   // 角色库总览页按 Esc 返回主菜单
   useEffect(() => {
-    if (editor !== null) return;
+    if (editor !== null || npcEditor !== null) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       if (document.querySelector("[role=dialog], [role=alertdialog]")) return;
@@ -332,7 +498,7 @@ export function CharactersScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editor, navigate]);
+  }, [editor, npcEditor, navigate]);
 
   const go = (next: Destination) => {
     clearDraft();
@@ -454,15 +620,100 @@ export function CharactersScreen() {
     />
   );
 
-  const headCode = editor === null ? "ID // ROSTER" : "ID // DOSSIER";
+  const openNewNpcWorkbench = () => {
+    setShareNotice(null);
+    setNpcEditor({ mode: "create", session: newSession() });
+  };
+
+  const openCustomNpcWorkbench = (card: npcRules.NpcCard) => {
+    setShareNotice(null);
+    setNpcEditor({ mode: "edit-custom", initial: card, session: newSession() });
+  };
+
+  const openCanonNpcWorkbench = async (
+    brief: CanonNpcBrief,
+    existingOverride?: npcRules.NpcCard,
+  ) => {
+    setShareNotice(null);
+    if (existingOverride) {
+      setNpcEditor({
+        mode: "edit-canon",
+        initial: existingOverride,
+        hasOverride: true,
+        session: newSession(),
+      });
+      return;
+    }
+    setLoadingNpcId(brief.id);
+    try {
+      const full = await api.characterBoardNpc(brief.id);
+      setNpcEditor({
+        mode: "edit-canon",
+        initial: full,
+        hasOverride: false,
+        session: newSession(),
+      });
+    } catch (err) {
+      setShareNotice({
+        tone: "error",
+        text: err instanceof Error ? err.message : "读取人物档案失败",
+      });
+    } finally {
+      setLoadingNpcId(null);
+    }
+  };
+
+  const handleSaveNpc = (card: npcRules.NpcCard) => {
+    if (!npcEditor) return;
+    if (npcEditor.mode === "edit-canon") {
+      saveLocalNpcOverride(card);
+      setShareNotice({
+        tone: "ok",
+        text: `已保存原作人物「${card.name}」的自定义档案，新建存档时将自动生效`,
+      });
+    } else {
+      saveLocalCustomNpc(card);
+      setShareNotice({
+        tone: "ok",
+        text: `已保存自建 NPC「${card.name}」至本地人物库`,
+      });
+    }
+    setNpcEditor(null);
+    setRosterTab("npcs");
+  };
+
+  const handleResetNpcOverride = (id: string, displayName?: string) => {
+    removeLocalNpcOverride(id);
+    setNpcEditor(null);
+    setShareNotice({
+      tone: "ok",
+      text: displayName ? `已恢复「${displayName}」的原作默认设定` : "已恢复原作默认设定",
+    });
+  };
+
+  const handleDeleteCustomNpc = (card: npcRules.NpcCard) => {
+    removeLocalCustomNpc(card.id);
+    setDeletingNpc(null);
+    setNpcEditor(null);
+    setShareNotice({ tone: "ok", text: `已删除自建 NPC「${card.name}」` });
+  };
+
+  const headCode =
+    npcEditor !== null ? "NC // NPC DOSSIER" : editor === null ? "ID // ROSTER" : "ID // DOSSIER";
   const headTitle =
-    editor === null
-      ? "角色档案库"
-      : editor.id === null
-        ? "新建角色"
-        : editor.sample
-          ? "预设档案"
-          : "编辑档案";
+    npcEditor !== null
+      ? npcEditor.mode === "create"
+        ? "新建 NPC"
+        : npcEditor.mode === "edit-canon"
+          ? `修改原作人物 · ${npcEditor.initial?.name ?? ""}`
+          : `编辑 NPC · ${npcEditor.initial?.name ?? ""}`
+      : editor === null
+        ? "角色档案库"
+        : editor.id === null
+          ? "新建角色"
+          : editor.sample
+            ? "预设档案"
+            : "编辑档案";
   const totalCustom = allCharacters.filter((entry) => !entry.sample).length;
   const totalSample = allCharacters.length - totalCustom;
 
@@ -485,16 +736,41 @@ export function CharactersScreen() {
           accept=".json,application/json"
           onChange={importCharacter}
         />
-        {editor === null ? (
+        {npcEditor !== null ? (
+          <>
+            <fieldset className={wb.headGroup} aria-label="NPC 工作台操作">
+              <Button small onClick={() => setNpcEditor(null)}>
+                ← 返回人物档案库
+              </Button>
+              <Button small onClick={openNewNpcWorkbench}>
+                ＋ 新建 NPC
+              </Button>
+            </fieldset>
+            <span className={wb.headDivider} aria-hidden />
+            <fieldset className={wb.headGroup} aria-label="页面导航">
+              <Button small onClick={() => requestGo({ back: true })}>
+                返回主菜单
+              </Button>
+            </fieldset>
+          </>
+        ) : editor === null ? (
           <>
             <fieldset className={wb.headGroup} aria-label="角色库操作">
               <Button
                 small
-                primary
+                primary={rosterTab === "characters"}
                 disabled={busy}
                 onClick={() => requestGo({ editor: editorFor(blankCard()) })}
               >
                 ＋ 新建角色
+              </Button>
+              <Button
+                small
+                primary={rosterTab === "npcs"}
+                disabled={busy}
+                onClick={openNewNpcWorkbench}
+              >
+                ＋ 新建 NPC
               </Button>
               <Button small disabled={busy} onClick={() => importRef.current?.click()}>
                 {importCard.isPending || commitImport.isPending ? "导入中…" : "导入 JSON"}
@@ -567,7 +843,48 @@ export function CharactersScreen() {
       />
 
       <div className={wb.workspace}>
-        {editor === null ? (
+        {npcEditor !== null ? (
+          <section className={wb.editorWrap} aria-label="NPC 档案工作台">
+            {boardData.isPending && <p role="status">正在读取义体、武器与势力目录…</p>}
+            {boardData.isError && (
+              <div role="alert">
+                <p className={wb.error}>{boardData.error.message}</p>
+                <Button small onClick={() => void boardData.refetch()}>
+                  重新读取目录
+                </Button>
+              </div>
+            )}
+            {npcBoardData && (
+              <div className={wb.benchHost}>
+                <NpcCreatorWorkbench
+                  key={npcEditor.session}
+                  mode={npcEditor.mode}
+                  initial={npcEditor.initial}
+                  data={npcBoardData}
+                  hasOverride={npcEditor.hasOverride}
+                  onSave={handleSaveNpc}
+                  onReset={
+                    npcEditor.mode === "edit-canon" && npcEditor.initial
+                      ? () => {
+                          if (npcEditor.initial) {
+                            handleResetNpcOverride(npcEditor.initial.id, npcEditor.initial.name);
+                          }
+                        }
+                      : undefined
+                  }
+                  onDelete={
+                    npcEditor.mode === "edit-custom" && npcEditor.initial
+                      ? () => {
+                          if (npcEditor.initial) setDeletingNpc(npcEditor.initial);
+                        }
+                      : undefined
+                  }
+                  onCancel={() => setNpcEditor(null)}
+                />
+              </div>
+            )}
+          </section>
+        ) : editor === null ? (
           <section className={wb.rosterView} aria-label="角色档案库">
             {shareNotice && (
               <div
@@ -612,75 +929,171 @@ export function CharactersScreen() {
               </div>
             )}
 
+            <div className={wb.subTabs} role="tablist" aria-label="档案库分类">
+              <button
+                type="button"
+                role="tab"
+                className={wb.subTab}
+                aria-selected={rosterTab === "characters"}
+                onClick={() => setRosterTab("characters")}
+              >
+                <span>主角与预设角色 ({allCharacters.length})</span>
+                <span
+                  className={wb.subTabLine}
+                  style={{
+                    maskImage: cssUrl("tab.line"),
+                    WebkitMaskImage: cssUrl("tab.line"),
+                  }}
+                  aria-hidden
+                />
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={wb.subTab}
+                aria-selected={rosterTab === "npcs"}
+                onClick={() => setRosterTab("npcs")}
+              >
+                <span>
+                  夜之城 NPC ({localCustomNpcs.length + (boardData.data?.npcs.length ?? 0)}
+                  {localNpcOverrides.length > 0 ? ` · 已改 ${localNpcOverrides.length}` : ""})
+                </span>
+                <span
+                  className={wb.subTabLine}
+                  style={{
+                    maskImage: cssUrl("tab.line"),
+                    WebkitMaskImage: cssUrl("tab.line"),
+                  }}
+                  aria-hidden
+                />
+              </button>
+            </div>
+
             <div className={wb.rosterToolbar}>
               <FrameBox className={wb.rosterSearch}>
                 <input
                   type="search"
                   value={libraryQuery}
-                  placeholder="搜索角色名、代号或出身…"
-                  aria-label="搜索角色库"
+                  placeholder={
+                    rosterTab === "npcs"
+                      ? "搜索 NPC 姓名、外号、身份、势力或外貌…"
+                      : "搜索角色名、代号或出身…"
+                  }
+                  aria-label={rosterTab === "npcs" ? "搜索 NPC 档案库" : "搜索角色库"}
                   onChange={(e) => setLibraryQuery(e.target.value)}
                 />
               </FrameBox>
-              <span className={wb.rosterCount}>
-                共 <strong className="num">{allCharacters.length}</strong> 张档案 · 自建{" "}
-                <span className="num">{totalCustom}</span> · 官方预设{" "}
-                <span className="num">{totalSample}</span>
-              </span>
+              {rosterTab === "npcs" ? (
+                <span className={wb.rosterCount}>
+                  共{" "}
+                  <strong className="num">
+                    {localCustomNpcs.length + (boardData.data?.npcs.length ?? 0)}
+                  </strong>{" "}
+                  位人物 · 自建 <span className="num">{localCustomNpcs.length}</span> · 原作{" "}
+                  <span className="num">{boardData.data?.npcs.length ?? 0}</span>
+                  {localNpcOverrides.length > 0 ? (
+                    <>
+                      {" "}
+                      · 已改写 <span className="num">{localNpcOverrides.length}</span>
+                    </>
+                  ) : null}
+                </span>
+              ) : (
+                <span className={wb.rosterCount}>
+                  共 <strong className="num">{allCharacters.length}</strong> 张档案 · 自建{" "}
+                  <span className="num">{totalCustom}</span> · 官方预设{" "}
+                  <span className="num">{totalSample}</span>
+                </span>
+              )}
             </div>
 
             <div className={wb.rosterScroll}>
-              {characters.isPending && <p role="status">正在读取角色库…</p>}
-              {characters.isError && (
-                <div role="alert">
-                  <p className={wb.error}>{characters.error.message}</p>
-                  <Button small onClick={() => void characters.refetch()}>
-                    重新读取
-                  </Button>
-                </div>
-              )}
-              {characters.isSuccess && allCharacters.length === 0 && (
-                <div className={wb.rosterEmpty}>
-                  <p className={wb.note}>
-                    还没有角色档案，点击「＋ 新建角色」创建你的第一位夜之城来客。
-                  </p>
-                  <Button primary onClick={() => requestGo({ editor: editorFor(blankCard()) })}>
-                    ＋ 新建角色
-                  </Button>
-                </div>
-              )}
-              {characters.isSuccess &&
-                allCharacters.length > 0 &&
-                filteredCharacters.length === 0 && (
-                  <div className={wb.rosterEmpty}>
-                    <p className={wb.note}>没有匹配「{libraryQuery}」的角色档案。</p>
-                    <Button small onClick={() => setLibraryQuery("")}>
-                      清空搜索
+              {rosterTab === "npcs" ? (
+                boardData.isPending ? (
+                  <p role="status">正在读取夜之城人物档案…</p>
+                ) : boardData.isError ? (
+                  <div role="alert">
+                    <p className={wb.error}>{boardData.error.message}</p>
+                    <Button small onClick={() => void boardData.refetch()}>
+                      重新读取
                     </Button>
                   </div>
-                )}
+                ) : (
+                  <NpcRosterPanel
+                    data={npcBoardData}
+                    localCustomNpcs={localCustomNpcs}
+                    localOverrides={localNpcOverrides}
+                    query={libraryQuery}
+                    loadingNpcId={loadingNpcId}
+                    busy={busy}
+                    onCreateNpc={openNewNpcWorkbench}
+                    onEditCustom={openCustomNpcWorkbench}
+                    onEditCanon={(brief, ov) => void openCanonNpcWorkbench(brief, ov)}
+                    onResetOverride={(id) => {
+                      const matched = boardData.data?.npcs.find((n) => n.id === id);
+                      handleResetNpcOverride(id, matched?.name);
+                    }}
+                    onDeleteCustom={(card) => setDeletingNpc(card)}
+                    onClearQuery={() => setLibraryQuery("")}
+                  />
+                )
+              ) : (
+                <>
+                  {characters.isPending && <p role="status">正在读取角色库…</p>}
+                  {characters.isError && (
+                    <div role="alert">
+                      <p className={wb.error}>{characters.error.message}</p>
+                      <Button small onClick={() => void characters.refetch()}>
+                        重新读取
+                      </Button>
+                    </div>
+                  )}
+                  {characters.isSuccess && allCharacters.length === 0 && (
+                    <div className={wb.rosterEmpty}>
+                      <p className={wb.note}>
+                        还没有角色档案，点击「＋ 新建角色」创建你的第一位夜之城来客。
+                      </p>
+                      <Button primary onClick={() => requestGo({ editor: editorFor(blankCard()) })}>
+                        ＋ 新建角色
+                      </Button>
+                    </div>
+                  )}
+                  {characters.isSuccess &&
+                    allCharacters.length > 0 &&
+                    filteredCharacters.length === 0 && (
+                      <div className={wb.rosterEmpty}>
+                        <p className={wb.note}>没有匹配「{libraryQuery}」的角色档案。</p>
+                        <Button small onClick={() => setLibraryQuery("")}>
+                          清空搜索
+                        </Button>
+                      </div>
+                    )}
 
-              {customCharacters.length > 0 && (
-                <section className={wb.rosterSection} aria-label="自建角色">
-                  <div className={wb.rosterSectionHead}>
-                    <h2 className={wb.rosterSectionTitle}>自建角色（{customCharacters.length}）</h2>
-                  </div>
-                  <ul className={wb.rosterGrid}>{customCharacters.map(renderRosterCard)}</ul>
-                </section>
-              )}
+                  {customCharacters.length > 0 && (
+                    <section className={wb.rosterSection} aria-label="自建角色">
+                      <div className={wb.rosterSectionHead}>
+                        <h2 className={wb.rosterSectionTitle}>
+                          自建角色（{customCharacters.length}）
+                        </h2>
+                      </div>
+                      <ul className={wb.rosterGrid}>{customCharacters.map(renderRosterCard)}</ul>
+                    </section>
+                  )}
 
-              {sampleCharacters.length > 0 && (
-                <section className={wb.rosterSection} aria-label="官方预设模板">
-                  <div className={wb.rosterSectionHead}>
-                    <h2 className={wb.rosterSectionTitle}>
-                      官方预设模板（{sampleCharacters.length}）
-                    </h2>
-                    <span className={wb.rosterSectionHint}>
-                      可直接用于新建存档，或打开另存为自建副本
-                    </span>
-                  </div>
-                  <ul className={wb.rosterGrid}>{sampleCharacters.map(renderRosterCard)}</ul>
-                </section>
+                  {sampleCharacters.length > 0 && (
+                    <section className={wb.rosterSection} aria-label="官方预设模板">
+                      <div className={wb.rosterSectionHead}>
+                        <h2 className={wb.rosterSectionTitle}>
+                          官方预设模板（{sampleCharacters.length}）
+                        </h2>
+                        <span className={wb.rosterSectionHint}>
+                          可直接用于新建存档，或打开另存为自建副本
+                        </span>
+                      </div>
+                      <ul className={wb.rosterGrid}>{sampleCharacters.map(renderRosterCard)}</ul>
+                    </section>
+                  )}
+                </>
               )}
             </div>
           </section>
@@ -853,6 +1266,21 @@ export function CharactersScreen() {
           }
         >
           <p>当前角色卡的修改还没有保存。</p>
+        </Dialog>
+      )}
+      {deletingNpc && (
+        <Dialog
+          title={`删除自建 NPC「${deletingNpc.name}」？`}
+          tone="danger"
+          onClose={() => setDeletingNpc(null)}
+          actions={
+            <>
+              <Button onClick={() => setDeletingNpc(null)}>取消</Button>
+              <Button onClick={() => handleDeleteCustomNpc(deletingNpc)}>确认删除</Button>
+            </>
+          }
+        >
+          <p>该自建 NPC 会从本地人物库删除，已有存档不受影响。</p>
         </Dialog>
       )}
       {deleting && (

@@ -1,6 +1,7 @@
 import type { inventoryRules } from "@cp/core";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { AssetId } from "../../assets";
+import type { GearArtId } from "../../assets/customArt";
 import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
@@ -214,7 +215,7 @@ function resolveArtOrIcon(
   kind: string | undefined,
   subLabel: string,
   fallbackIcon: AssetId,
-): { readonly asset: AssetId; readonly isArtwork: boolean } {
+): { readonly asset: GearArtId; readonly isArtwork: boolean } {
   const art = itemArtOf(baseId ?? id);
   if (art) return { asset: art, isArtwork: true };
   if (kind === "weapon") {
@@ -231,7 +232,7 @@ function ShowcaseStage({
   rarityText,
   cornerBadge,
 }: {
-  readonly asset: AssetId;
+  readonly asset: GearArtId;
   readonly isArtwork: boolean;
   readonly alt: string;
   readonly rarityTint: string;
@@ -1014,7 +1015,7 @@ export function Shop({
   readonly view: View;
   readonly shop: ShopView;
   /** 正在生成时不传，按钮不能点 */
-  readonly onBuy?: ((id: string) => Promise<void>) | undefined;
+  readonly onBuy?: ((id: string, forNpc?: string) => Promise<void>) | undefined;
   readonly onSell?: ((id: string) => Promise<void>) | undefined;
   readonly onGunsmith?: ((action: GunsmithPayload) => Promise<void>) | undefined;
   readonly gunsmithDisabledReason?: string | undefined;
@@ -1027,6 +1028,9 @@ export function Shop({
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("default");
   const [layout, setLayout] = useState<ViewLayout>("grid");
+  const [buyForNpcId, setBuyForNpcId] = useState<string>("");
+  const companions = useMemo(() => view.npcs.filter((n) => n.following && n.alive), [view.npcs]);
+  const targetCompanion = companions.find((n) => n.id === buyForNpcId) ?? null;
   const [focus, setFocus] = useState<{ readonly mode: ShopMode; readonly id: string } | null>(() =>
     shop.shelf[0]
       ? { mode: "buy", id: shop.shelf[0].id }
@@ -1633,6 +1637,33 @@ export function Shop({
 
             {/* 两层紧凑控制台 */}
             <nav className={shopCss.toolbar} aria-label="商店模式与货架筛选">
+              {mode === "buy" && companions.length > 0 && (
+                <div className={shopCss.toolbarTop} style={{ paddingBottom: 4 }}>
+                  <div className={shopCss.modeTabs} role="tablist" aria-label="购买对象">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={!targetCompanion}
+                      className={shopCss.modeTab}
+                      onClick={() => setBuyForNpcId("")}
+                    >
+                      给自己买
+                    </button>
+                    {companions.map((comp) => (
+                      <button
+                        key={comp.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={targetCompanion?.id === comp.id}
+                        className={shopCss.modeTab}
+                        onClick={() => setBuyForNpcId(comp.id)}
+                      >
+                        给 {comp.name} 买（{comp.body?.gear.length ?? 0}/12）
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className={shopCss.toolbarTop}>
                 <div className={shopCss.modeGroup}>
                   <div className={shopCss.modeTabs} role="tablist" aria-label="交易模式">
@@ -2110,7 +2141,9 @@ export function Shop({
             confirming.kind === "gunsmith"
               ? `${confirming.title}？`
               : confirming.kind === "buy"
-                ? `买下${confirming.item.name}？`
+                ? targetCompanion
+                  ? `为同行同伴 ${targetCompanion.name} 买下${confirming.item.name}？`
+                  : `买下${confirming.item.name}？`
                 : `把${confirming.item.name}卖给${shop.keeper}？`
           }
           tone="info"
@@ -2132,8 +2165,11 @@ export function Shop({
                     if (onGunsmith) void run(() => onGunsmith(confirming.payload));
                   } else {
                     const id = confirming.item.id;
-                    const task = confirming.kind === "buy" ? onBuy : onSell;
-                    if (task) void run(() => task(id));
+                    if (confirming.kind === "buy") {
+                      if (onBuy) void run(() => onBuy(id, targetCompanion?.id));
+                    } else if (onSell) {
+                      void run(() => onSell(id));
+                    }
                   }
                 }}
               >

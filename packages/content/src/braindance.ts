@@ -386,4 +386,105 @@ export const braindances = braindanceRules.BdWorkListSchema.parse([
       },
     ],
   },
+  // 9. xbd — 地下黑超梦（漩涡帮神经超频改装实录）
+  {
+    id: "bd-maelstrom-chrome-fever",
+    title: "红眼过载·全食品厂黑超梦（XBD）",
+    tier: "xbd",
+    xbdRisk: "强电流痛觉与多目光学视野畸变未经限幅，直看会引发视神经撕裂感、狂躁与短暂解离",
+    recorder: "漩涡帮地下义体工坊（流出版）",
+    synopsis:
+      "在沃森北区黑市暗流涌动的无滤波黑超梦，从一名刚被强行加装多目光学与超频神经件的漩涡帮成员视角录下，充斥着电弧烧灼与剧烈神经排异。",
+    durationMinutes: 7,
+    location: "kabuki-market",
+    passages: [
+      {
+        id: "chair-weld",
+        label: "焊枪与神经接驳",
+        minutes: 3,
+        outline:
+          "多目光学模块强行同步的瞬间，视界裂成六块重影与刺目红框，电焊臭氧味和神经突触过流灼痛毫无阻隔地冲进大脑皮层。",
+      },
+      {
+        id: "overclock-rush",
+        label: "黑蕾丝超频狂潮",
+        minutes: 4,
+        outline:
+          "录制者吞下双倍黑蕾丝冲出手术间，心跳飙破极限，工业重金属噪音化作尖锐电流啸叫，感官在过载白光里骤然撕裂。",
+      },
+    ],
+    details: [
+      {
+        id: "fever-crate-seal",
+        passage: "chair-weld",
+        layer: "visual",
+        finding:
+          "手术台下方堆着印有「军用科技沃森 07 号车队」封条的军规神经稳压模块箱，批号被磨掉一半。",
+      },
+      {
+        id: "fever-boss-voice",
+        passage: "overclock-rush",
+        layer: "audio",
+        finding:
+          "剥离狂躁噪点后，背景里有人用合成器变声腔吩咐“把剩下的稳压件明天凌晨转运去北码头废弃冷库”。",
+      },
+      {
+        id: "fever-coil-heat",
+        passage: "chair-weld",
+        layer: "thermal",
+        finding: "手术室隔壁铁门后方藏着一组高温运转的非法大功率神经压制剂合成反应釜与散热管道。",
+      },
+    ],
+  },
+  // 10. xbd — 地下黑超梦（狗镇黑墙脉冲实验泄漏原片）
+  {
+    id: "bd-dogtown-blackwall-leak",
+    title: "裂隙回声·狗镇黑市黑超梦（XBD）",
+    tier: "xbd",
+    xbdRisk: "残存旧网异常脉冲与神经反烧余波，未受压制剂或编辑隔离保护极易直接冲垮神经稳态",
+    recorder: "狗镇体育场地下黑客（失踪）",
+    synopsis:
+      "狗镇黑市高价私售的非法 XBD 残片，录下一名潜网黑客试图打捞旧网军用碎片时遭遇猩红脉冲反噬的最后几分钟。",
+    durationMinutes: 6,
+    location: "dogtown",
+    passages: [
+      {
+        id: "ice-tub-dive",
+        label: "体育场地下冰槽",
+        minutes: 3,
+        outline:
+          "录制者浸在满是碎冰的旧蓄水池里接入私改终端，四周混凝土墙回荡着幽冥犬巡逻队的靴声，数据流骤然泛起不自然的猩红锯齿。",
+      },
+      {
+        id: "crimson-spike",
+        label: "猩红反烧脉冲",
+        minutes: 3,
+        outline:
+          "无数错乱语音与冰冷数据噪声瞬间灌满听觉与视网膜，个人链路接口冒出焦烟，录制者在剧烈抽搐与窒息感中彻底失联。",
+      },
+    ],
+    details: [
+      {
+        id: "leak-terminal-tag",
+        passage: "ice-tub-dive",
+        layer: "visual",
+        finding:
+          "终端机箱侧面刻着「狗镇体育场 B2 配电夹层 · 3 号走私链路」与一组尚未失效的离线跳板坐标。",
+      },
+      {
+        id: "leak-netwatch-ping",
+        passage: "crimson-spike",
+        layer: "audio",
+        finding:
+          "猩红脉冲噪点底层夹杂着网络监察自动封锁信标的加密握手音，说明这批军用碎片已被网监反向挂标。",
+      },
+      {
+        id: "leak-ice-melt",
+        passage: "crimson-spike",
+        layer: "thermal",
+        finding:
+          "脉冲爆发瞬间，录制者后颈接入仓与冰槽电缆温度在两秒内飙升至灼伤区间，旁侧散热器却被人为动过手脚。",
+      },
+    ],
+  },
 ]);

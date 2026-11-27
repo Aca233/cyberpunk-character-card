@@ -39,6 +39,8 @@ export interface PreparedCheckpointData {
   readonly confirmation: BigSpend | undefined;
   readonly spend: BigSpend | undefined;
   readonly decided: readonly string[];
+  readonly extractDecided?: readonly string[] | undefined;
+  readonly newNpcLikely?: boolean | undefined;
   readonly loreTrace: LoreTrace | undefined;
   readonly loreSection: string | undefined;
   readonly budgetTrace: BudgetTrace;

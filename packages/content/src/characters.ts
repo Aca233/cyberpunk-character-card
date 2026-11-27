@@ -289,8 +289,175 @@ const mingyuanBoard: Board = BoardSchema.parse({
   startLocation: "lizzies-bar",
 });
 
-/** 官方预设角色模板：覆盖四大生态、不同命牌、义体流派与生活/感官改造，可直接开档或另存微调 */
+/** V 预设卡支持的性别与 2077 三大经典出身 */
+export type VGender = "female" | "male";
+export type VOriginKey = "street-kid" | "nomad" | "corpo";
+
+/**
+ * 统一构造 V（瓦莱丽 / 文森特）的可选主角预设卡：
+ * 角色库中仅保留 1 张 V 预设卡，建档工作台内可一键切换 2 性别 × 3 出身（街头 / 流浪 / 公司），
+ * 切换后仍可继续自由微调任何字段；所有变体均标记 replacesNpcId: "v" 避免世界里刷出两个 V。
+ */
+export function buildVCharacterCard(
+  gender: VGender = "female",
+  originKey: VOriginKey = "street-kid",
+) {
+  const female = gender === "female";
+  const name = female ? "瓦莱丽" : "文森特";
+  const pronoun = female ? "她" : "他";
+
+  const lookBase = female
+    ? "二十三岁左右、身形精干矫健，挑染红棕的不对称短发利落贴颈，眉眼锋利带股不服输的狠劲；眼角嵌有细微赛博电路饰纹，指节留着常年握枪与拆件磨出的薄茧。"
+    : "二十三岁左右、身形匀称精壮，留着利落贴皮短发与浅淡胡茬，下颌线条硬朗；眼角嵌有细微赛博电路饰纹，目光沉稳警觉，指节带着常年握枪与拧扳手磨出的硬茧。";
+
+  const originConfig: Readonly<
+    Record<
+      VOriginKey,
+      {
+        readonly originLabel: string;
+        readonly originModule: string;
+        readonly tarot: "fool" | "chariot" | "emperor";
+        readonly pasts: readonly string[];
+        readonly skills: readonly string[];
+        readonly flaws: readonly string[];
+        readonly cyberware: readonly string[];
+        readonly cashTier: "tight" | "standard" | "stash";
+        readonly vehicle: string;
+        readonly startLocation: string;
+        readonly lookSuffix: string;
+        readonly past: string;
+        readonly personality: string;
+        readonly voice: string;
+        readonly skillsText: string;
+        readonly acquaintances: readonly Acquaintance[];
+      }
+    >
+  > = {
+    "street-kid": {
+      originLabel: "街头小子",
+      originModule: "street-kid",
+      tarot: "fool",
+      pasts: ["past-turf-war", "past-scav-escape"],
+      skills: ["marksman", "streetwise", "danger-sense", "lockpick"],
+      flaws: ["no-one-left-behind"],
+      cyberware: ["kiroshi-mk1", "ballistic-coprocessor", "subdermal-armor", "militech-paraline"],
+      cashTier: "standard",
+      vehicle: "quadra-turbo-r",
+      startLocation: "megabuilding-h10",
+      lookSuffix:
+        "常穿高领发光翻领的街头改装夹克与战术长裤，举手投足满是海伍德和沃森街巷磨出来的机敏。",
+      past: "在海伍德的霓虹与枪声里长大，闯过亚特兰大又回到夜之城。几个月前帮野狼酒吧酒保佩佩顶雷时意外结识杰克·威尔斯，两人一拍即合成为过命搭档。靠着杰克与威尔斯太太照拂，刚在沃森超级摩天楼 H10 租下小公寓、在老维诊所赊账升了第一批实用义体，此刻正和杰克、T-Bug 一起瞄准来生大联盟——还没踏进绀碧大厦，一切尚未定局。",
+      personality:
+        "嘴硬心热、绝不低头，对公司嘴脸和画大饼的中间人天然警惕；信奉实力说话，但把杰克、维克多和米丝蒂视作不可触碰的底线。",
+      voice:
+        "干脆利落、带着地道夜之城街头黑话与冷幽默；谈价钱毫不退让，真碰上生死关头反而话少手稳。",
+      skillsText:
+        "精通手枪与冲锋枪近中距交火、门禁潜入与街头黑市门路，熟悉沃森和海伍德各帮派的规矩暗语；配齐岐路司义眼、弹道协同与基础接入仓，既能硬刚也能拆局。",
+      acquaintances: [
+        contact("jackie", "friend", "帮野狼酒吧顶雷时结下的过命搭档，一起在 H10 闯荡大联盟"),
+        contact("viktor", "youOwe", "赊账帮忙装上岐路司义眼与弹道协同处理器，发誓连本带利还清"),
+        contact("misty", "friend", "杰克的女友兼楼上通灵屋好邻里，难得让人松懈防备的朋友"),
+        contact("t-bug", "nod", "嘴毒但极靠谱的黑客搭档，常和杰克三人一起接单"),
+        contact("wilson", "nod", "H10 楼上武器店老板，刚帮忙调校好招牌定制手枪“终夜”"),
+      ],
+    },
+    nomad: {
+      originLabel: "恶土部族流浪者",
+      originModule: "nomad",
+      tarot: "chariot",
+      pasts: ["past-border-run", "past-convoy-guard"],
+      skills: ["marksman", "driving", "mechanic", "danger-sense"],
+      flaws: ["no-one-left-behind"],
+      cyberware: ["kiroshi-mk1", "ballistic-coprocessor", "subdermal-armor", "biomonitor"],
+      cashTier: "standard",
+      vehicle: "thorton-colby-pickup",
+      startLocation: "megabuilding-h10",
+      lookSuffix: "披着沾着恶土风沙痕迹的耐磨机车夹克，脖颈和手臂留着修车与跑边境线的风霜感。",
+      past: "出身已经解散的巴克家族，不愿向蛇族低头而独自离开恶土闯荡夜之城。过隔离墙走私那单活里和杰克·威尔斯并肩冲出荒坂巡逻线，自此结成生死之交。进城几个月刚在 H10 落脚、在老维诊所赊账装上实用义体，此刻正和杰克、T-Bug 一起跑单攒口碑，站在决定夜之城命运的门槛前。",
+      personality:
+        "重信诺、讲义气、骨子里带着荒原人的自由与倔强；不惯城里人的弯弯绕，认定的人哪怕刀山火海也会拉一把。",
+      voice:
+        "坦率直接、带点恶土车手特有的干脆与务实，不爱听虚头巴脑的客套，谈起引擎、武器和退路时字字在点上。",
+      skillsText:
+        "擅长复杂路况特种驾驶、车辆机械改装与中近距精准火力压制，野外求生与反埋伏直觉极强；配上岐路司义眼、弹道协同与生物监测，正面突围极具韧性。",
+      acquaintances: [
+        contact("jackie", "friend", "一起把走私货冲过隔离墙的生死搭档，进城后一路照应"),
+        contact("viktor", "youOwe", "刚进城时赊账帮忙装上岐路司义眼与弹道接口，记在心上的恩情"),
+        contact("misty", "friend", "杰克的女友，进城后少数真心相待的温和朋友"),
+        contact("t-bug", "nod", "一起搭伙干活的资深黑客，冷静挑剔但从不掉链子"),
+        contact("wilson", "nod", "H10 楼上枪店老街坊，刚帮忙把“终夜”手枪调到顺手"),
+      ],
+    },
+    corpo: {
+      originLabel: "企业雇员",
+      originModule: "corpo",
+      tarot: "emperor",
+      pasts: ["past-corp-purge", "past-fixer-courier"],
+      skills: ["marksman", "ice-veins", "corpo-negotiation", "micro-expression"],
+      flaws: ["corpo-blacklist"],
+      cyberware: [
+        "kiroshi-mk1",
+        "ballistic-coprocessor",
+        "subdermal-armor",
+        "synaptic-accelerator",
+      ],
+      cashTier: "stash",
+      vehicle: "villefort-cortes",
+      startLocation: "megabuilding-h10",
+      lookSuffix:
+        "即便脱下荒坂反情报制服换上街头利落外套，站姿与审视他人的锐利眼神仍透着前企业精英的锋芒。",
+      past: "曾是荒坂反情报部门的得力干员，在高层派系倾轧里被直属上司詹金斯拖下水，一夜之间遭剥离公司义体、冻结账户并扫地出门。危急关头是多年暗线老友杰克·威尔斯在丽姿酒吧替自己压住荒坂追兵、拉回街头重头再来。如今刚在 H10 站稳脚跟，在老维诊所赊账补回实用义体，正以独立佣兵身份重新审视这座由巨企掌控的城市。",
+      personality:
+        "冷静敏锐、擅长读局与权衡筹码，深知巨企的冷血吃人；对外滴水不漏，却对危难时拉过自己一把的杰克和老维极讲分寸与情义。",
+      voice:
+        "语速沉稳克制、逻辑清晰带锋芒，一句话能点破对方谈判底牌；脱掉公司外壳后偶尔流露出压抑已久的街头冷笑。",
+      skillsText:
+        "洞悉荒坂与企业内部规则、擅长微表情审讯与商务博弈，枪法精准、临危不乱；搭配突触加速器、岐路司义眼与弹道协同，既能凭头脑破局也能干净利落拔枪收尾。",
+      acquaintances: [
+        contact("jackie", "friend", "在丽姿酒吧替自己拦下荒坂清洗小队的多年老友与现搭档"),
+        contact("viktor", "youOwe", "公司义体被剥离后赊账帮忙重装岐路司义眼与弹道接口"),
+        contact("misty", "friend", "杰克的女友，在被荒坂扫地出门后给过难得的安宁"),
+        contact("t-bug", "nod", "专业冷静的独立黑客搭档，合作干活极讲效率"),
+        contact("wilson", "nod", "H10 楼上武器店老板，刚帮把定制手枪“终夜”调校到位"),
+      ],
+    },
+  };
+
+  const cfg = originConfig[originKey];
+  const board: Board = BoardSchema.parse({
+    origin: library(cfg.originModule),
+    tarot: cfg.tarot,
+    pasts: cfg.pasts.map(library),
+    skills: cfg.skills.map(library),
+    flaws: cfg.flaws.map(library),
+    cyberware: cfg.cyberware.map((id) => chrome(id)),
+    kit: {
+      cashTier: cfg.cashTier,
+      weapons: ["unity"],
+      vehicle: cfg.vehicle,
+    },
+    acquaintances: [...cfg.acquaintances],
+    startLocation: cfg.startLocation,
+  });
+
+  return CharacterCardSchema.parse({
+    name,
+    alias: "V",
+    pronoun,
+    origin: cfg.originLabel,
+    look: `${lookBase}${cfg.lookSuffix}`,
+    past: cfg.past,
+    personality: cfg.personality,
+    voice: cfg.voice,
+    skills: cfg.skillsText,
+    board,
+    replacesNpcId: "v",
+  });
+}
+
+/** 官方预设角色模板：首张为可一键调配性别与三出身的原作主角 V，其余覆盖四大生态与多元流派 */
 export const sampleCharacters = CharacterCardSchema.array().parse([
+  buildVCharacterCard("female", "street-kid"),
   {
     name: "洛·门多萨",
     alias: "扳手",

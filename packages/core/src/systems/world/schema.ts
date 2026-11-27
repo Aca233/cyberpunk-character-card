@@ -151,7 +151,7 @@ export const DeadlineCommandSchema = z
   .object({
     type: z.literal("deadline"),
     action: z.enum(["add", "handle"]),
-    id: z.string().min(1),
+    id: z.string().min(1).describe("约定稳定 id（handle 填【约定】里已有 id）"),
     label: z.string().min(1).optional(),
     due: GameTimeSchema.optional(),
   })

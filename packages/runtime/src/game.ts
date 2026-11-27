@@ -38,6 +38,7 @@ import {
   type NarratorPlan,
   NarratorStageError,
   type NarratorTurn,
+  NPC_OVERRIDES_MAX,
   newGameWorld,
   npcRules,
   OFFSCREEN_PACE_SCENES,
@@ -112,6 +113,10 @@ export const CreateSaveSchema = z.strictObject({
    * 不给时照旧用开场自带的丽姿酒吧；建档时按地图数据校验，对不上的拒收
    */
   startLocation: z.string().trim().min(1).max(80).optional(),
+  /** 全局本地改写过的原作/世界 NPC 卡面（优先级低于角色卡自身专属覆写） */
+  npcOverrides: z.array(npcRules.NpcCardSchema).max(NPC_OVERRIDES_MAX).optional(),
+  /** 全局本地自建 NPC 卡面（开新档自动加入世界，不覆盖同 id 已有角色） */
+  customNpcs: z.array(npcRules.NpcCardSchema).max(NPC_OVERRIDES_MAX).optional(),
 });
 
 /** 完整导出的文件格式：meta、整份回合日志和最新快照；含剧透，只用来备份和换电脑 */
@@ -230,7 +235,11 @@ export class GameService {
   constructor(private readonly deps: GameDeps) {}
 
   private runtime(meta: SaveMeta) {
-    return workshopRuntime(meta.workshopPacks ?? [], meta.board?.customCyberware);
+    return workshopRuntime(
+      meta.workshopPacks ?? [],
+      meta.board?.customCyberware,
+      meta.board?.kit?.customItems,
+    );
   }
 
   async list(): Promise<Record<string, unknown>[]> {
@@ -295,8 +304,33 @@ export class GameService {
     if (workshopPacks.length > 40) {
       return { status: 400, body: { error: "每份存档最多使用 40 个内容包，请先停用部分包。" } };
     }
-    const start = boardStart(entry.card);
-    const runtime = workshopRuntime(workshopPacks, start?.customCyberware);
+    const baseStart = boardStart(entry.card);
+    const globalOverrides = input.npcOverrides ?? [];
+    const globalCustomNpcs = input.customNpcs ?? [];
+    const start = (() => {
+      if (globalOverrides.length === 0 && globalCustomNpcs.length === 0) return baseStart;
+      const mergedOverridesMap = new Map<string, npcRules.NpcCard>();
+      for (const card of globalOverrides) mergedOverridesMap.set(card.id, card);
+      for (const card of baseStart?.npcOverrides ?? []) mergedOverridesMap.set(card.id, card);
+      const existingPeople = [...(baseStart?.people ?? [])];
+      const existingIds = new Set(existingPeople.map((p) => p.id));
+      for (const card of globalCustomNpcs) {
+        if (existingIds.has(card.id)) continue;
+        existingIds.add(card.id);
+        existingPeople.push({ ...card, canon: false, met: false, ledger: [] });
+      }
+      return {
+        cyberware: baseStart?.cyberware ?? [],
+        ...(baseStart?.cyberwareSides ? { cyberwareSides: baseStart.cyberwareSides } : {}),
+        customCyberware: baseStart?.customCyberware ?? [],
+        ...(baseStart?.origin ? { origin: baseStart.origin } : {}),
+        ...(baseStart?.kit ? { kit: baseStart.kit } : {}),
+        people: existingPeople,
+        acquaintances: baseStart?.acquaintances ?? [],
+        npcOverrides: [...mergedOverridesMap.values()].slice(0, NPC_OVERRIDES_MAX),
+      };
+    })();
+    const runtime = workshopRuntime(workshopPacks, start?.customCyberware, start?.kit?.customItems);
     const matchInput = loadoutText(entry.card);
     const cardStart = entry.card.board?.startLocation;
     const startLocation =
@@ -304,8 +338,9 @@ export class GameService {
       (cardStart && RADAR_ANCHORS.some((anchor) => anchor.id === cardStart)
         ? cardStart
         : pickStartLocation(matchInput, runtime.content.loadouts ?? []));
+    const { npcOverrides: _o, customNpcs: _c, ...saveInput } = input;
     const meta: SaveMeta = {
-      ...input,
+      ...saveInput,
       startLocation,
       createdAt: this.deps.clock.now().toISOString(),
       character: saveCharacter(entry.card),

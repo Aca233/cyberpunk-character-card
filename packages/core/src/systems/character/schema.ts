@@ -105,6 +105,8 @@ export const CharacterStateSchema = z.object({
   pastFacts: z.array(PastFactSchema).default([]),
   /** 角色立绘图片 ID（本地 ImageStore） */
   portrait: z.string().min(1).max(120).optional(),
+  /** 若玩家直接扮演某位原作预制人物（例如 "v"），开局时自动跳过对应 NPC 避免重复 */
+  replacesNpcId: z.string().trim().min(1).max(40).optional(),
 });
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 
@@ -117,6 +119,7 @@ export const SetCharacterSchema = z.object({
   /** 旧存档的角色快照没有 */
   traits: z.array(TraitSchema).max(TRAITS_MAX).optional(),
   portrait: z.string().min(1).max(120).optional(),
+  replacesNpcId: z.string().trim().min(1).max(40).optional(),
 });
 export type SetCharacter = z.infer<typeof SetCharacterSchema>;
 

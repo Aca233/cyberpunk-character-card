@@ -16,7 +16,12 @@ import { layerOpen, useLayer } from "../../ui/layers";
 import { MenuItem } from "../../ui/MenuItem";
 import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import { useCardTilt } from "../../ui/useCardTilt";
-import { defaultStartLocationFor } from "../characters/creator";
+import {
+  defaultStartLocationFor,
+  loadLocalCustomNpcs,
+  loadLocalNpcOverrides,
+  subscribeLocalCustomNpcs,
+} from "../characters/creator";
 import {
   anchorLabel,
   DEFAULT_START,
@@ -25,6 +30,7 @@ import {
 } from "../characters/StartMapPicker";
 import { GeneratedImage } from "../images/GeneratedImage";
 import { EmptyState } from "../status/StatusParts";
+import { portraitOf } from "../story/art";
 import {
   SHELL_THEMES,
   ShellBackdrop,
@@ -76,6 +82,11 @@ export function MainMenu() {
   const saves = useQuery({ queryKey: ["saves"], queryFn: api.saves });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health });
   const characters = useQuery({ queryKey: ["characters"], queryFn: api.characters });
+  const boardData = useQuery({
+    queryKey: ["characterBoard"],
+    queryFn: api.characterBoard,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.profiles, retry: false });
 
   const sorted = useMemo(() => [...(saves.data ?? [])].sort(byNewest), [saves.data]);
@@ -89,6 +100,19 @@ export function MainMenu() {
   const [immersive, setImmersive] = useState(false);
   const [loadFilter, setLoadFilter] = useState("");
   const [charFilter, setCharFilter] = useState("");
+  const [charTab, setCharTab] = useState<"characters" | "npcs">("characters");
+  const [npcFilter, setNpcFilter] = useState("");
+  const [localCustomNpcs, setLocalCustomNpcs] = useState(() => loadLocalCustomNpcs());
+  const [localNpcOverrides, setLocalNpcOverrides] = useState(() => loadLocalNpcOverrides());
+
+  useEffect(
+    () =>
+      subscribeLocalCustomNpcs(() => {
+        setLocalCustomNpcs(loadLocalCustomNpcs());
+        setLocalNpcOverrides(loadLocalNpcOverrides());
+      }),
+    [],
+  );
   const layoutRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -308,6 +332,45 @@ export function MainMenu() {
     });
   }, [characters.data, normalizedCharFilter]);
 
+  const menuNpcItems = useMemo(() => {
+    const overrideMap = new Map(localNpcOverrides.map((c) => [c.id, c] as const));
+    const customList = localCustomNpcs.map((c) => ({
+      id: c.id,
+      name: c.name,
+      alias: c.alias,
+      role: c.role,
+      badge: "自建 NPC",
+      isCustom: true,
+      hasPortrait: false,
+    }));
+    const canonList = (boardData.data?.npcs ?? []).map((n) => {
+      const ov = overrideMap.get(n.id);
+      return {
+        id: n.id,
+        name: ov?.name ?? n.name,
+        alias: ov ? ov.alias : n.alias,
+        role: ov?.role ?? n.role,
+        badge: ov ? "已改写" : "原作人物",
+        isCustom: false,
+        hasPortrait: Boolean(portraitOf(n.id)),
+      };
+    });
+    canonList.sort((a, b) => Number(b.hasPortrait) - Number(a.hasPortrait));
+    return [...customList, ...canonList];
+  }, [localCustomNpcs, localNpcOverrides, boardData.data?.npcs]);
+
+  const normalizedNpcFilter = npcFilter.trim().toLowerCase();
+  const filteredMenuNpcs = useMemo(() => {
+    if (!normalizedNpcFilter) return menuNpcItems;
+    return menuNpcItems.filter((item) => {
+      const hay = [item.name, item.alias, item.role, item.badge]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(normalizedNpcFilter);
+    });
+  }, [menuNpcItems, normalizedNpcFilter]);
+
   const stageTitle = STAGE_TITLES[focus] ?? "";
   const stageCode = STAGE_CODES[focus] ?? "";
   const stageCount =
@@ -319,8 +382,12 @@ export function MainMenu() {
         ? "最近一次冒险"
         : focus === "new" && characters.data
           ? `${characters.data.length} 名可用角色`
-          : focus === "characters" && characters.data
-            ? `${characters.data.length} 张档案`
+          : focus === "characters"
+            ? charTab === "npcs"
+              ? `${menuNpcItems.length} 位人物`
+              : characters.data
+                ? `${characters.data.length} 张档案`
+                : ""
             : focus === "workshop"
               ? "未完成 · 暂未启用"
               : focus === "theme"
@@ -633,57 +700,131 @@ export function MainMenu() {
               {focus === "characters" && (
                 <div className={styles.load}>
                   <div className={styles.loadToolbar}>
-                    {(characters.data?.length ?? 0) > 4 ? (
-                      <FrameBox className={styles.loadSearch}>
-                        <input
-                          value={charFilter}
-                          onChange={(e) => setCharFilter(e.target.value)}
-                          placeholder="筛选角色名、外号或出身…"
-                          aria-label="筛选角色"
-                        />
-                      </FrameBox>
-                    ) : (
-                      <span className={styles.note}>
-                        共 {characters.data?.length ?? 0} 张角色档案 · 点击角色进入档案编辑
-                      </span>
-                    )}
-                    <div className={styles.saveTools}>
-                      <Button small onClick={() => navigate("/characters")}>
-                        管理全部
+                    <div className={styles.saveTools} role="tablist" aria-label="档案分类">
+                      <Button
+                        small
+                        pressed={charTab === "characters"}
+                        onClick={() => setCharTab("characters")}
+                      >
+                        主角与预设 ({characters.data?.length ?? 0})
                       </Button>
-                      <Button small primary onClick={() => navigate("/characters?new=1")}>
-                        ＋ 新建角色
+                      <Button small pressed={charTab === "npcs"} onClick={() => setCharTab("npcs")}>
+                        夜之城 NPC ({menuNpcItems.length})
                       </Button>
                     </div>
+                    <div className={styles.saveTools}>
+                      {charTab === "npcs" ? (
+                        <>
+                          <Button small onClick={() => navigate("/characters?tab=npcs")}>
+                            管理全部 NPC
+                          </Button>
+                          <Button small primary onClick={() => navigate("/characters?newNpc=1")}>
+                            ＋ 新建 NPC
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button small onClick={() => navigate("/characters")}>
+                            管理全部
+                          </Button>
+                          <Button small primary onClick={() => navigate("/characters?new=1")}>
+                            ＋ 新建角色
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  {(characters.data?.length ?? 0) === 0 ? (
-                    <EmptyState
-                      text="还没有角色档案"
-                      action={
-                        <Button primary onClick={() => navigate("/characters?new=1")}>
-                          ＋ 新建角色
-                        </Button>
-                      }
-                    />
-                  ) : filteredCharacters.length === 0 ? (
-                    <EmptyState
-                      text={`没有匹配「${charFilter}」的角色档案`}
-                      action={<Button onClick={() => setCharFilter("")}>清空筛选</Button>}
-                    />
+
+                  {charTab === "characters" ? (
+                    <>
+                      {(characters.data?.length ?? 0) > 4 && (
+                        <div className={styles.loadToolbar}>
+                          <FrameBox className={styles.loadSearch}>
+                            <input
+                              value={charFilter}
+                              onChange={(e) => setCharFilter(e.target.value)}
+                              placeholder="筛选角色名、外号或出身…"
+                              aria-label="筛选角色"
+                            />
+                          </FrameBox>
+                        </div>
+                      )}
+                      {(characters.data?.length ?? 0) === 0 ? (
+                        <EmptyState
+                          text="还没有角色档案"
+                          action={
+                            <Button primary onClick={() => navigate("/characters?new=1")}>
+                              ＋ 新建角色
+                            </Button>
+                          }
+                        />
+                      ) : filteredCharacters.length === 0 ? (
+                        <EmptyState
+                          text={`没有匹配「${charFilter}」的角色档案`}
+                          action={<Button onClick={() => setCharFilter("")}>清空筛选</Button>}
+                        />
+                      ) : (
+                        <ul className={styles.saveGrid}>
+                          {filteredCharacters.map((entry) => (
+                            <li key={entry.id}>
+                              <CharPreviewCard
+                                entry={entry}
+                                onOpen={() =>
+                                  navigate(`/characters?id=${encodeURIComponent(entry.id)}`)
+                                }
+                                footer={
+                                  !entry.sample ? <DeleteCharacter entry={entry} /> : undefined
+                                }
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   ) : (
-                    <ul className={styles.saveGrid}>
-                      {filteredCharacters.map((entry) => (
-                        <li key={entry.id}>
-                          <CharPreviewCard
-                            entry={entry}
-                            onOpen={() =>
-                              navigate(`/characters?id=${encodeURIComponent(entry.id)}`)
-                            }
-                            footer={!entry.sample ? <DeleteCharacter entry={entry} /> : undefined}
+                    <>
+                      <div className={styles.loadToolbar}>
+                        <FrameBox className={styles.loadSearch}>
+                          <input
+                            value={npcFilter}
+                            onChange={(e) => setNpcFilter(e.target.value)}
+                            placeholder="筛选 NPC 姓名、外号或身份…"
+                            aria-label="筛选 NPC"
                           />
-                        </li>
-                      ))}
-                    </ul>
+                        </FrameBox>
+                        <span className={styles.note}>
+                          点击任意人物直接进入工作台调整资料与义体
+                        </span>
+                      </div>
+                      {boardData.isPending ? (
+                        <p className={styles.note} role="status">
+                          正在读取夜之城人物档案…
+                        </p>
+                      ) : filteredMenuNpcs.length === 0 ? (
+                        <EmptyState
+                          text={`没有匹配「${npcFilter}」的夜之城人物`}
+                          action={<Button onClick={() => setNpcFilter("")}>清空筛选</Button>}
+                        />
+                      ) : (
+                        <ul className={styles.saveGrid}>
+                          {filteredMenuNpcs.map((npc) => (
+                            <li key={npc.id}>
+                              <NpcPreviewCard
+                                id={npc.id}
+                                name={npc.name}
+                                alias={npc.alias}
+                                role={npc.role}
+                                badge={npc.badge}
+                                isCustom={npc.isCustom}
+                                onOpen={() =>
+                                  navigate(`/characters?npc=${encodeURIComponent(npc.id)}`)
+                                }
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -810,6 +951,56 @@ function CharPreviewCard({
         </span>
       </button>
       {footer && <div className={styles.charPreviewFoot}>{footer}</div>}
+    </div>
+  );
+}
+
+function NpcPreviewCard({
+  id,
+  name,
+  alias,
+  role,
+  badge,
+  isCustom,
+  onOpen,
+}: {
+  readonly id: string;
+  readonly name: string;
+  readonly alias?: string | undefined;
+  readonly role: string;
+  readonly badge: string;
+  readonly isCustom: boolean;
+  readonly onOpen: () => void;
+}) {
+  const tilt = useCardTilt<HTMLDivElement>({
+    maxRotate: 5.5,
+    shadowShift: 4.5,
+  });
+  const face = !isCustom ? portraitOf(id) : undefined;
+  const monogram = ([...name.trim()][0] ?? "N").toUpperCase();
+
+  return (
+    <div className={styles.charPreviewCard} {...tilt}>
+      <CellFrame />
+      <button type="button" className={styles.charPreviewMain} onClick={onOpen}>
+        <div className={styles.charPreviewBody}>
+          <span className={styles.charPreviewBadge}>{badge}</span>
+          <strong className={styles.charPreviewName}>
+            {name}
+            {alias ? `「${alias}」` : ""}
+          </strong>
+          <span className={styles.charPreviewMeta}>{role}</span>
+        </div>
+        <span className={styles.charPreviewMedia} data-kind={face ? "portrait" : "monogram"}>
+          {face ? (
+            <Asset id={face} alt={name} className={styles.charPreviewImg} />
+          ) : (
+            <span className={styles.charPreviewMonogram} aria-hidden>
+              {monogram}
+            </span>
+          )}
+        </span>
+      </button>
     </div>
   );
 }
@@ -1275,12 +1466,17 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   const startSpot = startAnchor(startLocation);
   const defaultSpot = startAnchor(defaultLocation);
   const create = useMutation({
-    mutationFn: () =>
-      api.createSave({
+    mutationFn: () => {
+      const globalOverrides = loadLocalNpcOverrides();
+      const globalCustomNpcs = loadLocalCustomNpcs();
+      return api.createSave({
         title: title.trim(),
         characterId,
         ...(startLocation ? { startLocation } : {}),
-      }),
+        ...(globalOverrides.length > 0 ? { npcOverrides: globalOverrides } : {}),
+        ...(globalCustomNpcs.length > 0 ? { customNpcs: globalCustomNpcs } : {}),
+      });
+    },
     onSuccess: async (save) => {
       await client.invalidateQueries({ queryKey: ["saves"] });
       onCreated(save.id);

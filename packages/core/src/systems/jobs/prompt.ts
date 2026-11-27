@@ -1,6 +1,12 @@
 import type { RuleModule } from "../../kernel/system";
 import { formatGameTime } from "../world";
-import { type FixerCard, fixerBlocked, isOpen, JOB_STATUS_LABELS } from "./apply";
+import {
+  type FixerCard,
+  fixerBlocked,
+  isOpen,
+  JOB_CREW_STATUS_LABELS,
+  JOB_STATUS_LABELS,
+} from "./apply";
 import { JOB_KIND_LABELS, type Job, type JobsState, JobTemplateCatalogSchema } from "./schema";
 
 /** 已结束的委托最多列这么多单，最近的优先 */
@@ -18,7 +24,7 @@ export const JOB_RISK_LABELS: Readonly<Record<number, string>> = {
 export const jobsRules: RuleModule<JobsState> = {
   id: "jobs",
   title: "委托",
-  commands: ["jobOffer", "jobAccept", "jobNote", "jobEnd"],
+  commands: ["jobOffer", "jobAccept", "jobNote", "jobCrew", "jobEnd"],
   when: () => true,
   judge: `- 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的能绕开硬碰硬、把局势拆开解决。
 - 委托里的危险与对手火力，按委托分量、雇主/目标势力与现场物理准备实际裁决。
@@ -37,7 +43,8 @@ export const jobsRules: RuleModule<JobsState> = {
 - 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的能把风险拆解掉。
 - 玩家在私信或对话里答应接单时写 jobAccept 才算接下；如果玩家在正文里直接明确拒绝某单待接委托，可写 jobEnd(outcome: "abandoned") 了结它；如果玩家没点接单就直接去把待接委托办完了，也可写 jobAccept 或直接 jobEnd 结算。
 - 有实质进展、玩家选了某条路、转折被揭开时写 jobNote（待接与进行中委托都可以写）。
-- 这单在正文里了结时写 jobEnd，结局按实际发生的事定。paid 只写已经实际到手的钱，没有到款写 0；完成约定不会自动发钱、声望或好感，关系变化需要独立事实。讨价还价、被克扣、顺手多拿都写进 paid，要在正文里说得通；到手的钱由代码记账。
+- 玩家拉已结识搭档一起干某单委托并谈妥分工/分成% 时写 jobCrew(action: "join", id, npc, role, cutPercent)；搭档中途退出或阵亡离队写 jobCrew(action: "leave", id, npc)。
+- 这单在正文里了结时写 jobEnd，结局按实际发生的事定。paid 写这单实际到账的总报酬，没有到款写 0；有入伙搭档时代码会自动按约定分成% 结算玩家净到手，不必再额外发 money 扣分成。仅当正文里玩家故意克扣少给或黑吃黑时，才填写 crewPayouts 写明实际分给搭档的数额，代码会自动在对应 NPC 账本记欠账（youOwe）与共同记忆。
 - 失败和坏选择要有真实的后果，但不写脱离局势的空降惩罚；被放走的人、被得罪的雇主以后可能回来。`,
 };
 
@@ -56,6 +63,17 @@ function jobLine(job: Job, state: JobsState): string {
       : [`期限 ${formatGameTime(job.due)}${job.overdue ? "（已超期）" : ""}`]),
   ];
   const lines = [`- ${job.title}［${job.id}］${parts.join("，")}`, `  利益冲突：${job.conflict}`];
+  const activeCrew = (job.crew ?? []).filter((m) => m.status !== "left");
+  if (activeCrew.length > 0) {
+    lines.push(
+      `  入伙搭档：${activeCrew
+        .map(
+          (m) =>
+            `${m.name}［${m.npc}］（${m.role}，分成 ${m.cutPercent}%，${JOB_CREW_STATUS_LABELS[m.status]}）`,
+        )
+        .join("、")}`,
+    );
+  }
   if (job.twist) lines.push(`  隐藏的转折：${job.twist}`);
   if (job.notes.length > 0) lines.push(`  进展：${job.notes.join("；")}`);
   return lines.join("\n");

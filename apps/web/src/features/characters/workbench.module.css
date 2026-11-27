@@ -14,10 +14,10 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(52px, auto) auto minmax(0, 1fr);
+  grid-template-rows: minmax(48px, auto) auto minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
-  padding: 44px 64px 26px;
+  padding: 34px clamp(22px, 2.8vw, 48px) 20px;
   box-sizing: border-box;
   color: var(--cp-text);
   background: var(--cp-bg);
@@ -620,6 +620,13 @@
 .benchHost {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.benchHost > * {
+  flex: 1;
+  min-height: 0;
 }
 
 .note {
@@ -663,6 +670,10 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
+}
+
+.stepRail[data-cols="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .stepBtn {
@@ -795,8 +806,8 @@
 .mainSplit {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(328px, 24.5vw, 396px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) clamp(292px, 21.5vw, 352px);
+  gap: 12px;
   min-height: 0;
 }
 
@@ -819,18 +830,18 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 22px 22px;
+  gap: 10px;
+  padding: 12px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: rgb(255 97 88 / 48%) transparent;
   scrollbar-width: thin;
 }
 
-/* Step 04 义体拓扑页：外层舞台锁定视口高度，左栏人体图撑满、滚动条仅作用于右侧义体货架清单 */
+/* Step 03 义体拓扑页：外层舞台锁定视口高度，左栏人体图撑满、滚动条仅作用于右侧义体货架清单 */
 .stageScroll[data-locked-scroll] {
   overflow: hidden;
-  padding-bottom: 14px;
+  padding-bottom: 12px;
 }
 
 .stageHead {
@@ -838,8 +849,8 @@
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 6px 16px;
-  padding-bottom: 10px;
+  gap: 4px 14px;
+  padding-bottom: 7px;
   border-bottom: 1px solid rgb(255 97 88 / 22%);
 }
 
@@ -984,9 +995,21 @@
   font-variant-numeric: tabular-nums;
 }
 
-.compactBox input {
+.compactBox input,
+.compactBox select {
   min-height: 36px;
+  height: 36px;
   padding: 6px 12px;
+  font-size: var(--fs-ui);
+}
+
+.compactBox select {
+  padding-right: 34px;
+}
+
+.compactBox textarea {
+  min-height: 54px;
+  padding: 8px 12px;
   font-size: var(--fs-ui);
 }
 
@@ -1471,7 +1494,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 0.3fr) minmax(0, 0.7fr);
+  grid-template-columns: clamp(188px, 21%, 236px) minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
   animation: wbSubPaneIn 220ms var(--ease-snap) both;
@@ -2083,11 +2106,117 @@
   line-height: 1.55;
 }
 
-/* 2x2 紧凑遥测矩阵（替换原先干瘪的长列表） */
+/* 右侧档案栏常驻启动资金直调卡 */
+.asideCashCard {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 10px 9px;
+  border: 1px solid rgb(252 238 10 / 24%);
+  border-left: 2px solid var(--cp-yellow);
+  background: rgb(16 18 24 / 84%);
+}
+
+.asideCashHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.asideCashValWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.asideCashInputWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.asideCashInput {
+  width: 96px;
+  height: 26px;
+  padding: 2px 7px;
+  border: 1px solid rgb(252 238 10 / 32%);
+  background: rgb(8 10 16 / 90%);
+  color: var(--cp-yellow);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+.asideCashInput::placeholder {
+  color: var(--cp-text-dim);
+  font-family: var(--font-ui);
+}
+
+.asideCashInput:focus {
+  outline: 1px solid var(--cp-cyan);
+  border-color: var(--cp-cyan);
+}
+
+.asideCashReset {
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid rgb(94 246 255 / 35%);
+  background: rgb(94 246 255 / 12%);
+  color: var(--cp-cyan);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: var(--cp-cursor-hand);
+}
+
+.asideCashReset:hover {
+  background: rgb(94 246 255 / 22%);
+}
+
+.asideCashTiers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.asideCashTierBtn {
+  padding: 3px 4px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: rgb(10 13 20 / 78%);
+  color: var(--cp-text-dim);
+  font: inherit;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: var(--cp-cursor-hand);
+}
+
+.asideCashTierBtn:hover {
+  border-color: rgb(252 238 10 / 48%);
+  color: var(--cp-text);
+}
+
+.asideCashTierBtn[aria-pressed="true"] {
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 16%);
+  color: var(--cp-yellow);
+  font-weight: 600;
+}
+
+/* 3列紧凑遥测矩阵（装配义体 / 履历特质 / 入城起点） */
 .dossierTelemetry {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .teleCell {
@@ -2636,4 +2765,186 @@
 
 .catTab[aria-pressed="true"] .catCount {
   color: var(--cp-yellow);
+}
+
+/* ———— V 单卡合一：性别 × 三出身快速调配条 ———— */
+.vPresetBar {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(252 238 10 / 42%);
+  border-left: 3px solid var(--cp-yellow);
+  background: rgb(252 238 10 / 6%);
+}
+
+.vPresetHead {
+  display: grid;
+  gap: 3px;
+}
+
+.vPresetTitle {
+  color: var(--cp-yellow);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.vPresetGroups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.vPresetGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.vPresetLabel {
+  color: var(--cp-cyan);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* ———— 角色档案库 NPC 列表与 NPC 档案工作台扩展样式 ———— */
+
+.npcRosterWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.npcFilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.npcAiBarHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.npcAiPresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.npcAiBarFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.npcTextarea {
+  width: 100%;
+  min-height: 3.6rem;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.npcMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.npcFormStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.npcSpoilerBox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgb(252 238 10 / 26%);
+  border-left: 3px solid var(--cp-yellow);
+  background: rgb(14 14 20 / 76%);
+}
+
+.npcSpoilerHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.npcPortraitFallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .npcMetaGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ———— 创角 Step 04 弹出的全屏 NPC 工作台覆层（彻底避免双层嵌套截断） ———— */
+
+.npcOverlayBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  padding: 24px clamp(20px, 2.6vw, 44px) 18px;
+  box-sizing: border-box;
+  background: rgb(5 5 10 / 96%);
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  animation: wbFadeIn 160ms ease-out both;
+}
+
+.npcOverlayHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 0 4px;
+}
+
+.npcOverlayHead h2 {
+  margin: 0;
+  color: var(--cp-text);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.npcOverlayBody {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  min-height: 0;
+  overflow: hidden;
 }

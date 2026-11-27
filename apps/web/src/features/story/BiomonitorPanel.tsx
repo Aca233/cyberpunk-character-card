@@ -32,6 +32,18 @@ const BODY_ZONES: Readonly<
   "left-leg": { label: "左腿", top: "71%", left: "57%" },
 };
 
+const ARMOR_LEVEL_LABELS: Readonly<Record<"light" | "ballistic" | "heavy", string>> = {
+  light: "轻型防护",
+  ballistic: "防弹护甲",
+  heavy: "重型装甲",
+};
+
+const ARMOR_ZONE_CONFIG = [
+  { key: "head", label: "头部", slots: ["head", "face"] },
+  { key: "torso", label: "躯干", slots: ["outer", "inner"] },
+  { key: "limbs", label: "四肢", slots: ["legs", "feet"] },
+] as const;
+
 const TONE_PRIORITY: Readonly<Record<WoundTone, number>> = {
   ok: 0,
   warn: 1,
@@ -47,21 +59,27 @@ function isBodyPart(zone: string): zone is BodyPart {
 type SystemAlert = "ok" | "warn" | "bad";
 type NeuroCellKind = "active" | "reserve" | "chrome";
 
-interface HostDossier {
-  readonly subtitle: string | null;
-  readonly notes: readonly string[];
+interface HostDossierEntry {
+  readonly key: string;
+  readonly label: string;
+  readonly body: string;
 }
 
-/** 从简介里剥掉「主板（…）」等模型提示词长块，只保留简明身份标头与手写档案注记 */
+interface HostDossier {
+  readonly subtitle: string | null;
+  readonly entries: readonly HostDossierEntry[];
+}
+
+/** 从简介里剥掉「主板（…）」等模型提示词长块，只保留简明身份标头与结构化的外貌/过往/性格/本事条目 */
 function parseHostDossier(brief: string | null): HostDossier {
-  if (!brief) return { subtitle: null, notes: [] };
+  if (!brief) return { subtitle: null, entries: [] };
   const rawLines = brief
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
   const cutIndex = rawLines.findIndex((line) => line.startsWith("主板（"));
   const visibleLines = cutIndex === -1 ? rawLines : rawLines.slice(0, cutIndex);
-  if (visibleLines.length === 0) return { subtitle: null, notes: [] };
+  if (visibleLines.length === 0) return { subtitle: null, entries: [] };
 
   const [first = "", ...rest] = visibleLines;
   const subtitle = first
@@ -69,10 +87,62 @@ function parseHostDossier(brief: string | null): HostDossier {
     .replace(/[，,]\s*出身[:：]\s*/g, " · ")
     .replace(/^出身[:：]\s*/, "")
     .trim();
+  const entries: HostDossierEntry[] = rest
+    .filter((line) => !line.startsWith("说话方式："))
+    .map((line, index) => {
+      const match = /^([^：:]{1,8})[：:]\s*(.+)$/.exec(line);
+      if (match?.[1] && match[2]) {
+        return { key: `${match[1]}-${index}`, label: match[1].trim(), body: match[2].trim() };
+      }
+      return { key: `note-${index}`, label: "档案", body: line };
+    });
   return {
     subtitle: subtitle || null,
-    notes: rest.filter((line) => !line.startsWith("说话方式：")),
+    entries,
   };
+}
+
+/** 切角折叠式宿主背景档案卡：默认收起为 1 行摘要，展开后以 2×2 结构化网格展示外貌/过往/性格/本事 */
+export function HostDossierCard({ brief }: { readonly brief: string | null }) {
+  const dossier = parseHostDossier(brief);
+  const [open, setOpen] = useState(false);
+  if (dossier.entries.length === 0) return null;
+
+  return (
+    <article className={styles.dossierCard} data-open={open || undefined}>
+      <CellFrame />
+      <button
+        type="button"
+        className={styles.dossierToggle}
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className={styles.dossierHeadLeft}>
+          <span className={styles.cardLabel}>HOST-FILE {"//"} 宿主背景档案</span>
+          {!open && (
+            <span className={styles.dossierPreviewTags} aria-hidden="true">
+              {dossier.entries.map((entry) => (
+                <span key={entry.key} className={styles.dossierPreviewChip}>
+                  {entry.label}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+        <span className={styles.dossierToggleCue}>{open ? "收起 ▴" : "展开 ▾"}</span>
+      </button>
+      {open && (
+        <div className={styles.dossierGrid}>
+          {dossier.entries.map((entry) => (
+            <div key={entry.key} className={styles.dossierCell}>
+              <span className={styles.dossierCellLabel}>{entry.label}</span>
+              <p className={styles.dossierCellBody}>{entry.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
+  );
 }
 
 function bodyLayers(view: View, wound: WoundTelemetry) {
@@ -657,6 +727,45 @@ export function BiomonitorPanel({
                 )}
               </div>
 
+              <section className={styles.armorBar} aria-label="当前部位护甲防护">
+                {ARMOR_ZONE_CONFIG.map((zone) => {
+                  const level = view.inventory.gearEffects.protection[zone.key];
+                  const tierLabel = level ? ARMOR_LEVEL_LABELS[level] : "无护甲";
+                  const wornNames = view.inventory.clothing
+                    .filter(
+                      (item) =>
+                        (zone.slots as readonly string[]).includes(item.slot) ||
+                        (zone.key === "limbs" &&
+                          item.effectTags.some(
+                            (tag) => tag.includes("四肢") || tag.includes("全身"),
+                          )),
+                    )
+                    .map((item) =>
+                      displayItemName(
+                        view.names.items,
+                        item.id,
+                        view.inventory.details?.[item.id]?.baseId,
+                      ),
+                    );
+                  const uniqueNames = [...new Set(wornNames)];
+                  const gearLabel = uniqueNames.length > 0 ? uniqueNames.join(" / ") : "未穿护具";
+                  return (
+                    <div
+                      key={zone.key}
+                      className={styles.armorZone}
+                      data-level={level ?? "none"}
+                      title={`${zone.label}防护：${tierLabel}${uniqueNames.length > 0 ? `\n当前穿着：${uniqueNames.join("、")}` : ""}`}
+                    >
+                      <span className={styles.armorZoneHead}>
+                        <span className={styles.armorZoneLabel}>{zone.label}</span>
+                        <span className={styles.armorTier}>{tierLabel}</span>
+                      </span>
+                      <span className={styles.armorGear}>{gearLabel}</span>
+                    </div>
+                  );
+                })}
+              </section>
+
               {wound.items.length > 0 ? (
                 <>
                   <ul className={styles.traumaList}>
@@ -919,14 +1028,6 @@ export function BiomonitorPanel({
           busy={busy || rescuePending}
           onClose={() => setMembershipOpen(false)}
         />
-      )}
-
-      {dossier.notes.length > 0 && (
-        <div className={styles.dossierBox}>
-          {dossier.notes.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
       )}
     </section>
   );

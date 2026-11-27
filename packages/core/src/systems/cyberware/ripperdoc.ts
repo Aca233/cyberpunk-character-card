@@ -1,9 +1,16 @@
 import type { ViewContext } from "../../kernel/system";
 import { RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
+import { shopMood } from "../inventory";
 import { formatGameTime, merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, repairCost, ripperdocList, ripperdocShelf, tradeInValue } from "./apply";
-import { clinicProvider, DoctorRosterSchema, quoteCyberware } from "./quote";
+import {
+  clinicMoodLabel,
+  clinicMoodLock,
+  clinicProvider,
+  DoctorRosterSchema,
+  quoteCyberware,
+} from "./quote";
 import {
   CYBERWARE_CATEGORY_LABELS,
   CyberwareStateSchema,
@@ -36,12 +43,26 @@ export function ripperdocView({ world, data }: ViewContext) {
   const owed = debts.filter((d) => d.doc === doc.id);
   const due = owed.flatMap((d) => (d.due === null ? [] : [d.due])).sort((a, b) => a - b)[0];
   const provider = clinicProvider(doc, npcs, clinic.staff, data);
+  const mood = shopMood(world, data, doc);
+  const moodFactor = mood?.factor ?? 1;
+  const moodLock = clinicMoodLock(mood);
   return {
     id: doc.id,
     name: doc.name,
     keeperNpc: doc.keeperNpc ?? null,
     note: doc.note,
     blackMarket: doc.blackMarket,
+    mood: mood
+      ? {
+          faction: mood.faction,
+          name: mood.name,
+          factor: mood.factor,
+          member: Boolean(mood.member),
+          contested: Boolean(mood.contested),
+          label: clinicMoodLabel(mood),
+          lock: moodLock,
+        }
+      : null,
     /** 最多肯赊多少；0 是不赊账 */
     credit: doc.credit,
     creditDays: doc.creditDays,
@@ -50,6 +71,7 @@ export function ripperdocView({ world, data }: ViewContext) {
       ? {
           amount: owed.reduce((sum, d) => sum + d.amount, 0),
           due: due === undefined ? "未约定期限" : formatGameTime(due),
+          overdue: owed.some((d) => d.due !== null && d.due <= world.time),
         }
       : null,
     /** 卸下装着的义体时回收多少，按义体 id */
@@ -71,7 +93,11 @@ export function ripperdocView({ world, data }: ViewContext) {
         const def = parts.get(c.id);
         if (!def || !broken.includes(c.id)) return [];
         const quote = quoteCyberware(world, data, { action: "repair", doc: doc.id, id: c.id });
-        return [[c.id, quote.ok ? quote.quote.total : repairCost(def)]];
+        const fallbackRepair = Math.max(
+          100,
+          Math.round((repairCost(def) * moodFactor) / 100) * 100,
+        );
+        return [[c.id, quote.ok ? quote.quote.total : fallbackRepair]];
       }),
     ) as Readonly<Record<string, number>>,
     shelf: ripperdocShelf(
@@ -103,6 +129,10 @@ export function ripperdocView({ world, data }: ViewContext) {
       const section = cyberwareSectionOf(item.def);
       const category = cyberwareCategoryOf(item.def);
       const extensionZone = cyberwareExtensionZone(item.def);
+      const fallbackPrice = Math.round((item.def.price * doc.priceFactor * moodFactor) / 100) * 100;
+      const fallbackTradeIn = item.replaces
+        ? Math.min(fallbackPrice, tradeInValue(item.replaces))
+        : 0;
       return {
         id: item.def.id,
         name: item.def.name,
@@ -128,9 +158,9 @@ export function ripperdocView({ world, data }: ViewContext) {
           const g = cyberwareExclusiveGroup(item.def);
           return g ? EXCLUSIVE_GROUP_LABELS[g] : null;
         })(),
-        price: quote?.price ?? item.price,
-        tradeIn: quote?.tradeIn ?? item.tradeIn,
-        net: quote?.total ?? item.net,
+        price: quote?.price ?? fallbackPrice,
+        tradeIn: quote?.tradeIn ?? fallbackTradeIn,
+        net: quote?.total ?? Math.max(0, fallbackPrice - fallbackTradeIn),
         inStock:
           (clinic.stock[item.def.id] ?? 0) +
           Object.values(state.parts).filter(

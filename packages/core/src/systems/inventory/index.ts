@@ -9,6 +9,7 @@ import {
   applyChipWrite,
   applyItem,
   applyMod,
+  applyOutfitPreset,
   applyParts,
   applyPlaceItem,
   applyWeaponHold,
@@ -67,6 +68,7 @@ export const inventory = defineSystem<
     backpack: {},
     heldWeapons: null,
     clothing: {},
+    outfits: [],
     parts: 0,
     claimedQuickhacks: [],
     merchants: {},
@@ -172,6 +174,12 @@ export const inventory = defineSystem<
             command.mod,
             itemCatalog(withWorldObjects(ctx.data, draft.objects)),
             ctx.now,
+          );
+        case "inventory.outfit":
+          return applyOutfitPreset(
+            draft,
+            command,
+            itemCatalog(withWorldObjects(ctx.data, draft.objects)),
           );
         case "parts":
           return applyParts(draft, command);
@@ -279,6 +287,7 @@ export * from "./apply";
 export * from "./events";
 export * from "./gunsmith";
 export * from "./merchants";
+export * from "./mood";
 export * from "./names";
 export * from "./prompt";
 export * from "./schema";

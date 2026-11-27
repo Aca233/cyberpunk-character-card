@@ -42,11 +42,14 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "yukimura",
+        "netrunner-infovisor",
         "street-jacket",
         "turtleneck-knit",
-        "cargo-pants",
-        "street-sneakers",
+        "netrunner-weave-pants",
+        "netrunner-ground-boots",
         "chip-reader-writer",
+        "faraday-pouch",
+        "relay-beacon",
         "blank-shard",
         "holo-phone",
       ],
@@ -90,7 +93,13 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
     initialDoing: "站在云顶前台全息操作台后核对今晚的预约流水，同时留意安保频道里的电梯层通报。",
     canon: true,
     body: {
-      gear: ["club-dress", "dress-shoes", "holo-phone", "shard-intel-clouds-manual"],
+      gear: [
+        "corpo-smart-specs",
+        "club-dress",
+        "dress-shoes",
+        "holo-phone",
+        "shard-intel-clouds-manual",
+      ],
       cyberware: [
         "kiroshi-mk1",
         "chroma-iris-overlay",
@@ -168,7 +177,7 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
     initialDoing: "在云顶员工休息廊擦拭袖口，留心着包厢区的灯光提示和安保换班动静。",
     canon: true,
     body: {
-      gear: ["silk-shirt", "tailored-slacks", "dress-shoes", "holo-phone"],
+      gear: ["silk-shirt", "tailored-slacks", "dress-shoes", "cloned-keycard", "holo-phone"],
       cyberware: [
         "doll-behavior-chip",
         "tactile-nerve-amp",
@@ -211,11 +220,13 @@ export const everydayPeople = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "lexington",
+        "mirror-shades",
         "long-trenchcoat",
         "silk-shirt",
         "cargo-pants",
         "street-sneakers",
         "chip-reader-writer",
+        "faraday-pouch",
         "synth-cigs",
         "blank-shard",
       ],

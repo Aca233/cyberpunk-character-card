@@ -80,7 +80,7 @@ export const DISTRICT_LAWS: Readonly<Record<string, DistrictLaw>> = {
     forbidsOpenLongArms: false,
     traumaCoverage: "blocked",
     lawSummary:
-      "汉森上校麾下幽灵犬重兵封锁的独立军管区。进出大门需查验通行证并接受载具扫描（违禁重武需藏入改装车走私暗格），空域封闭导致创伤小组难以直接降落。",
+      "汉森上校麾下幽冥犬军管的独立飞地，黑市与体育场对夜之城佣兵与商客开放进出。常规大门接受身份与随身武器扫描（或走太平洲地下通道）即可放行，不会以「缺少通行证」无故拒入；仅当与幽冥犬敌对/见面就打、开赃车或身背高星通缉时，关口盘查才会升级为阻拦或冲突。空域封闭，创伤小组无法直接降落。",
   },
   badlands: {
     id: "badlands",

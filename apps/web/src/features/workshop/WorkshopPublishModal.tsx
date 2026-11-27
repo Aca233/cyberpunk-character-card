@@ -1,6 +1,8 @@
 import {
   type BoardModule,
   type InstalledWorkshopPack,
+  inventoryRules,
+  type npcRules,
   type StartCyberware,
   type WorkshopGenerateFocus,
   type WorkshopPack,
@@ -14,7 +16,12 @@ import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { FrameBox } from "../../ui/FrameBox";
 import { ToggleCheck } from "../../ui/ToggleCheck";
-import { loadLocalCustomCyberware, loadLocalCustomModules } from "../characters/creator";
+import {
+  loadLocalCustomCyberware,
+  loadLocalCustomItems,
+  loadLocalCustomModules,
+  loadLocalCustomNpcs,
+} from "../characters/creator";
 import styles from "./workshop.module.css";
 
 export type PublishSourceTab = "local" | "ai" | "json";
@@ -156,6 +163,7 @@ function convertStartCyberwareToDef(
     ...(item.smartLink ? { smartLink: true } : {}),
     ...(item.carryBonus !== undefined ? { carryBonus: item.carryBonus } : {}),
     ...(item.defenses ? { defenses: item.defenses } : {}),
+    ...(item.art ? { art: item.art } : {}),
   };
 }
 
@@ -178,9 +186,11 @@ export function WorkshopPublishModal({
     [charactersQuery.data],
   );
   const localCyberware = useMemo<readonly StartCyberware[]>(() => loadLocalCustomCyberware(), []);
+  const localItems = useMemo<readonly inventoryRules.ItemDef[]>(() => loadLocalCustomItems(), []);
   const localModules = useMemo<readonly BoardModule[]>(() => loadLocalCustomModules(), []);
+  const localNpcs = useMemo<readonly npcRules.NpcCard[]>(() => loadLocalCustomNpcs(), []);
 
-  // ———— Tab 1: 从本地打包（选择已安装包，或勾选角色卡/自创义体/自创模块） ————
+  // ———— Tab 1: 从本地打包（选择已安装包，或勾选角色卡/自创义体/自创武器物品/自创模块/自建 NPC） ————
   const [pickedExistingPackId, setPickedExistingPackId] = useState<string | null>(
     initialPack?.id ?? null,
   );
@@ -188,8 +198,14 @@ export function WorkshopPublishModal({
   const [selectedCwIds, setSelectedCwIds] = useState<readonly string[]>(() =>
     initialPack ? [] : localCyberware.map((c) => c.id),
   );
+  const [selectedItemIds, setSelectedItemIds] = useState<readonly string[]>(() =>
+    initialPack ? [] : localItems.map((i) => i.id),
+  );
   const [selectedModIds, setSelectedModIds] = useState<readonly string[]>(() =>
     initialPack ? [] : localModules.map((m) => m.id),
+  );
+  const [selectedNpcIds, setSelectedNpcIds] = useState<readonly string[]>(() =>
+    initialPack ? [] : localNpcs.map((n) => n.id),
   );
 
   // ———— 共享元信息（包名、作者、简介、ID、更新密钥） ————
@@ -413,22 +429,42 @@ export function WorkshopPublishModal({
       .filter((c) => selectedCwIds.includes(c.id))
       .map(convertStartCyberwareToDef)
       .filter((c): c is WorkshopPack["cyberware"][number] => c !== null);
+    const pickedItems = localItems
+      .filter((item) => selectedItemIds.includes(item.id))
+      .map(({ customImage: _omit, ...rest }) => rest);
     const pickedMods = localModules.filter((m) => selectedModIds.includes(m.id));
-    if (pickedChars.length === 0 && pickedCw.length === 0 && pickedMods.length === 0) {
+    const pickedNpcs = localNpcs.filter((n) => selectedNpcIds.includes(n.id));
+    if (
+      pickedChars.length === 0 &&
+      pickedCw.length === 0 &&
+      pickedItems.length === 0 &&
+      pickedMods.length === 0 &&
+      pickedNpcs.length === 0
+    ) {
       return null;
     }
 
     const autoTitle =
-      pickedChars.length === 1 && pickedCw.length === 0 && pickedMods.length === 0
+      pickedChars.length === 1 &&
+      pickedCw.length === 0 &&
+      pickedItems.length === 0 &&
+      pickedMods.length === 0 &&
+      pickedNpcs.length === 0
         ? `${pickedChars[0]?.name ?? "原创角色"} · 角色卡`
         : "我的夜之城创作包";
     const autoDesc =
-      pickedChars.length === 1 && pickedCw.length === 0 && pickedMods.length === 0
+      pickedChars.length === 1 &&
+      pickedCw.length === 0 &&
+      pickedItems.length === 0 &&
+      pickedMods.length === 0 &&
+      pickedNpcs.length === 0
         ? `${pickedChars[0]?.origin || "原创角色"}：${pickedChars[0]?.look.slice(0, 80) ?? ""}`
         : `收录 ${[
             pickedChars.length ? `${pickedChars.length} 张角色卡` : "",
             pickedCw.length ? `${pickedCw.length} 件自创义体` : "",
+            pickedItems.length ? `${pickedItems.length} 件自创武器/物品` : "",
             pickedMods.length ? `${pickedMods.length} 项自创模块` : "",
+            pickedNpcs.length ? `${pickedNpcs.length} 位自建 NPC` : "",
           ]
             .filter(Boolean)
             .join("、")}`;
@@ -443,9 +479,9 @@ export function WorkshopPublishModal({
       characters: pickedChars,
       modules: pickedMods,
       acquaintances: [],
-      npcs: [],
-      seedNpcs: [],
-      items: [],
+      npcs: pickedNpcs,
+      seedNpcs: pickedNpcs.map((n) => n.id),
+      items: pickedItems,
       cyberware: pickedCw,
       braindances: [],
       chipContents: [],
@@ -465,8 +501,12 @@ export function WorkshopPublishModal({
     selectedCharIds,
     localCyberware,
     selectedCwIds,
+    localItems,
+    selectedItemIds,
     localModules,
     selectedModIds,
+    localNpcs,
+    selectedNpcIds,
     packId,
     title,
     author,
@@ -487,7 +527,9 @@ export function WorkshopPublishModal({
   const hasAnyLocalAsset =
     customCharacters.length > 0 ||
     localCyberware.length > 0 ||
+    localItems.length > 0 ||
     localModules.length > 0 ||
+    localNpcs.length > 0 ||
     installedPacks.length > 0;
 
   return (
@@ -689,6 +731,38 @@ export function WorkshopPublishModal({
                       </div>
                     )}
 
+                    {localItems.length > 0 && (
+                      <div className={styles.pickGroup}>
+                        <div className={styles.pickGroupHead}>
+                          <strong>角色工作台自创武器 / 物品 ({localItems.length})</strong>
+                          <span className={styles.paneCount}>已选 {selectedItemIds.length}</span>
+                        </div>
+                        <ul className={styles.pickList}>
+                          {localItems.map((item) => {
+                            const checked = selectedItemIds.includes(item.id);
+                            return (
+                              <li key={item.id} className={styles.pickItem}>
+                                <ToggleCheck
+                                  checked={checked}
+                                  aria-label={`选择自创武器或物品 ${item.name}`}
+                                  onChange={() =>
+                                    setSelectedItemIds((cur) => toggleId(cur, item.id))
+                                  }
+                                />
+                                <div className={styles.pickItemText}>
+                                  <strong>{item.name}</strong>
+                                  <span>
+                                    {inventoryRules.ITEM_KIND_LABELS[item.kind]}
+                                    {item.ability ? ` · ${item.ability}` : ""}
+                                  </span>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+
                     {localModules.length > 0 && (
                       <div className={styles.pickGroup}>
                         <div className={styles.pickGroupHead}>
@@ -708,6 +782,35 @@ export function WorkshopPublishModal({
                                 <div className={styles.pickItemText}>
                                   <strong>{mod.label}</strong>
                                   <span>{mod.ability || mod.hook || "自定义模块"}</span>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+
+                    {localNpcs.length > 0 && (
+                      <div className={styles.pickGroup}>
+                        <div className={styles.pickGroupHead}>
+                          <strong>角色工作台自建 NPC ({localNpcs.length})</strong>
+                          <span className={styles.paneCount}>已选 {selectedNpcIds.length}</span>
+                        </div>
+                        <ul className={styles.pickList}>
+                          {localNpcs.map((npc) => {
+                            const checked = selectedNpcIds.includes(npc.id);
+                            return (
+                              <li key={npc.id} className={styles.pickItem}>
+                                <ToggleCheck
+                                  checked={checked}
+                                  aria-label={`选择自建 NPC ${npc.name}`}
+                                  onChange={() => setSelectedNpcIds((cur) => toggleId(cur, npc.id))}
+                                />
+                                <div className={styles.pickItemText}>
+                                  <strong>
+                                    {npc.alias ? `${npc.name}（${npc.alias}）` : npc.name}
+                                  </strong>
+                                  <span>{npc.role}</span>
                                 </div>
                               </li>
                             );

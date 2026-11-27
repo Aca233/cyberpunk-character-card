@@ -104,6 +104,27 @@ export const CORE_COMMANDS = [
   "deadline",
 ] as const;
 
+/**
+ * 所有非 OOC 回合固定常驻激活的规则模块 id（判断 / 正文 / 抽取共用）：
+ * 归入 system 静态前缀层以便跨回合稳定命中 KV 缓存，仅动态激活模块留在 user 消息。
+ */
+export const ALWAYS_ON_MODULE_IDS: ReadonlySet<string> = new Set([
+  "economy",
+  "places",
+  "npcs",
+  "factions",
+  "reputation",
+  "habits",
+  "jobs",
+  "cyberware",
+  "events",
+  "phone",
+  "notes",
+  "chronicle",
+  "arcs",
+  "shards",
+]);
+
 export type NarratorPlan = { readonly kind: "action"; readonly input: TurnInput };
 
 /** 旧存档的输入方式 */
@@ -138,8 +159,10 @@ export interface PromptExtras {
   readonly hasPreset?: boolean | undefined;
   /** 未启用预设时的柔性场景烈度 */
   readonly intensity?: NarrativeIntensity | undefined;
-  /** 可选的新人物装备参考；超出正文输入预算时先撤下，不挤占记忆与历史。 */
+  /** 可选的新人物装备参考；超出输入预算时先撤下，不挤占记忆与历史。 */
   readonly includeNpcEquipment?: boolean | undefined;
+  /** 可选的抽取期长能力展开块；辅助模型窗口紧张时可撤下，系统层仍保留完整 ID 基表。 */
+  readonly includeCatalogDetails?: boolean | undefined;
 }
 
 export function stateSummary(
@@ -173,14 +196,24 @@ export interface NarratorPrompt {
 /** 判断只看最近几轮的原文 */
 export const JUDGE_TURNS = 4;
 
-/** 抽取核对 ID 的完整简表；长能力说明按本轮相关性放入用户消息，创作参考不进记账。 */
+/** 抽取核对 ID 的完整紧凑简表；长能力说明与委托模板按本轮相关性放入用户消息，创作参考不进记账。 */
 export function tablesOf(_view: PlayerView, extras: PromptExtras): string[] {
   if (!extras.data) return [];
-  return [
-    catalogSection(extras.data, false),
-    cyberwareSection(extras.data, false),
-    jobTemplateSection(extras.data),
-  ].filter((s): s is string => s !== undefined);
+  return [catalogSection(extras.data, false), cyberwareSection(extras.data, false)].filter(
+    (s): s is string => s !== undefined,
+  );
+}
+
+/** 委托类型模板（1.2K）：仅在输入/正文出现派单或委托语境时动态挂载给抽取，避免常态占满系统缓存。 */
+export function jobTemplatesForExtract(
+  data: Readonly<Record<string, unknown>> | undefined,
+  text: string,
+): string | undefined {
+  if (!data) return undefined;
+  if (!/委托|派单|接单|单子|活儿|中间人|雇主|赏金|酬劳|尾款|定金|任务/.test(text)) {
+    return undefined;
+  }
+  return jobTemplateSection(data);
 }
 
 /** 写正文只带剧情素材，不带 id 查阅表 */
@@ -656,8 +689,8 @@ export function situation(
     const physics = physicsSection(world, extras.data, input.text);
     if (physics) parts.push(`【物理与安防现状】\n${physics}`);
   }
-  // 2077 世界时间线是背景创作参考，只在写正文和判断阶段提供，避免抽取把未发生的背景节点误记为本轮事实
-  if (stage !== "extract") {
+  // 2077 世界时间线是背景创作参考，只在写正文阶段提供；判断步专注物理/社会裁决，抽取步只认定稿正文
+  if (stage === "narrate") {
     const canon = canonSection(extras.data, extras.startTime, world.time);
     if (canon) parts.push(`【2077 世界时间线】\n${canon}`);
   }

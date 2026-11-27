@@ -37,8 +37,8 @@ export type TransferInventoryItem = (
   count?: number,
 ) => Promise<void>;
 
-/** 物品栏一级位置视图：carried 为随身，elsewhere 为剧情留置汇总，其余为自有容器 key（home:id / vehicle:id） */
-export type InventoryViewKey = "carried" | "elsewhere" | string;
+/** 物品栏一级位置视图：carried 随身，loot 战场战利品，npc:id 同行同伴装备，elsewhere 剧情留置汇总，其余为自有容器 key（home:id / vehicle:id） */
+export type InventoryViewKey = "carried" | "loot" | "elsewhere" | string;
 
 export type StorageGroup = View["safehouse"]["storage"][number];
 type StoredItem = StorageGroup["items"][number];
@@ -149,6 +149,70 @@ function isTypingTarget(target: EventTarget | null): boolean {
  * 顶栏由外层 Weapon 统一承载位置切换（[随身] [公寓 ●] [车辆 ●] [别处]）与随身负担刻度；
  * 看随身时可穿用、改装、或一键存入身边的住处/车辆；看容器时可取回随身或在同地点容器间直转。
  */
+const WARDROBE_SLOTS = inventoryRules.ClothingSlotSchema.options;
+
+const WARDROBE_EMPTY_LABELS: Readonly<Record<inventoryRules.ClothingSlot, string>> = {
+  head: "头部未穿",
+  face: "面部未穿",
+  outer: "外套未穿",
+  inner: "内衣未穿",
+  legs: "腿部未穿",
+  feet: "鞋子未穿",
+};
+
+const TACTICAL_TOOL_DRAFTS: Readonly<
+  Record<string, { readonly label: string; readonly draft: string }>
+> = {
+  "signal-jammer": {
+    label: "开启信号干扰",
+    draft: "打开袖珍信号干扰器，压制周边监控与无线通信",
+  },
+  "thermal-monocular": {
+    label: "热成像侦察",
+    draft: "举起热成像单筒镜观察周围热源与掩体后动向",
+  },
+  "optical-cloak": {
+    label: "展开光学迷彩",
+    draft: "展开折叠光学迷彩披风，压低轮廓借阴影潜行",
+  },
+  "glass-cutter": {
+    label: "静音切玻璃",
+    draft: "用工业级静音玻璃刀无声切开窗面潜入",
+  },
+  "mag-grapple-kit": {
+    label: "架设抓钩索降",
+    draft: "架设磁吸抓钩与战术绳索准备攀爬或速降",
+  },
+  "faraday-pouch": {
+    label: "封入法拉第袋",
+    draft: "把目标芯片或终端封入法拉第电磁屏蔽袋隔绝追踪",
+  },
+  "ice-breaker-spike": {
+    label: "插入破冰刺",
+    draft: "把单次破冰刺直接插上附近接入端口强破防火墙",
+  },
+  "cloned-keycard": {
+    label: "刷克隆门禁卡",
+    draft: "用伪造的通用克隆门禁卡尝试刷开眼前的电子门禁",
+  },
+  "relay-beacon": {
+    label: "架设中继信标",
+    draft: "在隐蔽高处架设便携式黑客中继信标扩大接入范围",
+  },
+  "tool-kit": {
+    label: "工具包拆修",
+    draft: "掏出便携机械工具包拆解检修眼前的机械锁或设备",
+  },
+  "lockpick-set": {
+    label: "撬锁潜入",
+    draft: "拿出机械撬锁工具组尝试无声撬开眼前的物理门锁",
+  },
+  "holo-phone": {
+    label: "启用一次性手机",
+    draft: "开机启用匿名一次性全息手机进行隔离联络",
+  },
+};
+
 export function InventoryPage({
   view,
   activeView,
@@ -156,6 +220,8 @@ export function InventoryPage({
   initialFocus,
   onEquip,
   onUnequip,
+  onOutfitPreset,
+  onFieldAid,
   onMod,
   onBuyHome,
   onCallVehicle,
@@ -165,10 +231,13 @@ export function InventoryPage({
   onActionDraft,
   onPlaceItem,
   onTransferItem,
+  onLootCombatItem,
+  onLootCombatAll,
+  onExchangeCompanionGear,
   disabledReason,
 }: {
   readonly view: View;
-  /** 当前所在位置视图："carried" | "elsewhere" | "home:xxx" | "vehicle:xxx" */
+  /** 当前所在位置视图："carried" | "loot" | "npc:xxx" | "elsewhere" | "home:xxx" | "vehicle:xxx" */
   readonly activeView: InventoryViewKey;
   /** 切换位置视图（例如从车辆条目直达该车后备箱） */
   readonly onSelectView: (viewKey: InventoryViewKey) => void;
@@ -180,6 +249,7 @@ export function InventoryPage({
   /** 非战斗治疗和压制剂直接结算；情境性使用交给行动输入，由玩家确认。 */
   readonly onHeal?: ((id: string) => Promise<void>) | undefined;
   readonly onSuppressant?: (() => Promise<void>) | undefined;
+  readonly onFieldAid?: ((id: "med-kit" | "hemostatic-gel") => Promise<void>) | undefined;
   readonly onUse?: ((id: string) => void) | undefined;
   /** 将芯片/超梦等自由行动填入行动输入框，由玩家确认后提交。 */
   readonly onActionDraft?: ((text: string) => void) | undefined;
@@ -187,10 +257,25 @@ export function InventoryPage({
   readonly onPlaceItem?: PlaceInventoryItem | undefined;
   /** 在当前地点的两个自有容器之间直转物品（如住处 ↔ 后备箱） */
   readonly onTransferItem?: TransferInventoryItem | undefined;
+  /** 战后拾取单件战场战利品 */
+  readonly onLootCombatItem?: ((from: string, item: string) => Promise<void>) | undefined;
+  /** 战后一键拾取当前地点指定目标或全部战利品 */
+  readonly onLootCombatAll?: ((from?: string) => Promise<void>) | undefined;
+  /** 与身边的同行同伴原子交接装备或物品 */
+  readonly onExchangeCompanionGear?:
+    | ((id: string, action: "give" | "take", item: string) => Promise<void>)
+    | undefined;
   readonly disabledReason?: string | undefined;
   /** 换服装或快捷药剂/手雷；正在生成或战斗中时不传 */
   readonly onEquip?: ((id: string) => void) | undefined;
   readonly onUnequip?: ((id: string) => void) | undefined;
+  /** 一键穿搭方案：保存、一键换装、删除 */
+  readonly onOutfitPreset?:
+    | ((
+        action: "save" | "apply" | "delete",
+        opts?: { readonly id?: string; readonly name?: string },
+      ) => Promise<void>)
+    | undefined;
   /** 改装件：attach 从背包装到武器上，detach 拆下放回背包 */
   readonly onMod?: ((action: "attach" | "detach", weapon: string, mod: string) => void) | undefined;
   /** 买下当前地点的一处公寓；正在生成时不传 */
@@ -221,14 +306,38 @@ export function InventoryPage({
     [view],
   );
   const isCarriedView = activeView === "carried";
+  const isLootView = activeView === "loot";
   const isElsewhereView = activeView === "elsewhere";
+  const nearbyCompanions = useMemo(
+    () => view.npcs.filter((n) => n.alive && n.following && n.here),
+    [view.npcs],
+  );
+  const activeCompanion = useMemo(
+    () =>
+      activeView.startsWith("npc:")
+        ? (nearbyCompanions.find((n) => `npc:${n.id}` === activeView) ?? null)
+        : null,
+    [activeView, nearbyCompanions],
+  );
+  const lootTotalCount = useMemo(
+    () => view.combat.loot.reduce((sum, group) => sum + group.items.length, 0),
+    [view.combat.loot],
+  );
   const activeGroup = useMemo(
-    () => (isCarriedView || isElsewhereView ? null : (storageByKey.get(activeView) ?? null)),
-    [activeView, isCarriedView, isElsewhereView, storageByKey],
+    () =>
+      isCarriedView || isElsewhereView || isLootView || activeCompanion !== null
+        ? null
+        : (storageByKey.get(activeView) ?? null),
+    [activeCompanion, activeView, isCarriedView, isElsewhereView, isLootView, storageByKey],
   );
   const [preferredStoreKey, setPreferredStoreKey] = useState<string | null>(null);
 
   const [filter, setFilter] = useState<InventoryFilter>(() => initialFocus?.filter ?? "all");
+  const [clothingSlotFilter, setClothingSlotFilter] = useState<inventoryRules.ClothingSlot | null>(
+    null,
+  );
+  const [savingOutfit, setSavingOutfit] = useState(false);
+  const [outfitName, setOutfitName] = useState("");
   const [sort, setSort] = useState<InventorySort>("default");
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -249,6 +358,8 @@ export function InventoryPage({
     prevViewRef.current = activeView;
     setPickedItem(null);
     setOpenSlotPicker(null);
+    setClothingSlotFilter(null);
+    setSavingOutfit(false);
     setUseError("");
     if (activeView !== "carried" && filter === "vehicle") {
       setFilter("all");
@@ -317,6 +428,27 @@ export function InventoryPage({
     () => Object.entries(carried).filter(([, count]) => count > 0),
     [carried],
   );
+
+  const wornBySlot = useMemo(
+    () => new Map(inventory.clothing.map((entry) => [entry.slot, entry])),
+    [inventory.clothing],
+  );
+
+  const bagClothingCountsBySlot = useMemo(() => {
+    const counts: Record<inventoryRules.ClothingSlot, number> = {
+      head: 0,
+      face: 0,
+      outer: 0,
+      inner: 0,
+      legs: 0,
+      feet: 0,
+    };
+    for (const [id] of allCarried) {
+      const slot = inventory.details?.[id]?.clothingSlot;
+      if (slot) counts[slot] += 1;
+    }
+    return counts;
+  }, [allCarried, inventory.details]);
 
   // 当前视图条目：随身（已穿服装 + 随身物品 + 名下车辆）/ 指定自有容器 / 别处留置汇总
   const allEntries = useMemo<readonly InventoryEntry[]>(() => {
@@ -515,6 +647,10 @@ export function InventoryPage({
               ? kind === "misc" && !isNeural
               : kind === filter);
       if (!matchesFilter) return false;
+      if (isCarriedView && filter === "clothing" && clothingSlotFilter !== null) {
+        const itemSlot = entry.worn ? entry.slot : detail?.clothingSlot;
+        if (itemSlot !== clothingSlotFilter) return false;
+      }
 
       if (!query) return true;
       const chip = entry.worn ? undefined : carriedChipById.get(entry.id);
@@ -594,9 +730,11 @@ export function InventoryPage({
   }, [
     allEntries,
     carriedChipById,
+    clothingSlotFilter,
     filter,
     inventory.details,
     inventory.rarity,
+    isCarriedView,
     isUsable,
     itemName,
     search,
@@ -690,6 +828,33 @@ export function InventoryPage({
       view.health.wound === "severe" ? Math.floor(view.health.max * 0.29) : view.health.max;
     const directHeal = kind === "healing" && !view.combat.active;
     const directSuppressant = Boolean(detail?.suppressant) && !view.combat.active;
+    const fieldAidKind: "med-kit" | "hemostatic-gel" | null =
+      !worn && (id === "med-kit" || id === "hemostatic-gel") ? id : null;
+    const directFieldAid = fieldAidKind !== null && !view.combat.active;
+    const fieldAidTarget = fieldAidKind
+      ? view.health.injuries.find(
+          (injury) =>
+            !injury.treated &&
+            (fieldAidKind === "hemostatic-gel"
+              ? injury.tier === "graze" || injury.tier === "heavy"
+              : injury.tier === "graze"),
+        )
+      : undefined;
+    const fieldAidBlocked = fieldAidKind
+      ? disabledReason ||
+        (usingItem
+          ? "正在处理中…"
+          : view.combat.active
+            ? "交战中来不及自行包扎，请在行动里描述"
+            : view.health.condition !== "up"
+              ? "当前伤势过重，无法自行包扎"
+              : !fieldAidTarget
+                ? fieldAidKind === "med-kit"
+                  ? "当前没有未处理的表皮擦伤"
+                  : "当前没有可自行封口的擦伤或重创"
+                : undefined)
+      : undefined;
+    const tacticalDraft = !worn ? (TACTICAL_TOOL_DRAFTS[id] ?? null) : null;
     const suppressantUntil = view.psychosis.suppressant.until;
     const useBlocked =
       disabledReason ||
@@ -703,11 +868,19 @@ export function InventoryPage({
               ? "已达到当前治疗上限"
               : directSuppressant && suppressantUntil
                 ? `压制剂仍在起效中（到 ${suppressantUntil}）`
-                : !quick &&
-                    (kind === "grenade" || (kind === "healing" && Boolean(view.combat.active)))
-                  ? "先设为当前使用的物品"
-                  : undefined);
-    const directUseMissing = directHeal ? !onHeal : directSuppressant ? !onSuppressant : !onUse;
+                : directFieldAid && fieldAidBlocked
+                  ? fieldAidBlocked
+                  : !quick &&
+                      (kind === "grenade" || (kind === "healing" && Boolean(view.combat.active)))
+                    ? "先设为当前使用的物品"
+                    : undefined);
+    const directUseMissing = directHeal
+      ? !onHeal
+      : directSuppressant
+        ? !onSuppressant
+        : directFieldAid
+          ? !onFieldAid
+          : !onUse;
     return {
       id,
       count,
@@ -721,6 +894,10 @@ export function InventoryPage({
       useSpare,
       directHeal,
       directSuppressant,
+      fieldAidKind,
+      directFieldAid,
+      fieldAidBlocked,
+      tacticalDraft,
       useBlocked,
       directUseMissing,
     };
@@ -731,6 +908,7 @@ export function InventoryPage({
     inventory.equipTo,
     inventory.quickSupplyAvailable.grenade,
     inventory.quickSupplyAvailable.healing,
+    onFieldAid,
     onHeal,
     onSuppressant,
     onUse,
@@ -740,6 +918,7 @@ export function InventoryPage({
     view.combat.active,
     view.health.condition,
     view.health.hp,
+    view.health.injuries,
     view.health.max,
     view.health.wound,
     view.psychosis.suppressant.until,
@@ -967,6 +1146,16 @@ export function InventoryPage({
       !view.combat.active &&
       view.health.condition === "up",
   );
+  const canLootNow = Boolean(
+    !disabledReason && !view.combat.active && view.health.condition === "up",
+  );
+  const canExchangeGearNow = Boolean(
+    nearbyCompanions.length > 0 &&
+      onExchangeCompanionGear &&
+      !disabledReason &&
+      !view.combat.active &&
+      view.health.condition === "up",
+  );
 
   const filterTabs: readonly (readonly [InventoryFilter, string, number])[] = isCarriedView
     ? [
@@ -1035,1542 +1224,2250 @@ export function InventoryPage({
         </div>
       )}
 
-      {/* 物品主区：容器状态条（非随身） + 筛选 + 排序 + 搜索 + 全高双栏独立滚动 */}
+      {/* 物品主区：战利品 / 同行同伴 / 随身与容器 */}
       <section
         className={styles.packSection}
         aria-label={
-          isCarriedView
-            ? "随身行装与背包"
-            : isElsewhereView
-              ? "别处留置物品"
-              : activeGroup
-                ? `${activeGroup.name}储物清单`
-                : "储物清单"
+          isLootView
+            ? "战场战利品"
+            : activeCompanion
+              ? `${activeCompanion.name}的随身装备`
+              : isCarriedView
+                ? "随身行装与背包"
+                : isElsewhereView
+                  ? "别处留置物品"
+                  : activeGroup
+                    ? `${activeGroup.name}储物清单`
+                    : "储物清单"
         }
       >
-        {!isCarriedView && activeGroup && (
-          <div className={styles.containerBar} data-locked={!activeGroupReachable || undefined}>
-            <div className={styles.containerBarMain}>
-              <span className={styles.containerKind}>{STORAGE_KIND_LABELS[activeGroup.kind]}</span>
-              <strong className={styles.containerName}>{activeGroup.name}</strong>
-              <span className={styles.containerMeta}>
-                {activeGroup.locationName} ·{" "}
-                {activeGroupTotalCount > 0 ? `共 ${activeGroupTotalCount} 件` : "当前为空"}
-              </span>
+        {isLootView ? (
+          <>
+            <div className={styles.containerBar} data-locked={!canLootNow || undefined}>
+              <div className={styles.containerBarMain}>
+                <span className={styles.containerKind}>战场</span>
+                <strong className={styles.containerName}>未拾取战利品</strong>
+                <span className={styles.containerMeta}>
+                  {view.combat.loot.length} 处目标 · 共 {lootTotalCount} 件
+                </span>
+              </div>
+              {onLootCombatAll && lootTotalCount > 0 ? (
+                <Button
+                  small
+                  primary
+                  disabled={usingItem || !canLootNow}
+                  onClick={() =>
+                    void runDirectUse(
+                      () => onLootCombatAll(),
+                      `已拾取全部 ${lootTotalCount} 件战利品`,
+                    )
+                  }
+                >
+                  {usingItem ? "正在拾取…" : `一键全部拾取 (${lootTotalCount})`}
+                </Button>
+              ) : (
+                <span className={styles.containerStatus}>
+                  {view.combat.active ? "交战中需在行动里描述拾取" : "当前地点无战利品"}
+                </span>
+              )}
             </div>
-            <span className={styles.containerStatus}>
-              {activeGroupReachable
-                ? "当前就在现场 · 可直接取回或转运"
-                : (activeGroup.blockedReason ?? "远端只读")}
-            </span>
-          </div>
-        )}
-        {isElsewhereView && (
-          <div className={styles.containerBar} data-locked="">
-            <div className={styles.containerBarMain}>
-              <span className={styles.containerKind}>留置</span>
-              <strong className={styles.containerName}>别处留置物品</strong>
-              <span className={styles.containerMeta}>
-                {elsewhereGroups.length} 处 · 共 {elsewhereTotalCount} 件
-              </span>
-            </div>
-            <span className={styles.containerStatus}>只读 · 需在行动中说明交接与取回</span>
-          </div>
-        )}
+            {view.combat.loot.length === 0 ? (
+              <div className={styles.emptyBox}>
+                <CellFrame />
+                <span>当前地点已经没有遗留的战利品了。</span>
+                <ActionButton onClick={() => onSelectView("carried")}>返回随身物品栏</ActionButton>
+              </div>
+            ) : (
+              <div className={styles.exchangeScroll}>
+                {view.combat.loot.map((group) => (
+                  <div key={group.from} className={styles.exchangeGroup}>
+                    <header className={styles.exchangeGroupHead}>
+                      <strong className={styles.exchangeGroupTitle}>
+                        {group.name}（{group.items.length} 件）
+                      </strong>
+                      {onLootCombatAll && group.items.length > 1 && (
+                        <Button
+                          small
+                          disabled={usingItem || !canLootNow}
+                          onClick={() =>
+                            void runDirectUse(
+                              () => onLootCombatAll(group.from),
+                              `已拾取${group.name}的全部战利品`,
+                            )
+                          }
+                        >
+                          全拾
+                        </Button>
+                      )}
+                    </header>
+                    <ul className={styles.exchangeList}>
+                      {group.items.map((lootItem) => {
+                        const art = itemArtOf(lootItem.id);
+                        return (
+                          <li
+                            key={`${group.from}:${lootItem.id}`}
+                            className={styles.exchangeRow}
+                            data-rarity={lootItem.rarity ?? undefined}
+                            data-iconic={lootItem.iconic || undefined}
+                          >
+                            <span className={styles.exchangeRowThumb} aria-hidden>
+                              {art ? (
+                                <Asset id={art} className={styles.exchangeRowArt} />
+                              ) : (
+                                <Asset id="notify.inventory" tint="var(--cp-yellow)" height={16} />
+                              )}
+                            </span>
+                            <span className={styles.exchangeRowInfo}>
+                              <strong className={styles.exchangeRowTitle}>
+                                {lootItem.name}
+                                {lootItem.iconic && (
+                                  <span className={styles.miniTag} data-tone="yellow">
+                                    不朽
+                                  </span>
+                                )}
+                              </strong>
+                              {lootItem.ability && (
+                                <span className={styles.exchangeRowAbility}>
+                                  {lootItem.ability}
+                                </span>
+                              )}
+                            </span>
+                            {onLootCombatItem && (
+                              <Button
+                                small
+                                primary
+                                disabled={usingItem || !canLootNow}
+                                onClick={() =>
+                                  void runDirectUse(
+                                    () => onLootCombatItem(group.from, lootItem.id),
+                                    `已拾取「${lootItem.name}」`,
+                                    lootItem.id,
+                                  )
+                                }
+                              >
+                                拾取
+                              </Button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : activeCompanion ? (
+          (() => {
+            const companionGear = activeCompanion.body?.gear ?? [];
+            const companionGearBadges = activeCompanion.body?.gearBadges ?? [];
+            const canTakeCompanionGear = Boolean(
+              onExchangeCompanionGear &&
+                !disabledReason &&
+                !view.combat.active &&
+                view.health.condition === "up",
+            );
+            return (
+              <>
+                <div
+                  className={styles.containerBar}
+                  data-locked={!canTakeCompanionGear || undefined}
+                >
+                  <div className={styles.containerBarMain}>
+                    <span className={styles.containerKind}>同行</span>
+                    <strong className={styles.containerName}>{activeCompanion.name}</strong>
+                    <span className={styles.containerMeta}>
+                      {activeCompanion.role} · 随身装备 {companionGear.length}/12
+                    </span>
+                  </div>
+                  <div className={styles.lootStripActions}>
+                    <span className={styles.containerStatus}>
+                      {canTakeCompanionGear
+                        ? "当前同行在场 · 可直接交接"
+                        : view.combat.active
+                          ? "交战中需在行动里描述交接"
+                          : "只读"}
+                    </span>
+                    <ActionButton onClick={() => onSelectView("carried")}>
+                      去随身分配装备
+                    </ActionButton>
+                  </div>
+                </div>
+                {companionGearBadges.length > 0 && (
+                  <section
+                    className={styles.gearEffectsBar}
+                    aria-label={`${activeCompanion.name}当前着装与装备生效`}
+                  >
+                    <span className={styles.gearEffectsLabel}>{activeCompanion.name}着装生效</span>
+                    <ul className={styles.gearEffectsList}>
+                      {companionGearBadges.map((badge) => (
+                        <li key={badge} className={styles.gearEffectChip}>
+                          {badge}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+                {companionGear.length === 0 ? (
+                  <div className={styles.emptyBox}>
+                    <CellFrame />
+                    <span>
+                      {activeCompanion.name}
+                      身上目前没有随身装备，可切回「随身」把背包里的武器或物品交给对方。
+                    </span>
+                    <ActionButton onClick={() => onSelectView("carried")}>
+                      切回随身物品栏
+                    </ActionButton>
+                  </div>
+                ) : (
+                  <div className={styles.exchangeScroll}>
+                    <ul className={styles.exchangeList}>
+                      {companionGear.map((gearItem) => {
+                        const art = itemArtOf(gearItem.baseId ?? gearItem.id);
+                        return (
+                          <li
+                            key={gearItem.id}
+                            className={styles.exchangeRow}
+                            data-rarity={gearItem.rarity ?? undefined}
+                            data-iconic={gearItem.iconic || undefined}
+                          >
+                            <span className={styles.exchangeRowThumb} aria-hidden>
+                              {art ? (
+                                <Asset id={art} className={styles.exchangeRowArt} />
+                              ) : (
+                                <Asset id="notify.inventory" tint="var(--cp-cyan)" height={16} />
+                              )}
+                            </span>
+                            <span className={styles.exchangeRowInfo}>
+                              <strong className={styles.exchangeRowTitle}>
+                                {gearItem.name}
+                                {gearItem.iconic && (
+                                  <span className={styles.miniTag} data-tone="yellow">
+                                    不朽
+                                  </span>
+                                )}
+                              </strong>
+                              <span className={styles.exchangeRowMeta}>
+                                {gearItem.subLabel}
+                                {gearItem.rarityLabel ? ` · ${gearItem.rarityLabel}` : ""}
+                                {gearItem.effectTags.length > 0
+                                  ? ` · ${gearItem.effectTags.join(" / ")}`
+                                  : ""}
+                              </span>
+                              {gearItem.ability && (
+                                <span className={styles.exchangeRowAbility}>
+                                  {gearItem.ability}
+                                </span>
+                              )}
+                            </span>
+                            {onExchangeCompanionGear && (
+                              <Button
+                                small
+                                disabled={usingItem || !canTakeCompanionGear}
+                                onClick={() =>
+                                  void runDirectUse(
+                                    () =>
+                                      onExchangeCompanionGear(
+                                        activeCompanion.id,
+                                        "take",
+                                        gearItem.id,
+                                      ),
+                                    `已从${activeCompanion.name}处取回「${gearItem.name}」`,
+                                    gearItem.id,
+                                  )
+                                }
+                              >
+                                取回背包
+                              </Button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </>
+            );
+          })()
+        ) : (
+          <>
+            {isCarriedView && lootTotalCount > 0 && (
+              <div className={styles.lootStrip}>
+                <span className={styles.lootStripText}>
+                  当前战场遗留 <strong>{lootTotalCount}</strong> 件战利品
+                </span>
+                <div className={styles.lootStripActions}>
+                  <ActionButton onClick={() => onSelectView("loot")}>查看战利品</ActionButton>
+                  {onLootCombatAll && (
+                    <Button
+                      small
+                      primary
+                      disabled={usingItem || !canLootNow}
+                      onClick={() =>
+                        void runDirectUse(
+                          () => onLootCombatAll(),
+                          `已拾取全部 ${lootTotalCount} 件战利品`,
+                        )
+                      }
+                    >
+                      {usingItem ? "正在拾取…" : "一键全部拾取"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+            {isCarriedView && inventory.gearEffects.badges.length > 0 && (
+              <section className={styles.gearEffectsBar} aria-label="当前装备生效效果">
+                <span className={styles.gearEffectsLabel}>着装与装备生效</span>
+                <ul className={styles.gearEffectsList}>
+                  {inventory.gearEffects.badges.map((badge) => (
+                    <li key={badge} className={styles.gearEffectChip}>
+                      {badge}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {isCarriedView && filter === "clothing" && (
+              <section className={styles.wardrobePanel} aria-label="全身六格穿搭与方案">
+                <div className={styles.wardrobeGrid}>
+                  {WARDROBE_SLOTS.map((slot) => {
+                    const worn = wornBySlot.get(slot);
+                    const wornDetail = worn ? inventory.details?.[worn.id] : undefined;
+                    const art = worn ? itemArtOf(wornDetail?.baseId ?? worn.id) : null;
+                    const bagCount = bagClothingCountsBySlot[slot];
+                    const isSlotActive = clothingSlotFilter === slot;
+                    const slotLabel = inventoryRules.CLOTHING_SLOT_LABELS[slot];
+                    return (
+                      <div
+                        key={slot}
+                        className={styles.wardrobeSlot}
+                        data-empty={worn ? undefined : ""}
+                        data-active={isSlotActive ? "" : undefined}
+                      >
+                        <button
+                          type="button"
+                          className={styles.wardrobeSlotBtn}
+                          aria-pressed={isSlotActive}
+                          title={
+                            worn
+                              ? `${slotLabel}：${itemName(worn.id)}${worn.ability ? `\n${worn.ability}` : ""}\n点击按「${slotLabel}」筛选`
+                              : `${WARDROBE_EMPTY_LABELS[slot]} · 点击筛选背包里的${slotLabel}衣物`
+                          }
+                          onClick={() => {
+                            const nextSlot = isSlotActive ? null : slot;
+                            setClothingSlotFilter(nextSlot);
+                            if (nextSlot && worn) {
+                              setPickedItem({ id: worn.id, worn: true, entryType: "item" });
+                            } else {
+                              setPickedItem(null);
+                            }
+                            setUseError("");
+                          }}
+                        >
+                          <span className={styles.wardrobeSlotHead}>
+                            <span>{slotLabel}</span>
+                          </span>
+                          {worn ? (
+                            <>
+                              {art && <Asset id={art} className={styles.wardrobeSlotArt} />}
+                              <span className={styles.wardrobeSlotName}>{itemName(worn.id)}</span>
+                            </>
+                          ) : (
+                            <span className={styles.wardrobeSlotEmpty}>
+                              <span>{WARDROBE_EMPTY_LABELS[slot]}</span>
+                              <span className={styles.wardrobeSlotHint}>
+                                {bagCount > 0 ? `背包 ${bagCount} 件` : "空槽"}
+                              </span>
+                            </span>
+                          )}
+                        </button>
+                        {worn && onUnequip && !disabledReason && !usingItem && (
+                          <button
+                            type="button"
+                            className={styles.wardrobeUnequipBtn}
+                            title={`一键脱下「${itemName(worn.id)}」`}
+                            aria-label={`脱下${itemName(worn.id)}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              triggerUnequip(worn.id);
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
 
-        <div className={styles.toolbar}>
-          <nav className={styles.filterRow} aria-label="物品分类筛选">
-            {filterTabs.map(([key, label, count]) => (
-              <button
-                key={key}
-                type="button"
-                className={styles.filterChip}
-                aria-pressed={filter === key}
-                data-zero={count === 0 && key !== "all" ? "" : undefined}
-                onClick={() => {
-                  setFilter(key);
-                  setPickedItem(null);
-                  setUseError("");
-                }}
-              >
-                <span>{label}</span>
-                {count > 0 && <b className={styles.filterChipCount}>{count}</b>}
-              </button>
-            ))}
-          </nav>
+                <div className={styles.outfitRow}>
+                  <span className={styles.outfitLabel}>
+                    穿搭方案 {inventory.outfits.length}/{inventoryRules.OUTFIT_PRESET_MAX}
+                  </span>
+                  <div className={styles.outfitChips}>
+                    {inventory.outfits.map((preset) => {
+                      const summary = preset.entries
+                        .map((e) => `${e.slotLabel}：${e.name}${e.available ? "" : "（不在随身）"}`)
+                        .join("\n");
+                      return (
+                        <div
+                          key={preset.id}
+                          className={styles.outfitChipGroup}
+                          data-active={preset.active ? "" : undefined}
+                        >
+                          <button
+                            type="button"
+                            className={styles.outfitChip}
+                            disabled={!onOutfitPreset || usingItem || Boolean(disabledReason)}
+                            title={
+                              summary
+                                ? `${preset.name}\n${summary}\n点击一键换装`
+                                : `${preset.name}（空穿搭）`
+                            }
+                            onClick={() => {
+                              if (!onOutfitPreset) return;
+                              void runDirectUse(
+                                () => onOutfitPreset("apply", { id: preset.id }),
+                                preset.missingCount > 0
+                                  ? `已切换「${preset.name}」（${preset.missingCount} 件不在随身，已跳过）`
+                                  : `已一键切换穿搭「${preset.name}」`,
+                              );
+                            }}
+                          >
+                            <span>{preset.name}</span>
+                            {preset.missingCount > 0 && (
+                              <span className={styles.outfitMissing}>缺{preset.missingCount}</span>
+                            )}
+                          </button>
+                          {onOutfitPreset && (
+                            <button
+                              type="button"
+                              className={styles.outfitDelBtn}
+                              disabled={usingItem || Boolean(disabledReason)}
+                              title={`删除方案「${preset.name}」`}
+                              aria-label={`删除穿搭方案 ${preset.name}`}
+                              onClick={() =>
+                                void runDirectUse(
+                                  () => onOutfitPreset("delete", { id: preset.id }),
+                                  `已删除穿搭方案「${preset.name}」`,
+                                )
+                              }
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
 
-          <div className={styles.toolbarRight}>
-            <button
-              type="button"
-              className={styles.sortBtn}
-              title="点击切换排序方式：默认 / 品质 / 类型 / 负担"
-              onClick={cycleSort}
-            >
-              <span>排序</span>
-              <b>{SORT_LABELS[sort]}</b>
-            </button>
-            <FrameBox className={styles.searchBox}>
-              <input
-                ref={searchRef}
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                placeholder="搜名称、类型、能力…"
-                aria-label="搜索物品（按 / 聚焦）"
-                className={styles.searchInput}
-              />
-              {search ? (
+                    {onOutfitPreset &&
+                      inventory.outfits.length < inventoryRules.OUTFIT_PRESET_MAX &&
+                      (savingOutfit ? (
+                        <form
+                          className={styles.outfitForm}
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            const trimmed = outfitName.trim();
+                            if (!trimmed || !onOutfitPreset) return;
+                            void runDirectUse(async () => {
+                              await onOutfitPreset("save", { name: trimmed });
+                              setOutfitName("");
+                              setSavingOutfit(false);
+                            }, `已保存穿搭方案「${trimmed}」`);
+                          }}
+                        >
+                          <input
+                            type="text"
+                            maxLength={16}
+                            className={styles.outfitInput}
+                            value={outfitName}
+                            placeholder="如：夜店潜入 / 重甲火拼"
+                            onChange={(event) => setOutfitName(event.target.value)}
+                          />
+                          <Button
+                            small
+                            primary
+                            type="submit"
+                            disabled={!outfitName.trim() || usingItem || Boolean(disabledReason)}
+                          >
+                            保存
+                          </Button>
+                          <Button
+                            small
+                            onClick={() => {
+                              setSavingOutfit(false);
+                              setOutfitName("");
+                            }}
+                          >
+                            取消
+                          </Button>
+                        </form>
+                      ) : (
+                        <Button
+                          small
+                          disabled={
+                            usingItem || Boolean(disabledReason) || inventory.clothing.length === 0
+                          }
+                          onClick={() => {
+                            setOutfitName("");
+                            setSavingOutfit(true);
+                          }}
+                        >
+                          + 存当前穿搭
+                        </Button>
+                      ))}
+                  </div>
+
+                  {clothingSlotFilter !== null && (
+                    <button
+                      type="button"
+                      className={styles.outfitSlotReset}
+                      onClick={() => {
+                        setClothingSlotFilter(null);
+                        setPickedItem(null);
+                      }}
+                    >
+                      仅看{inventoryRules.CLOTHING_SLOT_LABELS[clothingSlotFilter]} · 查看全部 ×
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
+            {!isCarriedView && activeGroup && (
+              <div className={styles.containerBar} data-locked={!activeGroupReachable || undefined}>
+                <div className={styles.containerBarMain}>
+                  <span className={styles.containerKind}>
+                    {STORAGE_KIND_LABELS[activeGroup.kind]}
+                  </span>
+                  <strong className={styles.containerName}>{activeGroup.name}</strong>
+                  <span className={styles.containerMeta}>
+                    {activeGroup.locationName} ·{" "}
+                    {activeGroupTotalCount > 0 ? `共 ${activeGroupTotalCount} 件` : "当前为空"}
+                  </span>
+                </div>
+                <span className={styles.containerStatus}>
+                  {activeGroupReachable
+                    ? "当前就在现场 · 可直接取回或转运"
+                    : (activeGroup.blockedReason ?? "远端只读")}
+                </span>
+              </div>
+            )}
+            {isElsewhereView && (
+              <div className={styles.containerBar} data-locked="">
+                <div className={styles.containerBarMain}>
+                  <span className={styles.containerKind}>留置</span>
+                  <strong className={styles.containerName}>别处留置物品</strong>
+                  <span className={styles.containerMeta}>
+                    {elsewhereGroups.length} 处 · 共 {elsewhereTotalCount} 件
+                  </span>
+                </div>
+                <span className={styles.containerStatus}>只读 · 需在行动中说明交接与取回</span>
+              </div>
+            )}
+
+            <div className={styles.toolbar}>
+              <nav className={styles.filterRow} aria-label="物品分类筛选">
+                {filterTabs.map(([key, label, count]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={styles.filterChip}
+                    aria-pressed={filter === key}
+                    data-zero={count === 0 && key !== "all" ? "" : undefined}
+                    onClick={() => {
+                      setFilter(key);
+                      if (key !== "clothing") {
+                        setClothingSlotFilter(null);
+                        setSavingOutfit(false);
+                      }
+                      setPickedItem(null);
+                      setUseError("");
+                    }}
+                  >
+                    <span>{label}</span>
+                    {count > 0 && <b className={styles.filterChipCount}>{count}</b>}
+                  </button>
+                ))}
+              </nav>
+
+              <div className={styles.toolbarRight}>
                 <button
                   type="button"
-                  className={styles.searchClear}
-                  aria-label="清空搜索"
-                  onClick={() => setSearch("")}
+                  className={styles.sortBtn}
+                  title="点击切换排序方式：默认 / 品质 / 类型 / 负担"
+                  onClick={cycleSort}
                 >
-                  ×
+                  <span>排序</span>
+                  <b>{SORT_LABELS[sort]}</b>
                 </button>
-              ) : (
-                <kbd className={styles.searchKey} aria-hidden>
-                  /
-                </kbd>
-              )}
-            </FrameBox>
-          </div>
-        </div>
+                <FrameBox className={styles.searchBox}>
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setSearchFocused(false)}
+                    placeholder="搜名称、类型、能力…"
+                    aria-label="搜索物品（按 / 聚焦）"
+                    className={styles.searchInput}
+                  />
+                  {search ? (
+                    <button
+                      type="button"
+                      className={styles.searchClear}
+                      aria-label="清空搜索"
+                      onClick={() => setSearch("")}
+                    >
+                      ×
+                    </button>
+                  ) : (
+                    <kbd className={styles.searchKey} aria-hidden>
+                      /
+                    </kbd>
+                  )}
+                </FrameBox>
+              </div>
+            </div>
 
-        {visibleEntries.length === 0 ? (
-          <div className={styles.emptyBox}>
-            <CellFrame />
-            <span>
-              {allEntries.length === 0
-                ? isCarriedView
-                  ? "随身物品栏是空的。"
-                  : activeGroup
-                    ? activeGroup.canStore
-                      ? `${activeGroup.name}里还没有存放物品，可切回「随身」将物品存入。`
-                      : `${activeGroup.name}里没有存放物品。`
-                    : "目前没有留在别处的物品。"
-                : search || filter !== "all"
-                  ? "没有符合当前筛选条件的物品。"
-                  : "当前列表为空。"}
-            </span>
-            {search || filter !== "all" ? (
-              <ActionButton
-                onClick={() => {
-                  setFilter("all");
-                  setSearch("");
-                }}
-              >
-                重置全部筛选
-              </ActionButton>
+            {visibleEntries.length === 0 ? (
+              <div className={styles.emptyBox}>
+                <CellFrame />
+                <span>
+                  {allEntries.length === 0
+                    ? isCarriedView
+                      ? "随身物品栏是空的。"
+                      : activeGroup
+                        ? activeGroup.canStore
+                          ? `${activeGroup.name}里还没有存放物品，可切回「随身」将物品存入。`
+                          : `${activeGroup.name}里没有存放物品。`
+                        : "目前没有留在别处的物品。"
+                    : search || filter !== "all"
+                      ? "没有符合当前筛选条件的物品。"
+                      : "当前列表为空。"}
+                </span>
+                {search || filter !== "all" ? (
+                  <ActionButton
+                    onClick={() => {
+                      setFilter("all");
+                      setSearch("");
+                    }}
+                  >
+                    重置全部筛选
+                  </ActionButton>
+                ) : (
+                  !isCarriedView &&
+                  activeGroup?.canStore && (
+                    <ActionButton onClick={() => onSelectView("carried")}>
+                      切回随身存放物品
+                    </ActionButton>
+                  )
+                )}
+              </div>
             ) : (
-              !isCarriedView &&
-              activeGroup?.canStore && (
-                <ActionButton onClick={() => onSelectView("carried")}>
-                  切回随身存放物品
-                </ActionButton>
-              )
-            )}
-          </div>
-        ) : (
-          <div className={styles.browser}>
-            <ul
-              ref={listRef}
-              className={styles.itemList}
-              aria-label={isCarriedView ? "选择随身物品" : "选择存放物品"}
-            >
-              {visibleEntries.map((entry, index) => {
-                const isSelected = selectedEntry?.key === entry.key;
+              <div className={styles.browser}>
+                <ul
+                  ref={listRef}
+                  className={styles.itemList}
+                  aria-label={isCarriedView ? "选择随身物品" : "选择存放物品"}
+                >
+                  {visibleEntries.map((entry, index) => {
+                    const isSelected = selectedEntry?.key === entry.key;
 
-                if (entry.entryType === "vehicle") {
-                  const { vehicle } = entry;
-                  const art = vehicleArtOf(vehicle.model);
-                  const trunk = storageByKey.get(entry.key);
-                  const trunkCount = trunk
-                    ? trunk.items.reduce((sum, row) => sum + row.count, 0)
-                    : 0;
-                  const locationSummary =
-                    vehicle.location === null
-                      ? "位置未知"
-                      : vehicle.here
-                        ? `停在当前地点 · ${vehicle.locationName}`
-                        : `停在 ${vehicle.locationName}`;
+                    if (entry.entryType === "vehicle") {
+                      const { vehicle } = entry;
+                      const art = vehicleArtOf(vehicle.model);
+                      const trunk = storageByKey.get(entry.key);
+                      const trunkCount = trunk
+                        ? trunk.items.reduce((sum, row) => sum + row.count, 0)
+                        : 0;
+                      const locationSummary =
+                        vehicle.location === null
+                          ? "位置未知"
+                          : vehicle.here
+                            ? `停在当前地点 · ${vehicle.locationName}`
+                            : `停在 ${vehicle.locationName}`;
 
-                  return (
-                    <li key={entry.key}>
-                      <button
-                        type="button"
-                        data-item-index={index}
-                        className={styles.itemRow}
-                        aria-pressed={isSelected}
-                        data-vehicle-here={vehicle.here || undefined}
-                        onClick={() => selectEntry(entry, index)}
-                        onDoubleClick={() => {
-                          selectEntry(entry, index);
-                          triggerSafePrimary(entry);
-                        }}
-                      >
-                        <NineSlice
-                          id="map.filterCellBg"
-                          tint="var(--item-fill, var(--cp-surface))"
-                          slice={CELL_SLICE}
-                        />
-                        <NineSlice
-                          id="map.filterCellFg"
-                          tint="var(--item-line)"
-                          slice={CELL_SLICE}
-                        />
+                      return (
+                        <li key={entry.key}>
+                          <button
+                            type="button"
+                            data-item-index={index}
+                            className={styles.itemRow}
+                            aria-pressed={isSelected}
+                            data-vehicle-here={vehicle.here || undefined}
+                            onClick={() => selectEntry(entry, index)}
+                            onDoubleClick={() => {
+                              selectEntry(entry, index);
+                              triggerSafePrimary(entry);
+                            }}
+                          >
+                            <NineSlice
+                              id="map.filterCellBg"
+                              tint="var(--item-fill, var(--cp-surface))"
+                              slice={CELL_SLICE}
+                            />
+                            <NineSlice
+                              id="map.filterCellFg"
+                              tint="var(--item-line)"
+                              slice={CELL_SLICE}
+                            />
 
-                        <span className={styles.itemThumb} aria-hidden>
-                          <span
-                            className={styles.itemThumbGrid}
-                            style={{ backgroundImage: cssUrl("fx.grid") }}
+                            <span className={styles.itemThumb} aria-hidden>
+                              <span
+                                className={styles.itemThumbGrid}
+                                style={{ backgroundImage: cssUrl("fx.grid") }}
+                              />
+                              {art ? (
+                                <Asset id={art} className={styles.itemArt} />
+                              ) : (
+                                <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
+                              )}
+                            </span>
+
+                            <span className={styles.itemInfo}>
+                              <span className={styles.itemTopLine}>
+                                <strong className={styles.itemName}>{vehicle.name}</strong>
+                                {vehicle.here && (
+                                  <span className={styles.miniTag} data-tone="green">
+                                    在身边
+                                  </span>
+                                )}
+                                {vehicle.condition === "wrecked" && (
+                                  <span className={styles.miniTag} data-tone="danger">
+                                    报废
+                                  </span>
+                                )}
+                                {vehicle.condition === "damaged" && (
+                                  <span className={styles.miniTag} data-tone="yellow">
+                                    受损
+                                  </span>
+                                )}
+                                {vehicle.stolen && (
+                                  <span className={styles.miniTag} data-tone="yellow">
+                                    赃车
+                                  </span>
+                                )}
+                              </span>
+
+                              <span className={styles.itemSubLine}>
+                                <span className={styles.itemSubText}>
+                                  {vehicle.classLabel ? `${vehicle.classLabel} · ` : ""}
+                                  {locationSummary}
+                                </span>
+                              </span>
+                            </span>
+
+                            <span className={styles.itemMeta}>
+                              {trunk && (
+                                <span className={styles.itemCarryTag}>
+                                  {trunkCount > 0 ? `后备箱 ${trunkCount}` : "后备箱空"}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    }
+
+                    if (entry.entryType === "stored") {
+                      const { item, group } = entry;
+                      const art = itemArtOf(item.baseId ?? item.id);
+                      return (
+                        <li key={entry.key}>
+                          <button
+                            type="button"
+                            data-item-index={index}
+                            className={styles.itemRow}
+                            aria-pressed={isSelected}
+                            data-rarity={item.rarity ?? undefined}
+                            data-iconic={item.iconic || undefined}
+                            data-flash={flashId === item.id || undefined}
+                            onClick={() => selectEntry(entry, index)}
+                            onDoubleClick={() => {
+                              selectEntry(entry, index);
+                              triggerSafePrimary(entry);
+                            }}
+                          >
+                            <NineSlice
+                              id="map.filterCellBg"
+                              tint="var(--item-fill, var(--cp-surface))"
+                              slice={CELL_SLICE}
+                            />
+                            <NineSlice
+                              id="map.filterCellFg"
+                              tint="var(--item-line)"
+                              slice={CELL_SLICE}
+                            />
+                            {item.rarity && (
+                              <NineSlice
+                                id="cyber.cellRarity"
+                                tint="var(--rarity)"
+                                slice={0}
+                                className={styles.itemRarityBar}
+                              />
+                            )}
+
+                            <span className={styles.itemThumb} aria-hidden>
+                              <span
+                                className={styles.itemThumbGrid}
+                                style={{ backgroundImage: cssUrl("fx.grid") }}
+                              />
+                              {art ? (
+                                <Asset id={art} className={styles.itemArt} />
+                              ) : (
+                                <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
+                              )}
+                            </span>
+
+                            <span className={styles.itemInfo}>
+                              <span className={styles.itemTopLine}>
+                                <strong className={styles.itemName}>{item.name}</strong>
+                                {isElsewhereView && (
+                                  <span className={styles.miniTag}>{group.name}</span>
+                                )}
+                              </span>
+                              <span className={styles.itemSubLine}>
+                                <span className={styles.itemSubText}>
+                                  {item.subLabel}
+                                  {item.rarityLabel && (
+                                    <>
+                                      {" · "}
+                                      <span className={styles.itemRarityWord}>
+                                        {item.rarityLabel}
+                                      </span>
+                                    </>
+                                  )}
+                                  {isElsewhereView && ` · ${group.locationName}`}
+                                </span>
+                              </span>
+                            </span>
+
+                            <span className={styles.itemMeta}>
+                              {item.count > 1 && <b className={styles.itemCount}>×{item.count}</b>}
+                              {item.remaining !== null && item.charges ? (
+                                <span className={styles.itemCarryTag}>
+                                  {item.remaining}/{item.charges}
+                                </span>
+                              ) : item.carryUnits > 0 ? (
+                                <span
+                                  className={styles.itemCarryTag}
+                                  title={`单件携带负担 ${item.carryUnits} 分`}
+                                >
+                                  负担 {item.carryUnits}
+                                </span>
+                              ) : null}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    }
+
+                    const { id, count, worn } = entry;
+                    const quick = worn ? undefined : quickItems.find((item) => item.id === id);
+                    const detail = inventory.details?.[id];
+                    const chip = worn ? undefined : carriedChipById.get(id);
+                    const art = itemArtOf(detail?.baseId ?? id);
+                    const rarity = detail?.rarity ?? inventory.rarity[id];
+                    const isHeld =
+                      !worn &&
+                      detail?.kind === "weapon" &&
+                      Boolean(inventory.heldWeapons?.includes(id));
+                    const isSilenced =
+                      !worn &&
+                      detail?.kind === "weapon" &&
+                      detail.noise === "silent" &&
+                      !detail.subLabel.includes("刀剑") &&
+                      !detail.subLabel.includes("钝器");
+                    const modSlots = !worn && detail?.kind === "weapon" ? detail.modSlots : [];
+                    const carryUnits = worn ? 0 : (detail?.carryUnits ?? 0);
+                    const subLabel =
+                      detail?.subLabel ??
+                      (entry.slot ? inventoryRules.CLOTHING_SLOT_LABELS[entry.slot] : "物品");
+                    const chipStatusTags = chip
+                      ? [
+                          chip.categoryLabel,
+                          chip.encrypted ? chip.encryptionLabel : null,
+                          chip.inspected && chip.hazard && chip.hazard !== "none"
+                            ? chip.hazardLabel
+                            : !chip.inspected && chip.category === "daemon"
+                              ? "未查毒"
+                              : null,
+                          chip.eddiesRemaining > 0 ? `含 ${chip.eddiesRemaining} €$` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : null;
+
+                    return (
+                      <li key={entry.key}>
+                        <button
+                          type="button"
+                          data-item-index={index}
+                          className={styles.itemRow}
+                          aria-pressed={isSelected}
+                          data-worn={worn || undefined}
+                          data-rarity={rarity ?? undefined}
+                          data-iconic={detail?.iconic || undefined}
+                          data-flash={flashId === id || undefined}
+                          onClick={() => selectEntry(entry, index)}
+                          onDoubleClick={() => {
+                            selectEntry(entry, index);
+                            triggerSafePrimary(entry);
+                          }}
+                        >
+                          <NineSlice
+                            id="map.filterCellBg"
+                            tint="var(--item-fill, var(--cp-surface))"
+                            slice={CELL_SLICE}
                           />
-                          {art ? (
-                            <Asset id={art} className={styles.itemArt} />
-                          ) : (
-                            <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
+                          <NineSlice
+                            id="map.filterCellFg"
+                            tint="var(--item-line)"
+                            slice={CELL_SLICE}
+                          />
+                          {rarity && (
+                            <NineSlice
+                              id="cyber.cellRarity"
+                              tint="var(--rarity)"
+                              slice={0}
+                              className={styles.itemRarityBar}
+                            />
                           )}
-                        </span>
 
-                        <span className={styles.itemInfo}>
-                          <span className={styles.itemTopLine}>
-                            <strong className={styles.itemName}>{vehicle.name}</strong>
+                          <span className={styles.itemThumb} aria-hidden>
+                            <span
+                              className={styles.itemThumbGrid}
+                              style={{ backgroundImage: cssUrl("fx.grid") }}
+                            />
+                            {art ? (
+                              <Asset id={art} className={styles.itemArt} />
+                            ) : (
+                              <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
+                            )}
+                          </span>
+
+                          <span className={styles.itemInfo}>
+                            <span className={styles.itemTopLine}>
+                              <strong className={styles.itemName}>{itemName(id)}</strong>
+                              {worn && (
+                                <span className={styles.miniTag} data-tone="yellow">
+                                  已穿
+                                </span>
+                              )}
+                              {isHeld && (
+                                <span className={styles.miniTag} data-tone="yellow">
+                                  持用
+                                </span>
+                              )}
+                              {isSilenced && <span className={styles.miniTag}>消音</span>}
+                              {detail?.grantsSmartLink && (
+                                <span className={styles.miniTag} data-tone="yellow">
+                                  智能
+                                </span>
+                              )}
+                              {chip?.slotted && (
+                                <span className={styles.miniTag} data-tone="green">
+                                  插槽
+                                </span>
+                              )}
+                            </span>
+
+                            <span className={styles.itemSubLine}>
+                              <span className={styles.itemSubText}>
+                                {chipStatusTags ?? (
+                                  <>
+                                    {subLabel}
+                                    {detail?.rarityLabel && (
+                                      <>
+                                        {" · "}
+                                        <span className={styles.itemRarityWord}>
+                                          {detail.rarityLabel}
+                                        </span>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </span>
+                              {modSlots.length > 0 && (
+                                <span
+                                  className={styles.modPips}
+                                  title={`${modSlots.length} 个改装槽位`}
+                                  aria-hidden="true"
+                                >
+                                  {modSlots.map((slot) => {
+                                    const locked =
+                                      detail?.weaponState?.lockedSlots.includes(slot) ?? false;
+                                    const filled = Boolean(detail?.weaponState?.mods[slot]);
+                                    return (
+                                      <i
+                                        key={slot}
+                                        className={styles.modPip}
+                                        data-state={locked ? "locked" : filled ? "filled" : "empty"}
+                                      />
+                                    );
+                                  })}
+                                </span>
+                              )}
+                            </span>
+                          </span>
+
+                          <span className={styles.itemMeta}>
+                            {quick ? (
+                              <UnreadBadge>{`${quick.charges}/${quick.max}`}</UnreadBadge>
+                            ) : count > 1 ? (
+                              <b className={styles.itemCount}>×{count}</b>
+                            ) : null}
+                            {carryUnits > 0 && (
+                              <span
+                                className={styles.itemCarryTag}
+                                data-bulky={detail?.bulky || undefined}
+                                title={`单件携带负担 ${carryUnits} 分`}
+                              >
+                                负担 {carryUnits}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {selectedEntry?.entryType === "vehicle" &&
+                  (() => {
+                    const { vehicle } = selectedEntry;
+                    const art = vehicleArtOf(vehicle.model);
+                    const trunk = storageByKey.get(selectedEntry.key);
+                    const trunkCount = trunk
+                      ? trunk.items.reduce((sum, row) => sum + row.count, 0)
+                      : 0;
+                    const trunkReachable = Boolean(trunk && (trunk.canTake || trunk.canStore));
+                    const locationText =
+                      vehicle.location === null
+                        ? "位置未知"
+                        : vehicle.here
+                          ? `停在当前地点 · ${vehicle.locationName}`
+                          : `停在 ${vehicle.locationName}`;
+
+                    return (
+                      <article
+                        key={selectedEntry.key}
+                        className={styles.detailCard}
+                        aria-label="选中车辆详情"
+                      >
+                        <CellFrame />
+                        <span
+                          className={styles.detailGrid}
+                          style={{ backgroundImage: cssUrl("fx.grid") }}
+                          aria-hidden
+                        />
+
+                        <header className={styles.detailHead}>
+                          <div className={styles.detailTitleRow}>
+                            <strong className={styles.detailTitle}>{vehicle.name}</strong>
+                            {vehicle.maker && (
+                              <span className={styles.itemCarryTag}>{vehicle.maker}</span>
+                            )}
+                          </div>
+                          <div className={styles.detailTags}>
+                            <span className={styles.pill}>
+                              <NineSlice
+                                id="cyber.gaugeLabel"
+                                tint="rgb(94 246 255 / 16%)"
+                                slice={4}
+                              />
+                              <span className={styles.pillText}>
+                                {vehicle.classLabel || "载具"}
+                              </span>
+                            </span>
                             {vehicle.here && (
-                              <span className={styles.miniTag} data-tone="green">
-                                在身边
+                              <span className={styles.pillActive}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="var(--cp-yellow)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>在身边</span>
                               </span>
                             )}
-                            {vehicle.condition === "wrecked" && (
-                              <span className={styles.miniTag} data-tone="danger">
-                                报废
+                            <span className={styles.pill}>
+                              <NineSlice
+                                id="cyber.gaugeLabel"
+                                tint={
+                                  vehicle.condition === "wrecked"
+                                    ? "rgb(255 68 68 / 28%)"
+                                    : vehicle.condition === "damaged"
+                                      ? "rgb(252 238 10 / 22%)"
+                                      : "rgb(74 222 128 / 18%)"
+                                }
+                                slice={4}
+                              />
+                              <span className={styles.pillText}>
+                                车况：{vehicle.conditionLabel}
                               </span>
-                            )}
-                            {vehicle.condition === "damaged" && (
-                              <span className={styles.miniTag} data-tone="yellow">
-                                受损
-                              </span>
-                            )}
+                            </span>
                             {vehicle.stolen && (
-                              <span className={styles.miniTag} data-tone="yellow">
-                                赃车
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(252 238 10 / 22%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>赃车</span>
                               </span>
                             )}
-                          </span>
+                            {vehicle.seats > 0 && (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(148 163 184 / 16%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>{vehicle.seats} 座</span>
+                              </span>
+                            )}
+                          </div>
+                        </header>
 
-                          <span className={styles.itemSubLine}>
-                            <span className={styles.itemSubText}>
-                              {vehicle.classLabel ? `${vehicle.classLabel} · ` : ""}
-                              {locationSummary}
-                            </span>
-                          </span>
-                        </span>
-
-                        <span className={styles.itemMeta}>
-                          {trunk && (
-                            <span className={styles.itemCarryTag}>
-                              {trunkCount > 0 ? `后备箱 ${trunkCount}` : "后备箱空"}
-                            </span>
+                        <div className={styles.detailScroll}>
+                          {art && (
+                            <div className={styles.showcase} aria-hidden>
+                              <CellFrame />
+                              <span
+                                className={styles.showcaseGrid}
+                                style={{ backgroundImage: cssUrl("fx.grid") }}
+                              />
+                              {vehicle.classLabel && (
+                                <span className={styles.showcaseCornerLeft}>
+                                  {vehicle.classLabel}
+                                </span>
+                              )}
+                              {vehicle.speed > 0 && (
+                                <span className={styles.showcaseCornerRight}>
+                                  极速 {vehicle.speed}
+                                </span>
+                              )}
+                              <Asset id={art} className={styles.showcaseArt} />
+                            </div>
                           )}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                }
 
-                if (entry.entryType === "stored") {
-                  const { item, group } = entry;
-                  const art = itemArtOf(item.baseId ?? item.id);
-                  return (
-                    <li key={entry.key}>
-                      <button
-                        type="button"
-                        data-item-index={index}
-                        className={styles.itemRow}
-                        aria-pressed={isSelected}
+                          <div className={styles.detailCopy}>
+                            <p className={styles.detailDesc}>{locationText}</p>
+                            <p className={styles.detailStat}>
+                              {trunk
+                                ? trunkCount > 0
+                                  ? `后备箱内存放 ${trunkCount} 件物品${trunkReachable ? "（当前就在现场，可直接存取）" : "（远端只读）"}`
+                                  : `后备箱为空${trunkReachable ? "（当前就在现场，可将随身物品存入）" : ""}`
+                                : "该车辆暂无可用储物空间"}
+                            </p>
+                            {trunk?.blockedReason && (
+                              <p className={styles.actionHint}>{trunk.blockedReason}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <footer className={styles.detailFooter}>
+                          <div className={styles.actionRow}>
+                            {!vehicle.here &&
+                              !vehicle.stolen &&
+                              vehicle.condition !== "wrecked" &&
+                              onCallVehicle && (
+                                <Button
+                                  small
+                                  primary
+                                  disabled={Boolean(disabledReason) || Boolean(view.combat.active)}
+                                  onClick={() => void onCallVehicle(vehicle.id)}
+                                >
+                                  呼叫到当前位置
+                                </Button>
+                              )}
+                            {trunk && (
+                              <Button
+                                small
+                                primary={trunkReachable}
+                                onClick={() => onSelectView(selectedEntry.key)}
+                              >
+                                {trunkReachable
+                                  ? trunkCount > 0
+                                    ? `打开后备箱（${trunkCount} 件）→`
+                                    : "打开后备箱 →"
+                                  : `查看后备箱（${trunkCount} 件）→`}
+                              </Button>
+                            )}
+                          </div>
+                          <p className={styles.actionHint}>
+                            {trunkReachable
+                              ? "双击车辆条目或按 Enter 可直接切到后备箱。"
+                              : vehicle.stolen
+                                ? "偷来的车未绑定自动驾驶呼叫链路，需返回车辆停放地点使用。"
+                                : vehicle.condition === "wrecked"
+                                  ? "车辆已报废，无法远程呼叫。"
+                                  : "可以远程呼叫爱车自动驶来（约 5 分钟），或自行前往取车。"}
+                          </p>
+                        </footer>
+                      </article>
+                    );
+                  })()}
+
+                {selectedEntry?.entryType === "stored" &&
+                  (() => {
+                    const { item, group } = selectedEntry;
+                    const art = itemArtOf(item.baseId ?? item.id);
+                    const canOperate = Boolean(
+                      !disabledReason && !view.combat.active && view.health.condition === "up",
+                    );
+                    const canTakeHere = Boolean(group.canTake && onPlaceItem && canOperate);
+                    const batchTakeCount = item.count > 1 ? Math.min(item.count, 99) : 0;
+                    const transferTargets =
+                      canTakeHere && onTransferItem
+                        ? ownGroups.filter((other) => other.key !== group.key && other.canStore)
+                        : [];
+
+                    return (
+                      <article
+                        key={selectedEntry.key}
+                        className={styles.detailCard}
                         data-rarity={item.rarity ?? undefined}
                         data-iconic={item.iconic || undefined}
-                        data-flash={flashId === item.id || undefined}
-                        onClick={() => selectEntry(entry, index)}
-                        onDoubleClick={() => {
-                          selectEntry(entry, index);
-                          triggerSafePrimary(entry);
-                        }}
+                        aria-label="选中存放物品详情"
                       >
-                        <NineSlice
-                          id="map.filterCellBg"
-                          tint="var(--item-fill, var(--cp-surface))"
-                          slice={CELL_SLICE}
-                        />
-                        <NineSlice
-                          id="map.filterCellFg"
-                          tint="var(--item-line)"
-                          slice={CELL_SLICE}
+                        <CellFrame />
+                        <span
+                          className={styles.detailGrid}
+                          style={{ backgroundImage: cssUrl("fx.grid") }}
+                          aria-hidden
                         />
                         {item.rarity && (
                           <NineSlice
                             id="cyber.cellRarity"
                             tint="var(--rarity)"
                             slice={0}
-                            className={styles.itemRarityBar}
+                            className={styles.detailRarityBar}
                           />
                         )}
 
-                        <span className={styles.itemThumb} aria-hidden>
-                          <span
-                            className={styles.itemThumbGrid}
-                            style={{ backgroundImage: cssUrl("fx.grid") }}
-                          />
-                          {art ? (
-                            <Asset id={art} className={styles.itemArt} />
-                          ) : (
-                            <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
-                          )}
-                        </span>
-
-                        <span className={styles.itemInfo}>
-                          <span className={styles.itemTopLine}>
-                            <strong className={styles.itemName}>{item.name}</strong>
-                            {isElsewhereView && (
-                              <span className={styles.miniTag}>{group.name}</span>
+                        <header className={styles.detailHead}>
+                          <div className={styles.detailTitleRow}>
+                            <strong className={styles.detailTitle}>{item.name}</strong>
+                            {item.count > 1 && <b className={styles.detailCount}>×{item.count}</b>}
+                          </div>
+                          <div className={styles.detailTags}>
+                            {item.rarityLabel && (
+                              <span className={styles.pillRarity}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="var(--rarity, var(--cp-cyan))"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>{item.rarityLabel}</span>
+                              </span>
                             )}
-                          </span>
-                          <span className={styles.itemSubLine}>
-                            <span className={styles.itemSubText}>
-                              {item.subLabel}
-                              {item.rarityLabel && (
-                                <>
-                                  {" · "}
-                                  <span className={styles.itemRarityWord}>{item.rarityLabel}</span>
-                                </>
-                              )}
-                              {isElsewhereView && ` · ${group.locationName}`}
+                            <span className={styles.pill}>
+                              <NineSlice
+                                id="cyber.gaugeLabel"
+                                tint="rgb(94 246 255 / 16%)"
+                                slice={4}
+                              />
+                              <span className={styles.pillText}>{item.subLabel}</span>
                             </span>
-                          </span>
-                        </span>
-
-                        <span className={styles.itemMeta}>
-                          {item.count > 1 && <b className={styles.itemCount}>×{item.count}</b>}
-                          {item.remaining !== null && item.charges ? (
-                            <span className={styles.itemCarryTag}>
-                              {item.remaining}/{item.charges}
-                            </span>
-                          ) : item.carryUnits > 0 ? (
-                            <span
-                              className={styles.itemCarryTag}
-                              title={`单件携带负担 ${item.carryUnits} 分`}
-                            >
-                              负担 {item.carryUnits}
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                }
-
-                const { id, count, worn } = entry;
-                const quick = worn ? undefined : quickItems.find((item) => item.id === id);
-                const detail = inventory.details?.[id];
-                const chip = worn ? undefined : carriedChipById.get(id);
-                const art = itemArtOf(detail?.baseId ?? id);
-                const rarity = detail?.rarity ?? inventory.rarity[id];
-                const isHeld =
-                  !worn &&
-                  detail?.kind === "weapon" &&
-                  Boolean(inventory.heldWeapons?.includes(id));
-                const isSilenced =
-                  !worn &&
-                  detail?.kind === "weapon" &&
-                  detail.noise === "silent" &&
-                  !detail.subLabel.includes("刀剑") &&
-                  !detail.subLabel.includes("钝器");
-                const modSlots = !worn && detail?.kind === "weapon" ? detail.modSlots : [];
-                const carryUnits = worn ? 0 : (detail?.carryUnits ?? 0);
-                const subLabel =
-                  detail?.subLabel ??
-                  (entry.slot ? inventoryRules.CLOTHING_SLOT_LABELS[entry.slot] : "物品");
-                const chipStatusTags = chip
-                  ? [
-                      chip.categoryLabel,
-                      chip.encrypted ? chip.encryptionLabel : null,
-                      chip.inspected && chip.hazard && chip.hazard !== "none"
-                        ? chip.hazardLabel
-                        : !chip.inspected && chip.category === "daemon"
-                          ? "未查毒"
-                          : null,
-                      chip.eddiesRemaining > 0 ? `含 ${chip.eddiesRemaining} €$` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
-                  : null;
-
-                return (
-                  <li key={entry.key}>
-                    <button
-                      type="button"
-                      data-item-index={index}
-                      className={styles.itemRow}
-                      aria-pressed={isSelected}
-                      data-worn={worn || undefined}
-                      data-rarity={rarity ?? undefined}
-                      data-iconic={detail?.iconic || undefined}
-                      data-flash={flashId === id || undefined}
-                      onClick={() => selectEntry(entry, index)}
-                      onDoubleClick={() => {
-                        selectEntry(entry, index);
-                        triggerSafePrimary(entry);
-                      }}
-                    >
-                      <NineSlice
-                        id="map.filterCellBg"
-                        tint="var(--item-fill, var(--cp-surface))"
-                        slice={CELL_SLICE}
-                      />
-                      <NineSlice id="map.filterCellFg" tint="var(--item-line)" slice={CELL_SLICE} />
-                      {rarity && (
-                        <NineSlice
-                          id="cyber.cellRarity"
-                          tint="var(--rarity)"
-                          slice={0}
-                          className={styles.itemRarityBar}
-                        />
-                      )}
-
-                      <span className={styles.itemThumb} aria-hidden>
-                        <span
-                          className={styles.itemThumbGrid}
-                          style={{ backgroundImage: cssUrl("fx.grid") }}
-                        />
-                        {art ? (
-                          <Asset id={art} className={styles.itemArt} />
-                        ) : (
-                          <Asset id="notify.inventory" tint="var(--cp-cyan)" height={18} />
-                        )}
-                      </span>
-
-                      <span className={styles.itemInfo}>
-                        <span className={styles.itemTopLine}>
-                          <strong className={styles.itemName}>{itemName(id)}</strong>
-                          {worn && (
-                            <span className={styles.miniTag} data-tone="yellow">
-                              已穿
-                            </span>
-                          )}
-                          {isHeld && (
-                            <span className={styles.miniTag} data-tone="yellow">
-                              持用
-                            </span>
-                          )}
-                          {isSilenced && <span className={styles.miniTag}>消音</span>}
-                          {detail?.grantsSmartLink && (
-                            <span className={styles.miniTag} data-tone="yellow">
-                              智能
-                            </span>
-                          )}
-                          {chip?.slotted && (
-                            <span className={styles.miniTag} data-tone="green">
-                              插槽
-                            </span>
-                          )}
-                        </span>
-
-                        <span className={styles.itemSubLine}>
-                          <span className={styles.itemSubText}>
-                            {chipStatusTags ?? (
-                              <>
-                                {subLabel}
-                                {detail?.rarityLabel && (
-                                  <>
-                                    {" · "}
-                                    <span className={styles.itemRarityWord}>
-                                      {detail.rarityLabel}
-                                    </span>
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </span>
-                          {modSlots.length > 0 && (
-                            <span
-                              className={styles.modPips}
-                              title={`${modSlots.length} 个改装槽位`}
-                              aria-hidden="true"
-                            >
-                              {modSlots.map((slot) => {
-                                const locked =
-                                  detail?.weaponState?.lockedSlots.includes(slot) ?? false;
-                                const filled = Boolean(detail?.weaponState?.mods[slot]);
-                                return (
-                                  <i
-                                    key={slot}
-                                    className={styles.modPip}
-                                    data-state={locked ? "locked" : filled ? "filled" : "empty"}
-                                  />
-                                );
-                              })}
-                            </span>
-                          )}
-                        </span>
-                      </span>
-
-                      <span className={styles.itemMeta}>
-                        {quick ? (
-                          <UnreadBadge>{`${quick.charges}/${quick.max}`}</UnreadBadge>
-                        ) : count > 1 ? (
-                          <b className={styles.itemCount}>×{count}</b>
-                        ) : null}
-                        {carryUnits > 0 && (
-                          <span
-                            className={styles.itemCarryTag}
-                            data-bulky={detail?.bulky || undefined}
-                            title={`单件携带负担 ${carryUnits} 分`}
-                          >
-                            负担 {carryUnits}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {selectedEntry?.entryType === "vehicle" &&
-              (() => {
-                const { vehicle } = selectedEntry;
-                const art = vehicleArtOf(vehicle.model);
-                const trunk = storageByKey.get(selectedEntry.key);
-                const trunkCount = trunk ? trunk.items.reduce((sum, row) => sum + row.count, 0) : 0;
-                const trunkReachable = Boolean(trunk && (trunk.canTake || trunk.canStore));
-                const locationText =
-                  vehicle.location === null
-                    ? "位置未知"
-                    : vehicle.here
-                      ? `停在当前地点 · ${vehicle.locationName}`
-                      : `停在 ${vehicle.locationName}`;
-
-                return (
-                  <article
-                    key={selectedEntry.key}
-                    className={styles.detailCard}
-                    aria-label="选中车辆详情"
-                  >
-                    <CellFrame />
-                    <span
-                      className={styles.detailGrid}
-                      style={{ backgroundImage: cssUrl("fx.grid") }}
-                      aria-hidden
-                    />
-
-                    <header className={styles.detailHead}>
-                      <div className={styles.detailTitleRow}>
-                        <strong className={styles.detailTitle}>{vehicle.name}</strong>
-                        {vehicle.maker && (
-                          <span className={styles.itemCarryTag}>{vehicle.maker}</span>
-                        )}
-                      </div>
-                      <div className={styles.detailTags}>
-                        <span className={styles.pill}>
-                          <NineSlice id="cyber.gaugeLabel" tint="rgb(94 246 255 / 16%)" slice={4} />
-                          <span className={styles.pillText}>{vehicle.classLabel || "载具"}</span>
-                        </span>
-                        {vehicle.here && (
-                          <span className={styles.pillActive}>
-                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
-                            <span className={styles.pillText}>在身边</span>
-                          </span>
-                        )}
-                        <span className={styles.pill}>
-                          <NineSlice
-                            id="cyber.gaugeLabel"
-                            tint={
-                              vehicle.condition === "wrecked"
-                                ? "rgb(255 68 68 / 28%)"
-                                : vehicle.condition === "damaged"
-                                  ? "rgb(252 238 10 / 22%)"
-                                  : "rgb(74 222 128 / 18%)"
-                            }
-                            slice={4}
-                          />
-                          <span className={styles.pillText}>车况：{vehicle.conditionLabel}</span>
-                        </span>
-                        {vehicle.stolen && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(252 238 10 / 22%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>赃车</span>
-                          </span>
-                        )}
-                        {vehicle.seats > 0 && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(148 163 184 / 16%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>{vehicle.seats} 座</span>
-                          </span>
-                        )}
-                      </div>
-                    </header>
-
-                    <div className={styles.detailScroll}>
-                      {art && (
-                        <div className={styles.showcase} aria-hidden>
-                          <CellFrame />
-                          <span
-                            className={styles.showcaseGrid}
-                            style={{ backgroundImage: cssUrl("fx.grid") }}
-                          />
-                          {vehicle.classLabel && (
-                            <span className={styles.showcaseCornerLeft}>{vehicle.classLabel}</span>
-                          )}
-                          {vehicle.speed > 0 && (
-                            <span className={styles.showcaseCornerRight}>极速 {vehicle.speed}</span>
-                          )}
-                          <Asset id={art} className={styles.showcaseArt} />
-                        </div>
-                      )}
-
-                      <div className={styles.detailCopy}>
-                        <p className={styles.detailDesc}>{locationText}</p>
-                        <p className={styles.detailStat}>
-                          {trunk
-                            ? trunkCount > 0
-                              ? `后备箱内存放 ${trunkCount} 件物品${trunkReachable ? "（当前就在现场，可直接存取）" : "（远端只读）"}`
-                              : `后备箱为空${trunkReachable ? "（当前就在现场，可将随身物品存入）" : ""}`
-                            : "该车辆暂无可用储物空间"}
-                        </p>
-                        {trunk?.blockedReason && (
-                          <p className={styles.actionHint}>{trunk.blockedReason}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <footer className={styles.detailFooter}>
-                      <div className={styles.actionRow}>
-                        {!vehicle.here &&
-                          !vehicle.stolen &&
-                          vehicle.condition !== "wrecked" &&
-                          onCallVehicle && (
-                            <Button
-                              small
-                              primary
-                              disabled={Boolean(disabledReason) || Boolean(view.combat.active)}
-                              onClick={() => void onCallVehicle(vehicle.id)}
-                            >
-                              呼叫到当前位置
-                            </Button>
-                          )}
-                        {trunk && (
-                          <Button
-                            small
-                            primary={trunkReachable}
-                            onClick={() => onSelectView(selectedEntry.key)}
-                          >
-                            {trunkReachable
-                              ? trunkCount > 0
-                                ? `打开后备箱（${trunkCount} 件）→`
-                                : "打开后备箱 →"
-                              : `查看后备箱（${trunkCount} 件）→`}
-                          </Button>
-                        )}
-                      </div>
-                      <p className={styles.actionHint}>
-                        {trunkReachable
-                          ? "双击车辆条目或按 Enter 可直接切到后备箱。"
-                          : vehicle.stolen
-                            ? "偷来的车未绑定自动驾驶呼叫链路，需返回车辆停放地点使用。"
-                            : vehicle.condition === "wrecked"
-                              ? "车辆已报废，无法远程呼叫。"
-                              : "可以远程呼叫爱车自动驶来（约 5 分钟），或自行前往取车。"}
-                      </p>
-                    </footer>
-                  </article>
-                );
-              })()}
-
-            {selectedEntry?.entryType === "stored" &&
-              (() => {
-                const { item, group } = selectedEntry;
-                const art = itemArtOf(item.baseId ?? item.id);
-                const canOperate = Boolean(
-                  !disabledReason && !view.combat.active && view.health.condition === "up",
-                );
-                const canTakeHere = Boolean(group.canTake && onPlaceItem && canOperate);
-                const batchTakeCount = item.count > 1 ? Math.min(item.count, 99) : 0;
-                const transferTargets =
-                  canTakeHere && onTransferItem
-                    ? ownGroups.filter((other) => other.key !== group.key && other.canStore)
-                    : [];
-
-                return (
-                  <article
-                    key={selectedEntry.key}
-                    className={styles.detailCard}
-                    data-rarity={item.rarity ?? undefined}
-                    data-iconic={item.iconic || undefined}
-                    aria-label="选中存放物品详情"
-                  >
-                    <CellFrame />
-                    <span
-                      className={styles.detailGrid}
-                      style={{ backgroundImage: cssUrl("fx.grid") }}
-                      aria-hidden
-                    />
-                    {item.rarity && (
-                      <NineSlice
-                        id="cyber.cellRarity"
-                        tint="var(--rarity)"
-                        slice={0}
-                        className={styles.detailRarityBar}
-                      />
-                    )}
-
-                    <header className={styles.detailHead}>
-                      <div className={styles.detailTitleRow}>
-                        <strong className={styles.detailTitle}>{item.name}</strong>
-                        {item.count > 1 && <b className={styles.detailCount}>×{item.count}</b>}
-                      </div>
-                      <div className={styles.detailTags}>
-                        {item.rarityLabel && (
-                          <span className={styles.pillRarity}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="var(--rarity, var(--cp-cyan))"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>{item.rarityLabel}</span>
-                          </span>
-                        )}
-                        <span className={styles.pill}>
-                          <NineSlice id="cyber.gaugeLabel" tint="rgb(94 246 255 / 16%)" slice={4} />
-                          <span className={styles.pillText}>{item.subLabel}</span>
-                        </span>
-                        <span className={styles.pill}>
-                          <NineSlice
-                            id="cyber.gaugeLabel"
-                            tint={
-                              group.canTake ? "rgb(74 222 128 / 18%)" : "rgb(148 163 184 / 16%)"
-                            }
-                            slice={4}
-                          />
-                          <span className={styles.pillText}>
-                            {group.name} · {group.locationName}
-                          </span>
-                        </span>
-                        {item.carryUnits > 0 && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(148 163 184 / 16%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>负担 {item.carryUnits}</span>
-                          </span>
-                        )}
-                        {item.remaining !== null && item.charges && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(94 246 255 / 16%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>
-                              剩余 {item.remaining}/{item.charges} 次
-                            </span>
-                          </span>
-                        )}
-                      </div>
-                    </header>
-
-                    <div className={styles.detailScroll}>
-                      {art && (
-                        <div className={styles.showcase} aria-hidden>
-                          <CellFrame />
-                          <span
-                            className={styles.showcaseGrid}
-                            style={{ backgroundImage: cssUrl("fx.grid") }}
-                          />
-                          {item.rarityLabel && (
-                            <span className={styles.showcaseCornerLeft}>{item.rarityLabel}</span>
-                          )}
-                          {item.carryUnits > 0 && (
-                            <span className={styles.showcaseCornerRight}>
-                              负担 {item.carryUnits}
-                            </span>
-                          )}
-                          <Asset id={art} className={styles.showcaseArt} />
-                        </div>
-                      )}
-
-                      {item.ability && (
-                        <div className={styles.detailCopy}>
-                          <p className={styles.detailDesc}>{item.ability}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <footer className={styles.detailFooter}>
-                      {canTakeHere && onPlaceItem ? (
-                        <>
-                          <div className={styles.actionRow}>
-                            <Button
-                              small
-                              primary
-                              disabled={usingItem}
-                              onClick={() => {
-                                const nextFallback = Math.max(selectedIndex, 0);
-                                if (item.count <= 1) {
-                                  setPickedItem({
-                                    id: item.id,
-                                    entryType: "stored",
-                                    groupKey: group.key,
-                                    fallbackIndex: nextFallback,
-                                  });
+                            <span className={styles.pill}>
+                              <NineSlice
+                                id="cyber.gaugeLabel"
+                                tint={
+                                  group.canTake ? "rgb(74 222 128 / 18%)" : "rgb(148 163 184 / 16%)"
                                 }
-                                void runDirectUse(
-                                  () => onPlaceItem("take", item.id, group.target, undefined, 1),
-                                  `已从${group.name}取回「${item.name}」`,
-                                  item.id,
-                                );
-                              }}
-                            >
-                              {usingItem ? "正在处理…" : item.count > 1 ? "取回 1 件" : "取回随身"}
-                            </Button>
-                            {batchTakeCount > 1 && (
-                              <Button
-                                small
-                                disabled={usingItem}
-                                onClick={() => {
-                                  const nextFallback = Math.max(selectedIndex, 0);
-                                  setPickedItem({
-                                    id: item.id,
-                                    entryType: "stored",
-                                    groupKey: group.key,
-                                    fallbackIndex: nextFallback,
-                                  });
-                                  void runDirectUse(
-                                    () =>
-                                      onPlaceItem(
-                                        "take",
-                                        item.id,
-                                        group.target,
-                                        undefined,
-                                        batchTakeCount,
-                                      ),
-                                    `已从${group.name}取回「${item.name}」×${batchTakeCount}`,
-                                    item.id,
-                                  );
-                                }}
-                              >
-                                全部取回 ({batchTakeCount})
-                              </Button>
+                                slice={4}
+                              />
+                              <span className={styles.pillText}>
+                                {group.name} · {group.locationName}
+                              </span>
+                            </span>
+                            {item.carryUnits > 0 && (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(148 163 184 / 16%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>负担 {item.carryUnits}</span>
+                              </span>
+                            )}
+                            {item.remaining !== null && item.charges && (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(94 246 255 / 16%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>
+                                  剩余 {item.remaining}/{item.charges} 次
+                                </span>
+                              </span>
                             )}
                           </div>
+                        </header>
 
-                          {transferTargets.length > 0 && onTransferItem && (
-                            <div className={styles.storeBar}>
-                              <div className={styles.storeActions}>
-                                {transferTargets.map((dest) => (
+                        <div className={styles.detailScroll}>
+                          {art && (
+                            <div className={styles.showcase} aria-hidden>
+                              <CellFrame />
+                              <span
+                                className={styles.showcaseGrid}
+                                style={{ backgroundImage: cssUrl("fx.grid") }}
+                              />
+                              {item.rarityLabel && (
+                                <span className={styles.showcaseCornerLeft}>
+                                  {item.rarityLabel}
+                                </span>
+                              )}
+                              {item.carryUnits > 0 && (
+                                <span className={styles.showcaseCornerRight}>
+                                  负担 {item.carryUnits}
+                                </span>
+                              )}
+                              <Asset id={art} className={styles.showcaseArt} />
+                            </div>
+                          )}
+
+                          {item.ability && (
+                            <div className={styles.detailCopy}>
+                              <p className={styles.detailDesc}>{item.ability}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <footer className={styles.detailFooter}>
+                          {canTakeHere && onPlaceItem ? (
+                            <>
+                              <div className={styles.actionRow}>
+                                <Button
+                                  small
+                                  primary
+                                  disabled={usingItem}
+                                  onClick={() => {
+                                    const nextFallback = Math.max(selectedIndex, 0);
+                                    if (item.count <= 1) {
+                                      setPickedItem({
+                                        id: item.id,
+                                        entryType: "stored",
+                                        groupKey: group.key,
+                                        fallbackIndex: nextFallback,
+                                      });
+                                    }
+                                    void runDirectUse(
+                                      () =>
+                                        onPlaceItem("take", item.id, group.target, undefined, 1),
+                                      `已从${group.name}取回「${item.name}」`,
+                                      item.id,
+                                    );
+                                  }}
+                                >
+                                  {usingItem
+                                    ? "正在处理…"
+                                    : item.count > 1
+                                      ? "取回 1 件"
+                                      : "取回随身"}
+                                </Button>
+                                {batchTakeCount > 1 && (
                                   <Button
-                                    key={dest.key}
                                     small
                                     disabled={usingItem}
                                     onClick={() => {
                                       const nextFallback = Math.max(selectedIndex, 0);
-                                      if (item.count <= 1) {
-                                        setPickedItem({
-                                          id: item.id,
-                                          entryType: "stored",
-                                          groupKey: group.key,
-                                          fallbackIndex: nextFallback,
-                                        });
-                                      }
+                                      setPickedItem({
+                                        id: item.id,
+                                        entryType: "stored",
+                                        groupKey: group.key,
+                                        fallbackIndex: nextFallback,
+                                      });
                                       void runDirectUse(
-                                        () => onTransferItem(item.id, group.target, dest.target, 1),
-                                        `已将「${item.name}」转至${dest.name}`,
+                                        () =>
+                                          onPlaceItem(
+                                            "take",
+                                            item.id,
+                                            group.target,
+                                            undefined,
+                                            batchTakeCount,
+                                          ),
+                                        `已从${group.name}取回「${item.name}」×${batchTakeCount}`,
                                         item.id,
                                       );
                                     }}
                                   >
-                                    {item.count > 1 ? `转 1 件到${dest.name}` : `转到${dest.name}`}
+                                    全部取回 ({batchTakeCount})
                                   </Button>
-                                ))}
-                                {batchTakeCount > 1 &&
-                                  transferTargets.map((dest) => (
-                                    <Button
-                                      key={`${dest.key}:all`}
-                                      small
-                                      disabled={usingItem}
-                                      onClick={() => {
-                                        const nextFallback = Math.max(selectedIndex, 0);
-                                        setPickedItem({
-                                          id: item.id,
-                                          entryType: "stored",
-                                          groupKey: group.key,
-                                          fallbackIndex: nextFallback,
-                                        });
-                                        void runDirectUse(
-                                          () =>
-                                            onTransferItem(
+                                )}
+                              </div>
+
+                              {transferTargets.length > 0 && onTransferItem && (
+                                <div className={styles.storeBar}>
+                                  <div className={styles.storeActions}>
+                                    {transferTargets.map((dest) => (
+                                      <Button
+                                        key={dest.key}
+                                        small
+                                        disabled={usingItem}
+                                        onClick={() => {
+                                          const nextFallback = Math.max(selectedIndex, 0);
+                                          if (item.count <= 1) {
+                                            setPickedItem({
+                                              id: item.id,
+                                              entryType: "stored",
+                                              groupKey: group.key,
+                                              fallbackIndex: nextFallback,
+                                            });
+                                          }
+                                          void runDirectUse(
+                                            () =>
+                                              onTransferItem(item.id, group.target, dest.target, 1),
+                                            `已将「${item.name}」转至${dest.name}`,
+                                            item.id,
+                                          );
+                                        }}
+                                      >
+                                        {item.count > 1
+                                          ? `转 1 件到${dest.name}`
+                                          : `转到${dest.name}`}
+                                      </Button>
+                                    ))}
+                                    {batchTakeCount > 1 &&
+                                      transferTargets.map((dest) => (
+                                        <Button
+                                          key={`${dest.key}:all`}
+                                          small
+                                          disabled={usingItem}
+                                          onClick={() => {
+                                            const nextFallback = Math.max(selectedIndex, 0);
+                                            setPickedItem({
+                                              id: item.id,
+                                              entryType: "stored",
+                                              groupKey: group.key,
+                                              fallbackIndex: nextFallback,
+                                            });
+                                            void runDirectUse(
+                                              () =>
+                                                onTransferItem(
+                                                  item.id,
+                                                  group.target,
+                                                  dest.target,
+                                                  batchTakeCount,
+                                                ),
+                                              `已将「${item.name}」×${batchTakeCount} 转至${dest.name}`,
                                               item.id,
-                                              group.target,
-                                              dest.target,
-                                              batchTakeCount,
-                                            ),
-                                          `已将「${item.name}」×${batchTakeCount} 转至${dest.name}`,
-                                          item.id,
-                                        );
-                                      }}
-                                    >
-                                      全部转到{dest.name} ({batchTakeCount})
-                                    </Button>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <p className={styles.actionHint}>
-                          {disabledReason ||
-                            (view.combat.active
-                              ? "交战中存取物品需要在行动里描述"
-                              : view.health.condition !== "up"
-                                ? "当前无法自行存取物品"
-                                : (group.blockedReason ?? "当前位置只读"))}
-                        </p>
-                      )}
-                    </footer>
-                  </article>
-                );
-              })()}
-
-            {selectedCtx &&
-              (() => {
-                const {
-                  id,
-                  count,
-                  to,
-                  detail,
-                  chip,
-                  quick,
-                  kind,
-                  usable,
-                  remaining,
-                  useSpare,
-                  directHeal,
-                  directSuppressant,
-                  useBlocked,
-                  directUseMissing,
-                } = selectedCtx;
-                const art = itemArtOf(detail?.baseId ?? id);
-                const rarity = detail?.rarity ?? inventory.rarity[id];
-                const modSlot =
-                  kind === "mod"
-                    ? inventoryRules.ModSlotSchema.options.find(
-                        (s) => detail?.subLabel === `改装 · ${inventoryRules.MOD_SLOT_LABELS[s]}`,
-                      )
-                    : undefined;
-                const modTargets = selectedIsWorn ? [] : (inventory.modTargets[id] ?? []);
-                const carryUnits = detail?.carryUnits ?? 0;
-
-                return (
-                  <article
-                    key={id}
-                    className={styles.detailCard}
-                    data-rarity={rarity ?? undefined}
-                    data-iconic={detail?.iconic || undefined}
-                    aria-label="选中物品详情"
-                  >
-                    <CellFrame />
-                    <span
-                      className={styles.detailGrid}
-                      style={{ backgroundImage: cssUrl("fx.grid") }}
-                      aria-hidden
-                    />
-                    {rarity && (
-                      <NineSlice
-                        id="cyber.cellRarity"
-                        tint="var(--rarity)"
-                        slice={0}
-                        className={styles.detailRarityBar}
-                      />
-                    )}
-
-                    {/* 固定头部 */}
-                    <header className={styles.detailHead}>
-                      <div className={styles.detailTitleRow}>
-                        <strong className={styles.detailTitle}>{itemName(id)}</strong>
-                        {count > 1 && <b className={styles.detailCount}>×{count}</b>}
-                      </div>
-                      <div className={styles.detailTags}>
-                        {detail?.rarityLabel && (
-                          <span className={styles.pillRarity}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="var(--rarity, var(--cp-cyan))"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>{detail.rarityLabel}</span>
-                          </span>
-                        )}
-                        {detail?.subLabel && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(94 246 255 / 16%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>{detail.subLabel}</span>
-                          </span>
-                        )}
-                        {carryUnits > 0 && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint={
-                                detail?.bulky ? "rgb(252 238 10 / 22%)" : "rgb(148 163 184 / 16%)"
-                              }
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>
-                              {detail?.bulky ? `大件 · 负担 ${carryUnits}` : `负担 ${carryUnits}`}
-                            </span>
-                          </span>
-                        )}
-                        {kind === "weapon" && detail?.concealment && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(94 246 255 / 12%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>
-                              {CONCEALMENT_LABELS[detail.concealment]}
-                            </span>
-                          </span>
-                        )}
-                        {kind === "weapon" &&
-                          detail?.noise === "silent" &&
-                          !detail.subLabel.includes("刀剑") &&
-                          !detail.subLabel.includes("钝器") && (
-                            <span className={styles.pill}>
-                              <NineSlice
-                                id="cyber.gaugeLabel"
-                                tint="rgb(94 246 255 / 22%)"
-                                slice={4}
-                              />
-                              <span className={styles.pillText}>{NOISE_LABELS[detail.noise]}</span>
-                            </span>
-                          )}
-                        {kind === "weapon" && detail?.grantsSmartLink && (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(252 238 10 / 20%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>智能联锁</span>
-                          </span>
-                        )}
-                        {selectedIsWorn && (
-                          <span className={styles.pillActive}>
-                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
-                            <span className={styles.pillText}>当前穿着</span>
-                          </span>
-                        )}
-                        {kind === "weapon" && inventory.heldWeapons?.includes(id) && (
-                          <span className={styles.pillActive}>
-                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
-                            <span className={styles.pillText}>当前持用</span>
-                          </span>
-                        )}
-                        {quick ? (
-                          <span className={styles.pillActive}>
-                            <NineSlice id="cyber.gaugeLabel" tint="var(--cp-yellow)" slice={4} />
-                            <span className={styles.pillText}>
-                              快捷栏 · {quick.charges}/{quick.max} 次
-                            </span>
-                          </span>
-                        ) : remaining !== null && remaining !== undefined && detail?.charges ? (
-                          <span className={styles.pill}>
-                            <NineSlice
-                              id="cyber.gaugeLabel"
-                              tint="rgb(94 246 255 / 16%)"
-                              slice={4}
-                            />
-                            <span className={styles.pillText}>
-                              剩余 {remaining}/{detail.charges} 次
-                            </span>
-                          </span>
-                        ) : null}
-                      </div>
-                    </header>
-
-                    {/* 中间独立滚动区 */}
-                    <div className={styles.detailScroll}>
-                      {art && (
-                        <div className={styles.showcase} aria-hidden>
-                          <CellFrame />
-                          <span
-                            className={styles.showcaseGrid}
-                            style={{ backgroundImage: cssUrl("fx.grid") }}
-                          />
-                          {detail?.rarityLabel && (
-                            <span className={styles.showcaseCornerLeft}>{detail.rarityLabel}</span>
-                          )}
-                          {carryUnits > 0 && (
-                            <span className={styles.showcaseCornerRight}>负担 {carryUnits}</span>
-                          )}
-                          <Asset id={art} className={styles.showcaseArt} />
-                        </div>
-                      )}
-
-                      {(detail?.ability || chip || (kind === "healing" && detail?.healPercent)) && (
-                        <div className={styles.detailCopy}>
-                          {chip ? (
-                            <>
-                              <div className={mediaStyles.badgeRow}>
-                                {chip.slotted && (
-                                  <span
-                                    className={`${mediaStyles.badge} ${mediaStyles.badgeActive}`}
-                                  >
-                                    已插入神经槽
-                                  </span>
-                                )}
-                                {chip.encrypted && (
-                                  <span className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}>
-                                    加密：{chip.encryptionLabel}
-                                    {chip.lockedParts > 0 ? `（${chip.lockedParts} 段未破译）` : ""}
-                                  </span>
-                                )}
-                                {!chip.inspected &&
-                                  (chip.encrypted || chip.category === "daemon") && (
-                                    <span
-                                      className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}
-                                    >
-                                      尚未查毒
-                                    </span>
-                                  )}
-                                {chip.category === "behavior" && !view.shards.hasBehaviorChrome && (
-                                  <span className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}>
-                                    需安装完好行为芯片义体
-                                  </span>
-                                )}
-                                {chip.inspected && chip.hazard && (
-                                  <span
-                                    className={`${mediaStyles.badge} ${
-                                      chip.hazard === "none"
-                                        ? mediaStyles.badgeActive
-                                        : mediaStyles.badgeDanger
-                                    }`}
-                                  >
-                                    查毒：{chip.hazardLabel}
-                                  </span>
-                                )}
-                                {chip.eddiesRemaining > 0 && (
-                                  <span className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}>
-                                    未提取：{chip.eddiesRemaining} 欧元
-                                  </span>
-                                )}
-                                {chip.totalParts > 0 && (
-                                  <span className={mediaStyles.badge}>
-                                    已读 {chip.readParts}/{chip.totalParts} 段
-                                  </span>
-                                )}
-                              </div>
-                              <p className={styles.detailDesc}>{chip.summary}</p>
-                              {chip.ability && (
-                                <p className={styles.detailStat}>插槽能力：{chip.ability}</p>
-                              )}
-                              {chip.protocol && (
-                                <p className={styles.detailStat}>行为协议：{chip.protocol}</p>
+                                            );
+                                          }}
+                                        >
+                                          全部转到{dest.name} ({batchTakeCount})
+                                        </Button>
+                                      ))}
+                                  </div>
+                                </div>
                               )}
                             </>
                           ) : (
-                            detail?.ability && <p className={styles.detailDesc}>{detail.ability}</p>
-                          )}
-
-                          {kind === "healing" && detail?.healPercent && (
-                            <p className={styles.detailStat}>
-                              便携医疗急救 · 当前伤势：
-                              {woundTelemetry(view.health, view.combat, view.cyberware).title}
+                            <p className={styles.actionHint}>
+                              {disabledReason ||
+                                (view.combat.active
+                                  ? "交战中存取物品需要在行动里描述"
+                                  : view.health.condition !== "up"
+                                    ? "当前无法自行存取物品"
+                                    : (group.blockedReason ?? "当前位置只读"))}
                             </p>
                           )}
-                        </div>
-                      )}
+                        </footer>
+                      </article>
+                    );
+                  })()}
 
-                      {kind === "weapon" && detail && (
-                        <WeaponSlotInspector
-                          weaponId={id}
-                          detail={detail}
-                          installedList={inventory.mods[id]}
-                          allCarried={allCarried}
-                          details={inventory.details}
-                          modTargets={inventory.modTargets}
-                          shopModMeta={shopModMeta}
-                          itemName={itemName}
-                          onMod={usingItem ? undefined : triggerMod}
-                          openSlot={openSlotPicker?.weaponId === id ? openSlotPicker.slot : null}
-                          onToggleSlot={(slot) =>
-                            setOpenSlotPicker(slot ? { weaponId: id, slot } : null)
-                          }
+                {selectedCtx &&
+                  (() => {
+                    const {
+                      id,
+                      count,
+                      to,
+                      detail,
+                      chip,
+                      quick,
+                      kind,
+                      usable,
+                      remaining,
+                      useSpare,
+                      directHeal,
+                      directSuppressant,
+                      fieldAidKind,
+                      directFieldAid,
+                      fieldAidBlocked,
+                      tacticalDraft,
+                      useBlocked,
+                      directUseMissing,
+                    } = selectedCtx;
+                    const art = itemArtOf(detail?.baseId ?? id);
+                    const rarity = detail?.rarity ?? inventory.rarity[id];
+                    const modSlot =
+                      kind === "mod"
+                        ? inventoryRules.ModSlotSchema.options.find(
+                            (s) =>
+                              detail?.subLabel === `改装 · ${inventoryRules.MOD_SLOT_LABELS[s]}`,
+                          )
+                        : undefined;
+                    const modTargets = selectedIsWorn ? [] : (inventory.modTargets[id] ?? []);
+                    const carryUnits = detail?.carryUnits ?? 0;
+
+                    return (
+                      <article
+                        key={id}
+                        className={styles.detailCard}
+                        data-rarity={rarity ?? undefined}
+                        data-iconic={detail?.iconic || undefined}
+                        aria-label="选中物品详情"
+                      >
+                        <CellFrame />
+                        <span
+                          className={styles.detailGrid}
+                          style={{ backgroundImage: cssUrl("fx.grid") }}
+                          aria-hidden
                         />
-                      )}
+                        {rarity && (
+                          <NineSlice
+                            id="cyber.cellRarity"
+                            tint="var(--rarity)"
+                            slice={0}
+                            className={styles.detailRarityBar}
+                          />
+                        )}
 
-                      {/* 改装件反向装配：富武器目标卡 */}
-                      {kind === "mod" && modTargets.length > 0 && (
-                        <section className={styles.modTargetsSection} aria-label="可装配的目标武器">
-                          <span className={styles.modTargetsHead}>
-                            可装配武器（{modTargets.length}）
-                          </span>
-                          <ul className={styles.modTargetsGrid}>
-                            {modTargets.map((w) => {
-                              const wDetail = inventory.details?.[w];
-                              const wArt = itemArtOf(wDetail?.baseId ?? w);
-                              const existingId = modSlot
-                                ? wDetail?.weaponState?.mods[modSlot]
-                                : undefined;
-                              const alreadyFitted = existingId === id;
-                              return (
-                                <li key={w} className={styles.modTargetCard}>
-                                  <span className={styles.modTargetThumb} aria-hidden>
-                                    {wArt ? (
-                                      <Asset id={wArt} className={styles.modTargetArt} />
-                                    ) : (
-                                      <Asset
-                                        id="notify.inventory"
-                                        tint="var(--cp-cyan)"
-                                        height={16}
-                                      />
+                        {/* 固定头部 */}
+                        <header className={styles.detailHead}>
+                          <div className={styles.detailTitleRow}>
+                            <strong className={styles.detailTitle}>{itemName(id)}</strong>
+                            {count > 1 && <b className={styles.detailCount}>×{count}</b>}
+                          </div>
+                          <div className={styles.detailTags}>
+                            {detail?.rarityLabel && (
+                              <span className={styles.pillRarity}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="var(--rarity, var(--cp-cyan))"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>{detail.rarityLabel}</span>
+                              </span>
+                            )}
+                            {detail?.subLabel && (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(94 246 255 / 16%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>{detail.subLabel}</span>
+                              </span>
+                            )}
+                            {carryUnits > 0 && (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint={
+                                    detail?.bulky
+                                      ? "rgb(252 238 10 / 22%)"
+                                      : "rgb(148 163 184 / 16%)"
+                                  }
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>
+                                  {detail?.bulky
+                                    ? `大件 · 负担 ${carryUnits}`
+                                    : `负担 ${carryUnits}`}
+                                </span>
+                              </span>
+                            )}
+                            {kind === "weapon" && detail?.concealment && (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(94 246 255 / 12%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>
+                                  {CONCEALMENT_LABELS[detail.concealment]}
+                                </span>
+                              </span>
+                            )}
+                            {kind === "weapon" &&
+                              detail?.noise === "silent" &&
+                              !detail.subLabel.includes("刀剑") &&
+                              !detail.subLabel.includes("钝器") && (
+                                <span className={styles.pill}>
+                                  <NineSlice
+                                    id="cyber.gaugeLabel"
+                                    tint="rgb(94 246 255 / 22%)"
+                                    slice={4}
+                                  />
+                                  <span className={styles.pillText}>
+                                    {NOISE_LABELS[detail.noise]}
+                                  </span>
+                                </span>
+                              )}
+                            {kind === "weapon" && detail?.grantsSmartLink && (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(252 238 10 / 20%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>智能联锁</span>
+                              </span>
+                            )}
+                            {(detail?.effectTags ?? []).map((tag) => (
+                              <span key={tag} className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(63 242 160 / 18%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>{tag}</span>
+                              </span>
+                            ))}
+                            {selectedIsWorn && (
+                              <span className={styles.pillActive}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="var(--cp-yellow)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>当前穿着</span>
+                              </span>
+                            )}
+                            {kind === "weapon" && inventory.heldWeapons?.includes(id) && (
+                              <span className={styles.pillActive}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="var(--cp-yellow)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>当前持用</span>
+                              </span>
+                            )}
+                            {quick ? (
+                              <span className={styles.pillActive}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="var(--cp-yellow)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>
+                                  快捷栏 · {quick.charges}/{quick.max} 次
+                                </span>
+                              </span>
+                            ) : remaining !== null && remaining !== undefined && detail?.charges ? (
+                              <span className={styles.pill}>
+                                <NineSlice
+                                  id="cyber.gaugeLabel"
+                                  tint="rgb(94 246 255 / 16%)"
+                                  slice={4}
+                                />
+                                <span className={styles.pillText}>
+                                  剩余 {remaining}/{detail.charges} 次
+                                </span>
+                              </span>
+                            ) : null}
+                          </div>
+                        </header>
+
+                        {/* 中间独立滚动区 */}
+                        <div className={styles.detailScroll}>
+                          {art && (
+                            <div className={styles.showcase} aria-hidden>
+                              <CellFrame />
+                              <span
+                                className={styles.showcaseGrid}
+                                style={{ backgroundImage: cssUrl("fx.grid") }}
+                              />
+                              {detail?.rarityLabel && (
+                                <span className={styles.showcaseCornerLeft}>
+                                  {detail.rarityLabel}
+                                </span>
+                              )}
+                              {carryUnits > 0 && (
+                                <span className={styles.showcaseCornerRight}>
+                                  负担 {carryUnits}
+                                </span>
+                              )}
+                              <Asset id={art} className={styles.showcaseArt} />
+                            </div>
+                          )}
+
+                          {(detail?.ability ||
+                            chip ||
+                            (kind === "healing" && detail?.healPercent)) && (
+                            <div className={styles.detailCopy}>
+                              {chip ? (
+                                <>
+                                  <div className={mediaStyles.badgeRow}>
+                                    {chip.slotted && (
+                                      <span
+                                        className={`${mediaStyles.badge} ${mediaStyles.badgeActive}`}
+                                      >
+                                        已插入神经槽
+                                      </span>
                                     )}
-                                  </span>
-                                  <span className={styles.modTargetCopy}>
-                                    <b>{itemName(w)}</b>
-                                    <small>
-                                      {alreadyFitted
-                                        ? "已装配此配件"
-                                        : existingId
-                                          ? `当前已装：${itemName(existingId)}（装上将替换）`
-                                          : `${wDetail?.subLabel ?? "武器"} · 槽位空余`}
-                                    </small>
-                                  </span>
-                                  {onMod && (
-                                    <ActionButton
-                                      disabled={alreadyFitted || usingItem}
-                                      onClick={() => triggerMod("attach", w, id)}
-                                    >
-                                      {alreadyFitted ? "已装" : existingId ? "替换" : "装上"}
-                                    </ActionButton>
+                                    {chip.encrypted && (
+                                      <span
+                                        className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}
+                                      >
+                                        加密：{chip.encryptionLabel}
+                                        {chip.lockedParts > 0
+                                          ? `（${chip.lockedParts} 段未破译）`
+                                          : ""}
+                                      </span>
+                                    )}
+                                    {!chip.inspected &&
+                                      (chip.encrypted || chip.category === "daemon") && (
+                                        <span
+                                          className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}
+                                        >
+                                          尚未查毒
+                                        </span>
+                                      )}
+                                    {chip.category === "behavior" &&
+                                      !view.shards.hasBehaviorChrome && (
+                                        <span
+                                          className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}
+                                        >
+                                          需安装完好行为芯片义体
+                                        </span>
+                                      )}
+                                    {chip.inspected && chip.hazard && (
+                                      <span
+                                        className={`${mediaStyles.badge} ${
+                                          chip.hazard === "none"
+                                            ? mediaStyles.badgeActive
+                                            : mediaStyles.badgeDanger
+                                        }`}
+                                      >
+                                        查毒：{chip.hazardLabel}
+                                      </span>
+                                    )}
+                                    {chip.eddiesRemaining > 0 && (
+                                      <span
+                                        className={`${mediaStyles.badge} ${mediaStyles.badgeWarn}`}
+                                      >
+                                        未提取：{chip.eddiesRemaining} 欧元
+                                      </span>
+                                    )}
+                                    {chip.totalParts > 0 && (
+                                      <span className={mediaStyles.badge}>
+                                        已读 {chip.readParts}/{chip.totalParts} 段
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className={styles.detailDesc}>{chip.summary}</p>
+                                  {chip.ability && (
+                                    <p className={styles.detailStat}>插槽能力：{chip.ability}</p>
                                   )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </section>
-                      )}
-                    </div>
+                                  {chip.protocol && (
+                                    <p className={styles.detailStat}>行为协议：{chip.protocol}</p>
+                                  )}
+                                </>
+                              ) : (
+                                detail?.ability && (
+                                  <p className={styles.detailDesc}>{detail.ability}</p>
+                                )
+                              )}
 
-                    {/* 底部固定操作栏 */}
-                    <footer className={styles.detailFooter}>
-                      {/* 芯片 / 超梦专属动作 */}
-                      {chip && onActionDraft && (
-                        <div className={styles.actionRow}>
-                          {(chip.category === "skill" || chip.category === "behavior") && (
-                            <Button
-                              small
-                              primary={!chip.slotted}
-                              disabled={
-                                Boolean(disabledReason) ||
-                                (!chip.slotted &&
-                                  chip.category === "behavior" &&
-                                  !view.shards.hasBehaviorChrome)
-                              }
-                              reason={
-                                !chip.slotted &&
-                                chip.category === "behavior" &&
-                                !view.shards.hasBehaviorChrome
-                                  ? "需先在义体医生处安装完好的玩偶行为芯片（doll-behavior-chip）"
-                                  : undefined
-                              }
-                              onClick={() =>
-                                onActionDraft(
-                                  chip.slotted
-                                    ? `从颈后个人神经槽拔出${itemName(id)}`
-                                    : `把${itemName(id)}插入颈后个人神经槽`,
-                                )
-                              }
-                            >
-                              {chip.slotted ? "拔出神经槽" : "插入神经槽"}
-                            </Button>
+                              {kind === "healing" && detail?.healPercent && (
+                                <p className={styles.detailStat}>
+                                  便携医疗急救 · 当前伤势：
+                                  {woundTelemetry(view.health, view.combat, view.cyberware).title}
+                                </p>
+                              )}
+                            </div>
                           )}
-                          {chip.category === "braindance" && (
-                            <Button
-                              small
-                              primary
-                              disabled={Boolean(disabledReason)}
-                              onClick={() => onActionDraft(`用超梦头环播放${itemName(id)}`)}
-                            >
-                              播放超梦
-                            </Button>
-                          )}
-                          {chip.category !== "braindance" &&
-                            chip.totalParts > 0 &&
-                            chip.readParts < chip.totalParts && (
-                              <Button
-                                small
-                                primary={chip.category === "intel"}
-                                disabled={Boolean(disabledReason)}
-                                onClick={() => onActionDraft(`读取芯片「${itemName(id)}」里的内容`)}
-                              >
-                                读取内容
-                              </Button>
-                            )}
-                          {!chip.inspected &&
-                            (view.shards.hasReader ||
-                              chip.encrypted ||
-                              chip.category === "daemon") && (
-                              <Button
-                                small
-                                disabled={Boolean(disabledReason)}
-                                onClick={() =>
-                                  onActionDraft(
-                                    view.shards.hasReader
-                                      ? `用隔离芯片读写器对${itemName(id)}进行沙盒查毒`
-                                      : `检查${itemName(id)}是否带加密或恶意陷阱`,
-                                  )
-                                }
-                              >
-                                {view.shards.hasReader ? "隔离查毒" : "检查风险"}
-                              </Button>
-                            )}
-                          {(chip.encrypted || chip.eddiesRemaining > 0) && (
-                            <Button
-                              small
-                              disabled={Boolean(disabledReason)}
-                              onClick={() =>
-                                onActionDraft(
-                                  chip.eddiesRemaining > 0
-                                    ? `离线破译${itemName(id)}并提取里面的 ${chip.eddiesRemaining} 欧元`
-                                    : `离线破译${itemName(id)}的加密层`,
-                                )
+
+                          {kind === "weapon" && detail && (
+                            <WeaponSlotInspector
+                              weaponId={id}
+                              detail={detail}
+                              installedList={inventory.mods[id]}
+                              allCarried={allCarried}
+                              details={inventory.details}
+                              modTargets={inventory.modTargets}
+                              shopModMeta={shopModMeta}
+                              itemName={itemName}
+                              onMod={usingItem ? undefined : triggerMod}
+                              openSlot={
+                                openSlotPicker?.weaponId === id ? openSlotPicker.slot : null
                               }
+                              onToggleSlot={(slot) =>
+                                setOpenSlotPicker(slot ? { weaponId: id, slot } : null)
+                              }
+                            />
+                          )}
+
+                          {/* 改装件反向装配：富武器目标卡 */}
+                          {kind === "mod" && modTargets.length > 0 && (
+                            <section
+                              className={styles.modTargetsSection}
+                              aria-label="可装配的目标武器"
                             >
-                              {chip.eddiesRemaining > 0 ? "破译并提款" : "破译加密"}
-                            </Button>
+                              <span className={styles.modTargetsHead}>
+                                可装配武器（{modTargets.length}）
+                              </span>
+                              <ul className={styles.modTargetsGrid}>
+                                {modTargets.map((w) => {
+                                  const wDetail = inventory.details?.[w];
+                                  const wArt = itemArtOf(wDetail?.baseId ?? w);
+                                  const existingId = modSlot
+                                    ? wDetail?.weaponState?.mods[modSlot]
+                                    : undefined;
+                                  const alreadyFitted = existingId === id;
+                                  return (
+                                    <li key={w} className={styles.modTargetCard}>
+                                      <span className={styles.modTargetThumb} aria-hidden>
+                                        {wArt ? (
+                                          <Asset id={wArt} className={styles.modTargetArt} />
+                                        ) : (
+                                          <Asset
+                                            id="notify.inventory"
+                                            tint="var(--cp-cyan)"
+                                            height={16}
+                                          />
+                                        )}
+                                      </span>
+                                      <span className={styles.modTargetCopy}>
+                                        <b>{itemName(w)}</b>
+                                        <small>
+                                          {alreadyFitted
+                                            ? "已装配此配件"
+                                            : existingId
+                                              ? `当前已装：${itemName(existingId)}（装上将替换）`
+                                              : `${wDetail?.subLabel ?? "武器"} · 槽位空余`}
+                                        </small>
+                                      </span>
+                                      {onMod && (
+                                        <ActionButton
+                                          disabled={alreadyFitted || usingItem}
+                                          onClick={() => triggerMod("attach", w, id)}
+                                        >
+                                          {alreadyFitted ? "已装" : existingId ? "替换" : "装上"}
+                                        </ActionButton>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </section>
                           )}
                         </div>
-                      )}
 
-                      {/* 主操作行：使用 / 穿戴 / 脱下 / 设为快捷栏 */}
-                      {(usable ||
-                        (to === "quick" && !quick) ||
-                        (selectedIsWorn && onUnequip) ||
-                        (to === "clothing" && onEquip)) && (
-                        <>
-                          <div className={styles.actionRow}>
-                            {usable && (
-                              <Button
-                                small
-                                primary={!useBlocked}
-                                disabled={Boolean(useBlocked) || directUseMissing}
-                                onClick={() => {
-                                  if (useBlocked) return;
-                                  if (directHeal && onHeal) {
-                                    void runDirectUse(
-                                      () => onHeal(id),
-                                      `已使用「${itemName(id)}」`,
-                                      id,
-                                    );
-                                  } else if (directSuppressant && onSuppressant) {
-                                    void runDirectUse(onSuppressant, "已注射赛博精神病压制剂", id);
-                                  } else {
-                                    onUse?.(id);
+                        {/* 底部固定操作栏 */}
+                        <footer className={styles.detailFooter}>
+                          {/* 芯片 / 超梦专属动作 */}
+                          {chip && onActionDraft && (
+                            <div className={styles.actionRow}>
+                              {(chip.category === "skill" || chip.category === "behavior") && (
+                                <Button
+                                  small
+                                  primary={!chip.slotted}
+                                  disabled={
+                                    Boolean(disabledReason) ||
+                                    (!chip.slotted &&
+                                      chip.category === "behavior" &&
+                                      !view.shards.hasBehaviorChrome)
                                   }
-                                }}
-                              >
-                                {directHeal
-                                  ? "使用治疗品"
-                                  : directSuppressant
-                                    ? "注射压制剂"
-                                    : kind === "grenade"
-                                      ? "准备投掷"
-                                      : "准备使用"}
-                              </Button>
-                            )}
-
-                            {to === "quick" && !quick && (
-                              <Button
-                                small
-                                primary={Boolean(useBlocked)}
-                                disabled={
-                                  !onEquip ||
-                                  Boolean(disabledReason) ||
-                                  usingItem ||
-                                  Boolean(view.combat.active)
-                                }
-                                onClick={() => triggerEquip(id, kind)}
-                              >
-                                {kind === "healing" ? "设为当前治疗品" : "设为当前手雷"}
-                              </Button>
-                            )}
-
-                            {selectedIsWorn && onUnequip && (
-                              <Button
-                                small
-                                disabled={usingItem || Boolean(disabledReason)}
-                                onClick={() => triggerUnequip(id)}
-                              >
-                                脱下
-                              </Button>
-                            )}
-
-                            {to === "clothing" && onEquip && (
-                              <Button
-                                small
-                                primary
-                                disabled={usingItem || Boolean(disabledReason)}
-                                onClick={() => triggerEquip(id, kind)}
-                              >
-                                穿上
-                              </Button>
-                            )}
-                          </div>
-
-                          {usable &&
-                            (useBlocked ? (
-                              <p className={styles.actionHint}>{useBlocked}</p>
-                            ) : useSpare ? (
-                              <p className={styles.actionHint}>将取用随身携带的同款备用补给。</p>
-                            ) : !directHeal && !directSuppressant ? (
-                              <p className={styles.actionHint}>填入行动输入框，由你确认后执行。</p>
-                            ) : null)}
-                        </>
-                      )}
-
-                      {/* 存放区块：仅当身边存在可达容器时出现；无可达容器时保持详情底栏干净 */}
-                      {canDirectStoreNow && storeTarget && onPlaceItem ? (
-                        chip?.slotted ? (
-                          <p className={styles.actionHint}>请先从个人神经芯片槽拔下后再存放</p>
-                        ) : (
-                          (() => {
-                            const backpackCount = selectedIsWorn
-                              ? 0
-                              : (inventory.backpack[id] ?? 0);
-                            const batchStoreCount =
-                              !selectedIsWorn && backpackCount > 1
-                                ? Math.min(backpackCount, 99)
-                                : 0;
-                            const singleSource: "backpack" | "worn" | "quick" = selectedIsWorn
-                              ? "worn"
-                              : backpackCount > 0
-                                ? "backpack"
-                                : "quick";
-                            return (
-                              <div className={styles.storeBar}>
-                                {storeTargets.length > 1 && (
-                                  <fieldset
-                                    className={styles.storeTargetPills}
-                                    aria-label="选择存放点"
-                                  >
-                                    {storeTargets.map((group) => (
-                                      <button
-                                        key={group.key}
-                                        type="button"
-                                        className={styles.storeTargetChip}
-                                        aria-pressed={group.key === storeTarget.key}
-                                        disabled={usingItem}
-                                        onClick={() => setPreferredStoreKey(group.key)}
-                                      >
-                                        {group.name}
-                                      </button>
-                                    ))}
-                                  </fieldset>
-                                )}
-                                <div className={styles.storeActions}>
+                                  reason={
+                                    !chip.slotted &&
+                                    chip.category === "behavior" &&
+                                    !view.shards.hasBehaviorChrome
+                                      ? "需先在义体医生处安装完好的玩偶行为芯片（doll-behavior-chip）"
+                                      : undefined
+                                  }
+                                  onClick={() =>
+                                    onActionDraft(
+                                      chip.slotted
+                                        ? `从颈后个人神经槽拔出${itemName(id)}`
+                                        : `把${itemName(id)}插入颈后个人神经槽`,
+                                    )
+                                  }
+                                >
+                                  {chip.slotted ? "拔出神经槽" : "插入神经槽"}
+                                </Button>
+                              )}
+                              {chip.category === "braindance" && (
+                                <Button
+                                  small
+                                  primary
+                                  disabled={Boolean(disabledReason)}
+                                  onClick={() => onActionDraft(`用超梦头环播放${itemName(id)}`)}
+                                >
+                                  播放超梦
+                                </Button>
+                              )}
+                              {chip.category !== "braindance" &&
+                                chip.totalParts > 0 &&
+                                chip.readParts < chip.totalParts && (
                                   <Button
                                     small
-                                    disabled={usingItem}
+                                    primary={chip.category === "intel"}
+                                    disabled={Boolean(disabledReason)}
+                                    onClick={() =>
+                                      onActionDraft(`读取芯片「${itemName(id)}」里的内容`)
+                                    }
+                                  >
+                                    读取内容
+                                  </Button>
+                                )}
+                              {!chip.inspected &&
+                                (view.shards.hasReader ||
+                                  chip.encrypted ||
+                                  chip.category === "daemon") && (
+                                  <Button
+                                    small
+                                    disabled={Boolean(disabledReason)}
+                                    onClick={() =>
+                                      onActionDraft(
+                                        view.shards.hasReader
+                                          ? `用隔离芯片读写器对${itemName(id)}进行沙盒查毒`
+                                          : `检查${itemName(id)}是否带加密或恶意陷阱`,
+                                      )
+                                    }
+                                  >
+                                    {view.shards.hasReader ? "隔离查毒" : "检查风险"}
+                                  </Button>
+                                )}
+                              {(chip.encrypted || chip.eddiesRemaining > 0) && (
+                                <Button
+                                  small
+                                  disabled={Boolean(disabledReason)}
+                                  onClick={() =>
+                                    onActionDraft(
+                                      chip.eddiesRemaining > 0
+                                        ? `离线破译${itemName(id)}并提取里面的 ${chip.eddiesRemaining} 欧元`
+                                        : `离线破译${itemName(id)}的加密层`,
+                                    )
+                                  }
+                                >
+                                  {chip.eddiesRemaining > 0 ? "破译并提款" : "破译加密"}
+                                </Button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* 主操作行：使用 / 战地急救 / 战术工具 / 穿戴 / 脱下 / 设为快捷栏 */}
+                          {(usable ||
+                            fieldAidKind !== null ||
+                            (tacticalDraft !== null && Boolean(onActionDraft)) ||
+                            (to === "quick" && !quick) ||
+                            (selectedIsWorn && onUnequip) ||
+                            (to === "clothing" && onEquip)) && (
+                            <>
+                              <div className={styles.actionRow}>
+                                {usable && (
+                                  <Button
+                                    small
+                                    primary={!useBlocked}
+                                    disabled={Boolean(useBlocked) || directUseMissing}
                                     onClick={() => {
-                                      const nextFallback = Math.max(selectedIndex, 0);
-                                      if (count <= 1) {
-                                        setPickedItem({
+                                      if (useBlocked) return;
+                                      if (directHeal && onHeal) {
+                                        void runDirectUse(
+                                          () => onHeal(id),
+                                          `已使用「${itemName(id)}」`,
                                           id,
-                                          entryType: "item",
-                                          worn: selectedIsWorn,
-                                          fallbackIndex: nextFallback,
-                                        });
+                                        );
+                                      } else if (directSuppressant && onSuppressant) {
+                                        void runDirectUse(
+                                          onSuppressant,
+                                          "已注射赛博精神病压制剂",
+                                          id,
+                                        );
+                                      } else if (directFieldAid && fieldAidKind && onFieldAid) {
+                                        void runDirectUse(
+                                          () => onFieldAid(fieldAidKind),
+                                          "已用战地止血凝露封口稳伤",
+                                          id,
+                                        );
+                                      } else {
+                                        onUse?.(id);
                                       }
+                                    }}
+                                  >
+                                    {directHeal
+                                      ? "使用治疗品"
+                                      : directSuppressant
+                                        ? "注射压制剂"
+                                        : directFieldAid
+                                          ? "使用止血凝露"
+                                          : kind === "grenade"
+                                            ? "准备投掷"
+                                            : "准备使用"}
+                                  </Button>
+                                )}
+
+                                {!usable && fieldAidKind === "med-kit" && (
+                                  <Button
+                                    small
+                                    primary={!fieldAidBlocked}
+                                    disabled={Boolean(fieldAidBlocked) || !onFieldAid}
+                                    onClick={() => {
+                                      if (fieldAidBlocked || !onFieldAid) return;
                                       void runDirectUse(
-                                        () =>
-                                          onPlaceItem(
-                                            "leave",
-                                            id,
-                                            storeTarget.target,
-                                            singleSource,
-                                            1,
-                                          ),
-                                        `已将「${itemName(id)}」存入${storeTarget.name}`,
+                                        () => onFieldAid("med-kit"),
+                                        "已用急救绷带包处理表皮创伤",
                                         id,
                                       );
                                     }}
                                   >
-                                    {usingItem
-                                      ? "正在处理…"
-                                      : count > 1
-                                        ? `存放 1 件到${storeTarget.name}`
-                                        : `存放到${storeTarget.name}`}
+                                    紧急包扎
                                   </Button>
-                                  {batchStoreCount > 1 && (
-                                    <Button
-                                      small
-                                      disabled={usingItem}
-                                      onClick={() => {
-                                        const nextFallback = Math.max(selectedIndex, 0);
-                                        if (batchStoreCount >= count) {
-                                          setPickedItem({
-                                            id,
-                                            entryType: "item",
-                                            worn: false,
-                                            fallbackIndex: nextFallback,
-                                          });
-                                        }
-                                        void runDirectUse(
-                                          () =>
-                                            onPlaceItem(
-                                              "leave",
+                                )}
+
+                                {!usable && tacticalDraft && onActionDraft && (
+                                  <Button
+                                    small
+                                    primary
+                                    disabled={Boolean(disabledReason)}
+                                    onClick={() => onActionDraft(tacticalDraft.draft)}
+                                  >
+                                    {tacticalDraft.label}
+                                  </Button>
+                                )}
+
+                                {to === "quick" && !quick && (
+                                  <Button
+                                    small
+                                    primary={Boolean(useBlocked)}
+                                    disabled={
+                                      !onEquip ||
+                                      Boolean(disabledReason) ||
+                                      usingItem ||
+                                      Boolean(view.combat.active)
+                                    }
+                                    onClick={() => triggerEquip(id, kind)}
+                                  >
+                                    {kind === "healing" ? "设为当前治疗品" : "设为当前手雷"}
+                                  </Button>
+                                )}
+
+                                {selectedIsWorn && onUnequip && (
+                                  <Button
+                                    small
+                                    disabled={usingItem || Boolean(disabledReason)}
+                                    onClick={() => triggerUnequip(id)}
+                                  >
+                                    脱下
+                                  </Button>
+                                )}
+
+                                {to === "clothing" && onEquip && (
+                                  <Button
+                                    small
+                                    primary
+                                    disabled={usingItem || Boolean(disabledReason)}
+                                    onClick={() => triggerEquip(id, kind)}
+                                  >
+                                    穿上
+                                  </Button>
+                                )}
+                              </div>
+
+                              {usable &&
+                                (useBlocked ? (
+                                  <p className={styles.actionHint}>{useBlocked}</p>
+                                ) : useSpare ? (
+                                  <p className={styles.actionHint}>
+                                    将取用随身携带的同款备用补给。
+                                  </p>
+                                ) : !directHeal && !directSuppressant && !directFieldAid ? (
+                                  <p className={styles.actionHint}>
+                                    填入行动输入框，由你确认后执行。
+                                  </p>
+                                ) : null)}
+
+                              {!usable && fieldAidKind === "med-kit" && fieldAidBlocked && (
+                                <p className={styles.actionHint}>{fieldAidBlocked}</p>
+                              )}
+
+                              {!usable && tacticalDraft && onActionDraft && (
+                                <p className={styles.actionHint}>
+                                  填入行动输入框，由你确认后执行。
+                                </p>
+                              )}
+                            </>
+                          )}
+
+                          {/* 交给同行同伴：仅背包中的非穿戴物品可在场直接转交 */}
+                          {canExchangeGearNow &&
+                            onExchangeCompanionGear &&
+                            !selectedIsWorn &&
+                            (inventory.backpack[id] ?? 0) >= 1 &&
+                            (chip?.slotted ? (
+                              <p className={styles.actionHint}>
+                                请先从个人神经芯片槽拔下后再交给同伴
+                              </p>
+                            ) : (
+                              <div className={styles.storeBar}>
+                                <span className={styles.giveLabel}>交给同行同伴</span>
+                                <div className={styles.storeActions}>
+                                  {nearbyCompanions.map((comp) => {
+                                    const compGear = comp.body?.gear ?? [];
+                                    const alreadyHas = compGear.some((g) => g.id === id);
+                                    const isFull = compGear.length >= 12;
+                                    return (
+                                      <Button
+                                        key={comp.id}
+                                        small
+                                        disabled={usingItem || alreadyHas || isFull}
+                                        onClick={() => {
+                                          const nextFallback = Math.max(selectedIndex, 0);
+                                          if (count <= 1) {
+                                            setPickedItem({
                                               id,
-                                              storeTarget.target,
-                                              "backpack",
-                                              batchStoreCount,
-                                            ),
-                                          `已将「${itemName(id)}」×${batchStoreCount} 存入${storeTarget.name}`,
-                                          id,
-                                        );
-                                      }}
-                                    >
-                                      {quick
-                                        ? `存备用 (${batchStoreCount})`
-                                        : `全部存入 (${batchStoreCount})`}
-                                    </Button>
-                                  )}
+                                              entryType: "item",
+                                              worn: false,
+                                              fallbackIndex: nextFallback,
+                                            });
+                                          }
+                                          void runDirectUse(
+                                            () => onExchangeCompanionGear(comp.id, "give", id),
+                                            `已将「${itemName(id)}」交给${comp.name}`,
+                                            id,
+                                          );
+                                        }}
+                                      >
+                                        {alreadyHas
+                                          ? `${comp.name} 已有`
+                                          : isFull
+                                            ? `${comp.name} 栏满`
+                                            : `交给 ${comp.name}`}
+                                      </Button>
+                                    );
+                                  })}
                                 </div>
                               </div>
-                            );
-                          })()
-                        )
-                      ) : null}
-                    </footer>
-                  </article>
-                );
-              })()}
-          </div>
+                            ))}
+
+                          {/* 存放区块：仅当身边存在可达容器时出现；无可达容器时保持详情底栏干净 */}
+                          {canDirectStoreNow && storeTarget && onPlaceItem ? (
+                            chip?.slotted ? (
+                              <p className={styles.actionHint}>请先从个人神经芯片槽拔下后再存放</p>
+                            ) : (
+                              (() => {
+                                const backpackCount = selectedIsWorn
+                                  ? 0
+                                  : (inventory.backpack[id] ?? 0);
+                                const batchStoreCount =
+                                  !selectedIsWorn && backpackCount > 1
+                                    ? Math.min(backpackCount, 99)
+                                    : 0;
+                                const singleSource: "backpack" | "worn" | "quick" = selectedIsWorn
+                                  ? "worn"
+                                  : backpackCount > 0
+                                    ? "backpack"
+                                    : "quick";
+                                return (
+                                  <div className={styles.storeBar}>
+                                    {storeTargets.length > 1 && (
+                                      <fieldset
+                                        className={styles.storeTargetPills}
+                                        aria-label="选择存放点"
+                                      >
+                                        {storeTargets.map((group) => (
+                                          <button
+                                            key={group.key}
+                                            type="button"
+                                            className={styles.storeTargetChip}
+                                            aria-pressed={group.key === storeTarget.key}
+                                            disabled={usingItem}
+                                            onClick={() => setPreferredStoreKey(group.key)}
+                                          >
+                                            {group.name}
+                                          </button>
+                                        ))}
+                                      </fieldset>
+                                    )}
+                                    <div className={styles.storeActions}>
+                                      <Button
+                                        small
+                                        disabled={usingItem}
+                                        onClick={() => {
+                                          const nextFallback = Math.max(selectedIndex, 0);
+                                          if (count <= 1) {
+                                            setPickedItem({
+                                              id,
+                                              entryType: "item",
+                                              worn: selectedIsWorn,
+                                              fallbackIndex: nextFallback,
+                                            });
+                                          }
+                                          void runDirectUse(
+                                            () =>
+                                              onPlaceItem(
+                                                "leave",
+                                                id,
+                                                storeTarget.target,
+                                                singleSource,
+                                                1,
+                                              ),
+                                            `已将「${itemName(id)}」存入${storeTarget.name}`,
+                                            id,
+                                          );
+                                        }}
+                                      >
+                                        {usingItem
+                                          ? "正在处理…"
+                                          : count > 1
+                                            ? `存放 1 件到${storeTarget.name}`
+                                            : `存放到${storeTarget.name}`}
+                                      </Button>
+                                      {batchStoreCount > 1 && (
+                                        <Button
+                                          small
+                                          disabled={usingItem}
+                                          onClick={() => {
+                                            const nextFallback = Math.max(selectedIndex, 0);
+                                            if (batchStoreCount >= count) {
+                                              setPickedItem({
+                                                id,
+                                                entryType: "item",
+                                                worn: false,
+                                                fallbackIndex: nextFallback,
+                                              });
+                                            }
+                                            void runDirectUse(
+                                              () =>
+                                                onPlaceItem(
+                                                  "leave",
+                                                  id,
+                                                  storeTarget.target,
+                                                  "backpack",
+                                                  batchStoreCount,
+                                                ),
+                                              `已将「${itemName(id)}」×${batchStoreCount} 存入${storeTarget.name}`,
+                                              id,
+                                            );
+                                          }}
+                                        >
+                                          {quick
+                                            ? `存备用 (${batchStoreCount})`
+                                            : `全部存入 (${batchStoreCount})`}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()
+                            )
+                          ) : null}
+                        </footer>
+                      </article>
+                    );
+                  })()}
+              </div>
+            )}
+          </>
         )}
       </section>
 

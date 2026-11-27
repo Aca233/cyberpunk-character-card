@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { SceneMemoryUpdateSchema, SceneSummaryProposalSchema } from "../systems/memory/schema";
-import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 import { EventPlanSchema } from "./event-plan";
 
 /** 旧格式的指令块标签：写正文的模型偶尔仍附上，拆分器把它从正文里拿掉 */
@@ -55,24 +54,17 @@ export function normalizeChoiceProposal(raw: unknown): unknown {
 
 export const MAX_CHOICES = 5;
 
-/** ④ 抽取格式；事件先定归属和依赖，业务字段逐条校验，整组结算。 */
+/** ④ 抽取格式：直接按事件分组内嵌 changes / messages，消除手数下标错位，业务字段逐条校验、整组结算。 */
 export const ExtractDocSchema = z.object({
-  changes: z
-    .array(z.object({ type: z.string() }))
-    .describe("这一轮已经发生的状态变化，按发生顺序，见下方指令；每轮都有一条 world"),
   events: z
     .array(EventPlanSchema)
-    .describe("必填事件清单；覆盖全部 changes 与 messages，依赖事件在前；没有事实条目时写 []"),
+    .describe(
+      "必填事件清单，按发生顺序；每组直接内嵌同成同撤的 changes（以及可选 messages），依赖事件排在前面；每轮正常至少包含一条含 world 的事件，无任何事实条目时写 []",
+    ),
   choices: z
     .array(ChoiceProposalSchema)
     .describe(
       `玩家角色接下来可采取的 2–4 个不同方向的行动或回应，最多 ${MAX_CHOICES} 个；正常回合（含对话进行中）都应给出，仅在玩家死亡或故事结束时写 []`,
-    ),
-  messages: z
-    .array(IncomingMessageSchema)
-    .optional()
-    .describe(
-      `消息：正文里不在场的人通过植入式通讯发来的消息，每轮最多 ${MESSAGES_PER_TURN} 条；平常不写`,
     ),
   clutch: z
     .boolean()
@@ -93,12 +85,10 @@ export const ExtractDocSchema = z.object({
     .describe("考虑过但没抽的，每条写上原因，例如“只是打算，没发生”；没有写 []"),
 });
 
-/** 顶层字段只看类型；choices、changes 的每一条再单独校验 */
+/** 顶层字段只看类型；choices 与 events 内的每条指令再单独校验 */
 const ExtractShapeSchema = z.object({
   choices: z.array(z.unknown()).optional().catch(undefined),
-  changes: z.array(z.unknown()).optional(),
   events: z.unknown().optional(),
-  messages: z.array(z.unknown()).optional(),
   clutch: z.boolean().optional().catch(undefined),
   sceneEnd: z.boolean().optional().catch(undefined),
   sceneMemory: z.unknown().optional(),
@@ -187,11 +177,8 @@ export function readExtractShape(value: unknown): ShapeResult {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return { ok: false, error: "抽取结果要是一个 JSON 对象" };
   }
-  if (!("changes" in value) || !Array.isArray(value.changes)) {
-    return { ok: false, error: "抽取必须明确给出 changes 数组；无变化写 []，不能省略" };
-  }
-  if (!("events" in value)) {
-    return { ok: false, error: "抽取必须明确给出 events 事件清单；无事实条目写 []，不能猜测依赖" };
+  if (!("events" in value) || !Array.isArray(value.events)) {
+    return { ok: false, error: "抽取必须明确给出 events 事件数组；无事实条目写 []" };
   }
   const parsed = ExtractShapeSchema.safeParse(value);
   return parsed.success

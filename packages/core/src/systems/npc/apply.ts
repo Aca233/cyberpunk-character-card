@@ -324,7 +324,14 @@ export function applyNpc(
 
   const npc = draft.npcs[command.id];
   if (!npc) {
-    return { ok: false, reason: `没有 id 为 ${command.id} 的人物卡，新认识的人先用 npc 建卡` };
+    const hint =
+      command.type === "learn" || command.type === "memory"
+        ? `（${command.type} 的 id 应填【人物】里已有的人物卡 id，而非事件或记忆标题）`
+        : "";
+    return {
+      ok: false,
+      reason: `没有 id 为 ${command.id} 的人物卡${hint}，新认识的人先用 npc 建卡`,
+    };
   }
   // 死了的人也能被打听到
   if (command.type === "learn") {

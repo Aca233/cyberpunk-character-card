@@ -2,27 +2,41 @@ import {
   type Acquaintance,
   type Board,
   boardPeople,
+  CUSTOM_NPCS_MAX,
+  NPC_OVERRIDES_MAX,
   npcRules,
   RELATION_INFO,
   RELATIONS,
   type RelationKind,
 } from "@cp/core";
-import { useMemo, useState } from "react";
-import type { BoardData } from "../../api/client";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { api, type BoardData } from "../../api/client";
 import { ActionButton } from "../../ui/ActionButton";
-import { Asset } from "../../ui/Asset";
+import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { useLayer } from "../../ui/layers";
 import { portraitOf } from "../story/art";
 import styles from "./characters.module.css";
+import {
+  loadLocalCustomNpcs,
+  loadLocalNpcOverrides,
+  removeLocalCustomNpc,
+  saveLocalCustomNpc,
+  subscribeLocalCustomNpcs,
+} from "./creator";
+import { NpcCreatorWorkbench, type NpcWorkbenchMode } from "./NpcCreatorWorkbench";
+import wb from "./workbench.module.css";
 
-const { NPC_CIRCLES, NPC_CIRCLE_LABELS, inferNpcCircle } = npcRules;
+const { NO_FACTION, NPC_CIRCLES, NPC_CIRCLE_LABELS, inferNpcCircle } = npcRules;
 type NpcCircle = npcRules.NpcCircle;
 
 /**
  * 工作台的人脉选择器（NC CONTACTS）：
  * 按夜之城 7 大圈层清晰分类展示世界角色（支持全量 56+ 原作立绘头像），
- * 清晰展示外貌/圈层/势力/6 种关系真实开局效果，支持已选汇总条、圈层快筛与自定义旧识原地编辑。
+ * 支持完整自建 NPC、修改自建/原作/工坊人物卡（原作生平与秘密默认防剧透折叠），
+ * 清晰展示外貌/圈层/势力/6 种关系真实开局效果，并支持本地自建库跨角色复用与打包工坊。
  */
 
 const LEDGER_EFFECT_LABELS: Readonly<Record<string, string>> = {
@@ -80,18 +94,26 @@ interface Person {
   readonly look?: string;
   readonly faction?: string;
   readonly circle?: NpcCircle;
-  /** 原作人物的 id，有原作头像就画头像 */
+  /** 原作/工坊预制人物的 id，有原作头像就画头像 */
   readonly npc?: string;
   readonly hasPortrait: boolean;
   readonly fromModule: boolean;
+  readonly isCustom?: boolean;
+  readonly hasFullCard?: boolean;
+  readonly inBoardCustom?: boolean;
+  readonly hasOverride?: boolean;
   readonly catalogNpc?: boolean;
   readonly preset?: Acquaintance;
   readonly packId?: string;
 }
 
-const customId = () => `custom-${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
-
 type PeopleFilter = "all" | "linked" | "custom" | "workshop" | NpcCircle;
+
+interface ActiveNpcEditor {
+  readonly mode: NpcWorkbenchMode;
+  readonly initial?: npcRules.NpcCard | undefined;
+  readonly hasOverride?: boolean | undefined;
+}
 
 function isWorkshopSource(packId?: string): boolean {
   return Boolean(packId && packId !== "local");
@@ -112,36 +134,95 @@ function resolveCircle(raw: {
   return inferNpcCircle({ faction: raw.faction, role: raw.role });
 }
 
-function matchesPerson(p: Person, query: string): boolean {
+function matchesPerson(
+  p: Person,
+  query: string,
+  factionNameMap: ReadonlyMap<string, string>,
+): boolean {
   if (!query) return true;
   const circleLabel = p.circle ? NPC_CIRCLE_LABELS[p.circle] : "";
-  return `${p.name} ${p.rawName} ${p.role} ${p.faction ?? ""} ${circleLabel} ${p.look ?? ""} ${p.preset?.note ?? ""}`
+  const factionLabel = p.faction ? (factionNameMap.get(p.faction) ?? p.faction) : "";
+  return `${p.name} ${p.rawName} ${p.role} ${p.faction ?? ""} ${factionLabel} ${circleLabel} ${p.look ?? ""} ${p.preset?.note ?? ""}`
     .toLowerCase()
     .includes(query);
 }
 
+function upsertCard(
+  list: readonly npcRules.NpcCard[],
+  card: npcRules.NpcCard,
+  max: number,
+): npcRules.NpcCard[] {
+  const exists = list.some((item) => item.id === card.id);
+  const next = exists ? list.map((item) => (item.id === card.id ? card : item)) : [...list, card];
+  return next.slice(-max);
+}
+
 /**
- * 旧识不限人数：世界角色按夜之城 7 大圈层清晰分类，圈内优先展示带原作头像的人物，
- * 出身/特质带出故人可覆盖关系，自定义旧识支持原地改名改身份。
+ * 旧识与人物管理器：世界角色按夜之城 7 大圈层清晰分类，圈内优先展示带原作头像的人物，
+ * 支持新建完整自建 NPC（同步写入本地自建库供跨角色复用与工坊打包）、编辑自建 NPC 与修改原作/工坊人物卡。
  */
 export function PeoplePicker({
   board,
   data,
   commit,
+  replacesNpcId,
 }: {
   readonly board: Board;
   readonly data: BoardData;
   readonly commit: (board: Board) => void;
+  readonly replacesNpcId?: string | undefined;
 }) {
+  const [localNpcs, setLocalNpcs] = useState<readonly npcRules.NpcCard[]>(() =>
+    loadLocalCustomNpcs(),
+  );
+  const [globalOverrides, setGlobalOverrides] = useState<readonly npcRules.NpcCard[]>(() =>
+    loadLocalNpcOverrides(),
+  );
+  useEffect(
+    () =>
+      subscribeLocalCustomNpcs(() => {
+        setLocalNpcs(loadLocalCustomNpcs());
+        setGlobalOverrides(loadLocalNpcOverrides());
+      }),
+    [],
+  );
+
+  const factionNameMap = useMemo(
+    () => new Map((data.factions ?? []).map((f) => [f.id, f.name] as const)),
+    [data.factions],
+  );
+
   const byId = useMemo(
     () => new Map(board.acquaintances.map((a) => [a.id, a])),
     [board.acquaintances],
   );
 
+  const boardCustomSet = useMemo(
+    () => new Set((board.customNpcs ?? []).map((c) => c.id)),
+    [board.customNpcs],
+  );
+
+  const customNpcMap = useMemo(() => {
+    const map = new Map<string, npcRules.NpcCard>();
+    for (const card of localNpcs) map.set(card.id, card);
+    for (const card of board.customNpcs ?? []) map.set(card.id, card);
+    return map;
+  }, [localNpcs, board.customNpcs]);
+
+  const overrideMap = useMemo(() => {
+    const map = new Map<string, npcRules.NpcCard>();
+    for (const card of globalOverrides) map.set(card.id, card);
+    for (const card of board.npcOverrides ?? []) map.set(card.id, card);
+    return map;
+  }, [globalOverrides, board.npcOverrides]);
+
   const modulePeople: Person[] = useMemo(
     () =>
       boardPeople(board)
-        .filter((p) => !board.acquaintances.some((a) => a.id === p.id && a.custom))
+        .filter(
+          (p) =>
+            !customNpcMap.has(p.id) && !board.acquaintances.some((a) => a.id === p.id && a.custom),
+        )
         .map((p) => ({
           id: p.id,
           rawName: p.name,
@@ -150,49 +231,84 @@ export function PeoplePicker({
           hasPortrait: false,
           fromModule: true,
         })),
-    [board],
+    [board, customNpcMap],
   );
 
-  const own: Person[] = useMemo(
-    () =>
-      board.acquaintances
-        .filter((a) => a.custom)
-        .map((a) => ({
-          id: a.id,
-          rawName: a.name,
-          name: a.name,
-          role: a.role || "自定义旧识",
-          hasPortrait: false,
-          fromModule: false,
-          ...(a.packId ? { packId: a.packId } : {}),
-        })),
-    [board.acquaintances],
-  );
+  const own: Person[] = useMemo(() => {
+    const list: Person[] = [];
+    for (const card of customNpcMap.values()) {
+      const faction = card.faction && card.faction !== NO_FACTION ? card.faction : undefined;
+      list.push({
+        id: card.id,
+        rawName: card.name,
+        name: card.alias ? `${card.name}（${card.alias}）` : card.name,
+        role: card.role,
+        look: card.look,
+        ...(faction ? { faction } : {}),
+        circle: resolveCircle(card),
+        hasPortrait: false,
+        fromModule: false,
+        isCustom: true,
+        hasFullCard: true,
+        inBoardCustom: boardCustomSet.has(card.id),
+        packId: "local",
+      });
+    }
+    for (const a of board.acquaintances) {
+      if (!a.custom || customNpcMap.has(a.id)) continue;
+      list.push({
+        id: a.id,
+        rawName: a.name,
+        name: a.name,
+        role: a.role || "自定义旧识",
+        hasPortrait: false,
+        fromModule: false,
+        isCustom: true,
+        hasFullCard: false,
+        inBoardCustom: false,
+        ...(a.packId ? { packId: a.packId } : {}),
+      });
+    }
+    return list;
+  }, [customNpcMap, boardCustomSet, board.acquaintances]);
 
   const canon: Person[] = useMemo(() => {
-    const list = data.npcs.map((n) => {
-      const preset = data.acquaintances?.find((entry) => entry.id === n.id);
-      const hasPortrait = Boolean(portraitOf(n.id));
-      const circle = resolveCircle(n);
-      return {
-        id: n.id,
-        rawName: n.name,
-        name: n.alias ? `${n.name}（${n.alias}）` : n.name,
-        role: n.role,
-        ...(n.look ? { look: n.look } : {}),
-        ...(n.faction ? { faction: n.faction } : {}),
-        circle,
-        npc: n.id,
-        hasPortrait,
-        fromModule: false,
-        ...(n.packId || preset?.catalogNpc ? { catalogNpc: true } : {}),
-        ...(n.packId ? { packId: n.packId } : {}),
-        ...(preset ? { preset } : {}),
-      };
-    });
+    const list = data.npcs
+      .filter((n) => n.id !== replacesNpcId)
+      .map((n) => {
+        const ov = overrideMap.get(n.id);
+        const preset = data.acquaintances?.find((entry) => entry.id === n.id);
+        const hasPortrait = Boolean(portraitOf(n.id));
+        const effectiveName = ov?.name ?? n.name;
+        const effectiveAlias = ov ? ov.alias : n.alias;
+        const effectiveRole = ov?.role ?? n.role;
+        const effectiveLook = ov?.look ?? n.look;
+        const effectiveFaction = ov
+          ? ov.faction !== NO_FACTION
+            ? ov.faction
+            : undefined
+          : n.faction;
+        const circle = resolveCircle(ov ?? n);
+        return {
+          id: n.id,
+          rawName: effectiveName,
+          name: effectiveAlias ? `${effectiveName}（${effectiveAlias}）` : effectiveName,
+          role: effectiveRole,
+          ...(effectiveLook ? { look: effectiveLook } : {}),
+          ...(effectiveFaction ? { faction: effectiveFaction } : {}),
+          circle,
+          npc: n.id,
+          hasPortrait,
+          fromModule: false,
+          ...(ov ? { hasOverride: true } : {}),
+          ...(n.packId || preset?.catalogNpc ? { catalogNpc: true } : {}),
+          ...(n.packId ? { packId: n.packId } : {}),
+          ...(preset ? { preset } : {}),
+        };
+      });
     // 同圈层内带原作头像的标志人物排在前面
     return [...list].sort((x, y) => Number(y.hasPortrait) - Number(x.hasPortrait));
-  }, [data.npcs, data.acquaintances]);
+  }, [data.npcs, data.acquaintances, overrideMap, replacesNpcId]);
 
   const workshopPresets: Person[] = useMemo(() => {
     const catalogIds = new Set(data.npcs.map((npc) => npc.id));
@@ -211,13 +327,10 @@ export function PeoplePicker({
   }, [data.npcs, data.acquaintances]);
 
   const [picked, setPicked] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [draftName, setDraftName] = useState("");
-  const [draftRole, setDraftRole] = useState("");
-  const [ownNameDraft, setOwnNameDraft] = useState<{
-    readonly id: string;
-    readonly value: string;
-  } | null>(null);
+  const [editor, setEditor] = useState<ActiveNpcEditor | null>(null);
+  useLayer(() => setEditor(null), editor !== null);
+  const [loadingNpcId, setLoadingNpcId] = useState<string | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PeopleFilter>("all");
 
@@ -244,12 +357,12 @@ export function PeoplePicker({
     () => (list: readonly Person[]) =>
       list.filter((p) => {
         if (filter === "linked" && !byId.has(p.id)) return false;
-        if (filter === "custom" && !p.fromModule && !own.some((o) => o.id === p.id)) return false;
+        if (filter === "custom" && !p.fromModule && !p.isCustom) return false;
         if (filter === "workshop" && !isWorkshopSource(p.packId)) return false;
         if (isCircleFilter(filter) && p.circle !== filter) return false;
-        return matchesPerson(p, normalizedQuery);
+        return matchesPerson(p, normalizedQuery, factionNameMap);
       }),
-    [filter, byId, own, normalizedQuery],
+    [filter, byId, normalizedQuery, factionNameMap],
   );
 
   const shownModule = filterList(modulePeople);
@@ -280,7 +393,7 @@ export function PeoplePicker({
 
   const setRelation = (p: Person, relation: RelationKind | "") => {
     const had = byId.get(p.id);
-    const next = relation
+    const nextAcq = relation
       ? had
         ? board.acquaintances.map((a) => (a.id === p.id ? { ...a, relation } : a))
         : [
@@ -292,12 +405,42 @@ export function PeoplePicker({
               note: p.preset?.note ?? "",
               ...(p.catalogNpc ? { catalogNpc: true } : {}),
               ...(p.packId ? { packId: p.packId } : {}),
-              ...(p.preset?.role ? { role: p.preset.role } : {}),
-              ...(!p.catalogNpc && p.preset?.custom ? { custom: true } : {}),
+              ...(p.isCustom ? { custom: true, role: p.role } : {}),
+              ...(!p.isCustom && p.preset?.role ? { role: p.preset.role } : {}),
+              ...(!p.isCustom && !p.catalogNpc && p.preset?.custom ? { custom: true } : {}),
             },
           ]
       : board.acquaintances.filter((a) => a.id !== p.id);
-    commit({ ...board, acquaintances: next });
+
+    // 若为跨角色本地自建 NPC 建立关系，同时将其完整人物卡随当前角色卡打包入局
+    const fullCard = relation ? customNpcMap.get(p.id) : undefined;
+    const nextCustomNpcs =
+      fullCard && !boardCustomSet.has(p.id)
+        ? upsertCard(board.customNpcs ?? [], fullCard, CUSTOM_NPCS_MAX)
+        : (board.customNpcs ?? []);
+
+    commit({
+      ...board,
+      acquaintances: nextAcq,
+      customNpcs: nextCustomNpcs,
+    });
+  };
+
+  const toggleCustomInBoard = (id: string, include: boolean) => {
+    const card = customNpcMap.get(id);
+    if (!card) return;
+    if (include) {
+      commit({
+        ...board,
+        customNpcs: upsertCard(board.customNpcs ?? [], card, CUSTOM_NPCS_MAX),
+      });
+    } else {
+      commit({
+        ...board,
+        customNpcs: (board.customNpcs ?? []).filter((c) => c.id !== id),
+        acquaintances: board.acquaintances.filter((a) => a.id !== id),
+      });
+    }
   };
 
   const setNote = (id: string, note: string) =>
@@ -306,39 +449,145 @@ export function PeoplePicker({
       acquaintances: board.acquaintances.map((a) => (a.id === id ? { ...a, note } : a)),
     });
 
-  const updateOwnField = (id: string, patch: Partial<Pick<Acquaintance, "name" | "role">>) =>
-    commit({
-      ...board,
-      acquaintances: board.acquaintances.map((a) => (a.id === id ? { ...a, ...patch } : a)),
-    });
-
-  const addOwn = () => {
-    const name = draftName.trim().slice(0, 20);
-    if (!name) return;
-    const id = customId();
-    commit({
-      ...board,
-      acquaintances: [
-        ...board.acquaintances,
-        {
-          id,
-          name,
-          relation: "nod",
-          note: "",
-          role: draftRole.trim().slice(0, 80),
-          custom: true,
-          packId: "local",
+  const openEditorFor = async (person: Person) => {
+    setEditorError(null);
+    if (person.isCustom) {
+      const existing = customNpcMap.get(person.id);
+      if (existing) {
+        setEditor({ mode: "edit-custom", initial: existing });
+        return;
+      }
+      // 兼容早期仅填了姓名和身份的轻量旧识，打开完整表单补全升级
+      const stub = byId.get(person.id);
+      setEditor({
+        mode: "edit-custom",
+        initial: {
+          id: person.id,
+          name: stub?.name ?? person.rawName,
+          pronoun: "TA",
+          role: stub?.role || person.role || "自定义旧识",
+          faction: NO_FACTION,
+          entity: "human",
+          look: "",
+          voice: "",
+          samples: [],
+          want: "",
+          limit: "",
+          canon: false,
+          body: { gear: [], cyberware: [] },
         },
-      ],
-    });
-    setPicked(id);
-    setAdding(false);
-    setDraftName("");
-    setDraftRole("");
+      });
+      return;
+    }
+
+    if (!person.npc) return;
+    const existingOverride = overrideMap.get(person.id);
+    if (existingOverride) {
+      setEditor({ mode: "edit-canon", initial: existingOverride, hasOverride: true });
+      return;
+    }
+
+    setLoadingNpcId(person.id);
+    try {
+      const npc = await api.characterBoardNpc(person.id);
+      setEditor({ mode: "edit-canon", initial: npc, hasOverride: false });
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "读取人物卡失败");
+    } finally {
+      setLoadingNpcId(null);
+    }
   };
 
-  const dropOwn = (id: string) => {
-    commit({ ...board, acquaintances: board.acquaintances.filter((a) => a.id !== id) });
+  const handleEditorSave = (card: npcRules.NpcCard) => {
+    if (!editor) return;
+    setEditorError(null);
+    if (editor.mode === "edit-canon") {
+      const nextOverrides = upsertCard(board.npcOverrides ?? [], card, NPC_OVERRIDES_MAX);
+      const nextAcq = board.acquaintances.map((item) =>
+        item.id === card.id ? { ...item, name: card.name.slice(0, 20) } : item,
+      );
+      commit({
+        ...board,
+        npcOverrides: nextOverrides,
+        acquaintances: nextAcq,
+      });
+      setEditor(null);
+      setPicked(card.id);
+      return;
+    }
+
+    // 自建 NPC：同步持久化到本地自建库（可跨角色复用 / 打包工坊）并挂载到当前角色卡
+    saveLocalCustomNpc(card);
+    const nextCustomNpcs = upsertCard(board.customNpcs ?? [], card, CUSTOM_NPCS_MAX);
+    const nextAcq = board.acquaintances.map((item) =>
+      item.id === card.id
+        ? {
+            ...item,
+            name: card.name.slice(0, 20),
+            role: card.role,
+            custom: true,
+            packId: "local",
+          }
+        : item,
+    );
+    commit({
+      ...board,
+      customNpcs: nextCustomNpcs,
+      acquaintances: nextAcq,
+    });
+    setEditor(null);
+    setPicked(card.id);
+  };
+
+  const resetCanonOverride = (id: string) => {
+    const orig = data.npcs.find((n) => n.id === id);
+    const nextOverrides = (board.npcOverrides ?? []).filter((o) => o.id !== id);
+    const nextAcq = orig
+      ? board.acquaintances.map((item) =>
+          item.id === id ? { ...item, name: orig.name.slice(0, 20) } : item,
+        )
+      : board.acquaintances;
+    commit({
+      ...board,
+      npcOverrides: nextOverrides,
+      acquaintances: nextAcq,
+    });
+    setEditor(null);
+  };
+
+  const toggleVGender = async (toMale: boolean) => {
+    setEditorError(null);
+    if (!toMale) {
+      resetCanonOverride("v");
+      return;
+    }
+    setLoadingNpcId("v");
+    try {
+      const maleCard = await api.characterBoardNpc("v", "male");
+      const nextOverrides = upsertCard(board.npcOverrides ?? [], maleCard, NPC_OVERRIDES_MAX);
+      const nextAcq = board.acquaintances.map((item) =>
+        item.id === "v" ? { ...item, name: maleCard.name.slice(0, 20) } : item,
+      );
+      commit({
+        ...board,
+        npcOverrides: nextOverrides,
+        acquaintances: nextAcq,
+      });
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : "切换男 V 失败");
+    } finally {
+      setLoadingNpcId(null);
+    }
+  };
+
+  const deleteCustomNpc = (id: string) => {
+    removeLocalCustomNpc(id);
+    commit({
+      ...board,
+      customNpcs: (board.customNpcs ?? []).filter((c) => c.id !== id),
+      acquaintances: board.acquaintances.filter((a) => a.id !== id),
+    });
+    setEditor(null);
     setPicked(null);
   };
 
@@ -351,9 +600,12 @@ export function PeoplePicker({
         <button
           type="button"
           className={styles.peopleRow}
-          aria-pressed={p.id === current?.id}
-          data-on={a ? "" : undefined}
-          onClick={() => setPicked(p.id)}
+          aria-pressed={!editor && p.id === current?.id}
+          data-on={a || p.inBoardCustom || p.hasOverride ? "" : undefined}
+          onClick={() => {
+            setEditor(null);
+            setPicked(p.id);
+          }}
         >
           <span className={styles.peopleFace} aria-hidden="true">
             {face ? (
@@ -365,10 +617,16 @@ export function PeoplePicker({
           <span className={styles.peopleName}>
             <span className={styles.peopleTitleRow}>
               <b className={styles.peopleTitle}>{p.name}</b>
+              {p.hasOverride && <span className={styles.peopleTag}>已改</span>}
+              {p.isCustom && <span className={styles.peopleTag}>自建</span>}
               {fromWorkshop && <span className={styles.peopleTag}>工坊</span>}
             </span>
             <small className={styles.peopleSub}>
-              {a ? `${RELATION_INFO[a.relation].label} · ${p.role}` : p.role}
+              {a
+                ? `${RELATION_INFO[a.relation].label} · ${p.role}`
+                : p.inBoardCustom
+                  ? `入局人物 · ${p.role}`
+                  : p.role}
             </small>
           </span>
         </button>
@@ -378,7 +636,10 @@ export function PeoplePicker({
 
   const a = current ? byId.get(current.id) : undefined;
   const face = portraitOf(current?.npc);
-  const isOwn = current ? own.some((p) => p.id === current.id) : false;
+  const isOwn = Boolean(current?.isCustom);
+  const canEditCard = Boolean(current && (current.isCustom || current.npc));
+  const customInBoardCount = (board.customNpcs ?? []).length;
+  const overrideCount = (board.npcOverrides ?? []).length;
 
   return (
     <div className={styles.peopleWrap}>
@@ -388,11 +649,23 @@ export function PeoplePicker({
         <div className={styles.peopleSummaryHead}>
           <span className={styles.peopleSummaryTitle}>
             已建交集 <b>{board.acquaintances.length}</b> 人
+            {customInBoardCount > 0 && (
+              <>
+                {" "}
+                · 自建入局 <b>{customInBoardCount}</b> 人
+              </>
+            )}
+            {overrideCount > 0 && (
+              <>
+                {" "}
+                · 改写原作 <b>{overrideCount}</b> 人
+              </>
+            )}
           </span>
           <span className={styles.note}>
             {board.acquaintances.length > 0
-              ? "点击标签快速定位详情；所设关系将在入城时写入通讯录、关系档案与人情/仇怨账本。"
-              : "尚未建立额外旧识：从下方名录点选人物设定关系，或保持孤狼状态入城。"}
+              ? "点击标签快速定位详情；所设关系与人物卡改写将在入城时写入世界、通讯录与账本。"
+              : "可点选人物设定初始关系、新建自建 NPC，或修改任意原作/工坊人物卡。"}
           </span>
         </div>
         {board.acquaintances.length > 0 && (
@@ -408,6 +681,7 @@ export function PeoplePicker({
                   type="button"
                   className={styles.peopleChipMain}
                   onClick={() => {
+                    setEditor(null);
                     setFilter("all");
                     setQuery("");
                     setPicked(item.id);
@@ -461,52 +735,17 @@ export function PeoplePicker({
               重置筛选
             </ActionButton>
           )}
-          <Button small primary={adding} onClick={() => setAdding((v) => !v)}>
-            {adding ? "收起新建" : "＋ 新建自定义旧识"}
+          <Button
+            small
+            primary={editor?.mode !== "create"}
+            onClick={() => {
+              setEditorError(null);
+              setEditor((cur) => (cur?.mode === "create" ? null : { mode: "create" }));
+            }}
+          >
+            {editor?.mode === "create" ? "收起新建" : "＋ 自建 NPC"}
           </Button>
         </div>
-
-        {adding && (
-          <div className={styles.customForm}>
-            <CellFrame />
-            <div className={styles.ownEditGrid}>
-              <label className={styles.field}>
-                <span>名字</span>
-                <FrameBox className={styles.compactBox}>
-                  <input
-                    maxLength={20}
-                    value={draftName}
-                    placeholder="例如：老陈、莎拉"
-                    onChange={(e) => setDraftName(e.target.value)}
-                  />
-                </FrameBox>
-              </label>
-              <label className={styles.field}>
-                <span>身份</span>
-                <FrameBox className={styles.compactBox}>
-                  <input
-                    maxLength={80}
-                    value={draftRole}
-                    placeholder="例如：沃森区的黑市药贩"
-                    onChange={(e) => setDraftRole(e.target.value)}
-                  />
-                </FrameBox>
-              </label>
-            </div>
-            <div className={styles.slotTools}>
-              <Button
-                small
-                primary
-                disabled={draftName.trim() === ""}
-                reason="请先填写旧识的名字"
-                onClick={addOwn}
-              >
-                加入旧识
-              </Button>
-              <ActionButton onClick={() => setAdding(false)}>取消</ActionButton>
-            </div>
-          </div>
-        )}
 
         <fieldset className={styles.peopleFilters} aria-label="按圈层筛选联系人">
           <button
@@ -566,6 +805,12 @@ export function PeoplePicker({
         </fieldset>
       </div>
 
+      {editorError && (
+        <p className={styles.error} role="alert">
+          {editorError}
+        </p>
+      )}
+
       <div className={styles.people}>
         <nav className={styles.peopleList} aria-label="联系人">
           {shownModule.length > 0 && (
@@ -581,7 +826,7 @@ export function PeoplePicker({
           {shownOwn.length > 0 && (
             <section className={styles.peopleSection}>
               <h3 className={styles.peopleGroup}>
-                <span>自定义旧识</span>
+                <span>自建 NPC 与自定义旧识</span>
                 <small className={styles.peopleCount}>{shownOwn.length} 人</small>
               </h3>
               <ul className={styles.peopleGrid}>{shownOwn.map(contact)}</ul>
@@ -642,7 +887,11 @@ export function PeoplePicker({
                       {NPC_CIRCLE_LABELS[current.circle]}
                     </span>
                   )}
-                  {current.faction && <span className={styles.moduleBadge}>{current.faction}</span>}
+                  {current.faction && (
+                    <span className={styles.moduleBadge}>
+                      {factionNameMap.get(current.faction) ?? current.faction}
+                    </span>
+                  )}
                   {isWorkshopSource(current.packId) && (
                     <span className={styles.moduleBadge} data-tone="workshop">
                       工坊
@@ -651,43 +900,72 @@ export function PeoplePicker({
                   {isOwn && !isWorkshopSource(current.packId) && (
                     <span className={styles.moduleBadge}>自建</span>
                   )}
+                  {current.hasOverride && (
+                    <span className={styles.moduleBadge} data-tone="active">
+                      已修改
+                    </span>
+                  )}
                 </span>
                 <small className={styles.peopleSub}>{current.role}</small>
               </span>
+              {canEditCard && (
+                <div className={styles.peopleHeadActions}>
+                  {current.id === "v" && (
+                    <Button
+                      small
+                      primary
+                      disabled={loadingNpcId === "v"}
+                      onClick={() => void toggleVGender(current.rawName !== "文森特")}
+                    >
+                      {loadingNpcId === "v"
+                        ? "切换中…"
+                        : current.rawName === "文森特"
+                          ? "切回女 V（瓦莱丽）"
+                          : "切为男 V（文森特）"}
+                    </Button>
+                  )}
+                  <Button
+                    small
+                    disabled={loadingNpcId === current.id}
+                    onClick={() => void openEditorFor(current)}
+                  >
+                    {loadingNpcId === current.id
+                      ? "读取中…"
+                      : current.isCustom
+                        ? current.hasFullCard
+                          ? "编辑人物卡"
+                          : "补全人物卡"
+                        : "修改人物卡"}
+                  </Button>
+                  {current.hasOverride && (
+                    <ActionButton onClick={() => resetCanonOverride(current.id)}>
+                      恢复默认
+                    </ActionButton>
+                  )}
+                </div>
+              )}
             </header>
 
             {current.look && <p className={styles.peopleBio}>{current.look}</p>}
 
-            {isOwn && a && (
-              <div className={styles.ownEditGrid}>
-                <label className={styles.field}>
-                  <span>旧识姓名</span>
-                  <FrameBox className={styles.compactBox}>
-                    <input
-                      maxLength={20}
-                      value={ownNameDraft?.id === current.id ? ownNameDraft.value : a.name}
-                      onChange={(e) => {
-                        const v = e.target.value.slice(0, 20);
-                        setOwnNameDraft({ id: current.id, value: v });
-                        if (v.trim() !== "") updateOwnField(current.id, { name: v.trim() });
-                      }}
-                      onBlur={() => setOwnNameDraft(null)}
-                    />
-                  </FrameBox>
-                </label>
-                <label className={styles.field}>
-                  <span>身份简介</span>
-                  <FrameBox className={styles.compactBox}>
-                    <input
-                      maxLength={80}
-                      value={a.role ?? ""}
-                      placeholder="例如：沃森区的黑市义体掮客"
-                      onChange={(e) =>
-                        updateOwnField(current.id, { role: e.target.value.slice(0, 80) })
-                      }
-                    />
-                  </FrameBox>
-                </label>
+            {isOwn && current.hasFullCard && (
+              <div className={styles.presetHint}>
+                <p className={styles.note}>
+                  {current.inBoardCustom
+                    ? a
+                      ? "该自建 NPC 已随本角色卡入局，且开局即认识。"
+                      : "该自建 NPC 已加入本局世界（开局暂不相识，可在夜之城自然偶遇）。"
+                    : "该自建 NPC 保存在本地自建库中；设定关系或点击右侧按钮即可带入本局世界。"}
+                </p>
+                {current.inBoardCustom ? (
+                  <ActionButton onClick={() => toggleCustomInBoard(current.id, false)}>
+                    移出本局世界
+                  </ActionButton>
+                ) : (
+                  <Button small onClick={() => toggleCustomInBoard(current.id, true)}>
+                    加入本局世界
+                  </Button>
+                )}
               </div>
             )}
 
@@ -712,14 +990,16 @@ export function PeoplePicker({
                 type="button"
                 className={styles.relation}
                 aria-pressed={!a}
-                onClick={() => (isOwn ? dropOwn(current.id) : setRelation(current, ""))}
+                onClick={() => setRelation(current, "")}
               >
                 <CellFrame />
                 <b className={styles.relationLabel}>
-                  {isOwn ? "移除这位旧识" : current.fromModule ? "沿用默认关系" : "暂无交集"}
+                  {current.fromModule ? "沿用默认关系" : "暂无交集"}
                 </b>
                 <small className={styles.relationNote}>
-                  {isOwn ? "从通讯录中删除" : "不写入额外初始关系"}
+                  {isOwn && current.inBoardCustom
+                    ? "保留在夜之城世界中，但开局不相识"
+                    : "不写入额外初始关系"}
                 </small>
               </button>
               {RELATIONS.map((r) => (
@@ -772,6 +1052,69 @@ export function PeoplePicker({
           </section>
         )}
       </div>
+
+      {editor &&
+        createPortal(
+          <div
+            className={wb.npcOverlayBackdrop}
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              editor.mode === "create"
+                ? "新建 NPC 工作台"
+                : `编辑 NPC · ${editor.initial?.name ?? ""}`
+            }
+          >
+            <header className={wb.npcOverlayHead}>
+              <span className={wb.headCode}>{"NC // NPC DOSSIER"}</span>
+              <h2>
+                {editor.mode === "create"
+                  ? "新建 NPC"
+                  : editor.mode === "edit-canon"
+                    ? `修改原作人物 · ${editor.initial?.name ?? ""}`
+                    : `编辑 NPC · ${editor.initial?.name ?? ""}`}
+              </h2>
+              <span className={wb.headSpacer} />
+              <Button small keyId="key.esc" onClick={() => setEditor(null)}>
+                ← 返回当前角色创建
+              </Button>
+            </header>
+            <span
+              className={wb.headLine}
+              style={{
+                maskImage: cssUrl("tab.line"),
+                WebkitMaskImage: cssUrl("tab.line"),
+              }}
+              aria-hidden
+            />
+            <div className={wb.npcOverlayBody}>
+              <NpcCreatorWorkbench
+                key={`${editor.mode}:${editor.initial?.id ?? "new"}`}
+                mode={editor.mode}
+                initial={editor.initial}
+                data={data}
+                hasOverride={editor.hasOverride}
+                onSave={handleEditorSave}
+                onReset={
+                  editor.mode === "edit-canon" && editor.initial
+                    ? () => {
+                        if (editor.initial) resetCanonOverride(editor.initial.id);
+                      }
+                    : undefined
+                }
+                onDelete={
+                  editor.mode === "edit-custom" && editor.initial
+                    ? () => {
+                        if (editor.initial) deleteCustomNpc(editor.initial.id);
+                      }
+                    : undefined
+                }
+                onCancel={() => setEditor(null)}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

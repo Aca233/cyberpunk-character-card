@@ -5,10 +5,12 @@ import { EconomyStateSchema } from "../systems/economy/schema";
 import { InventoryStateSchema } from "../systems/inventory/schema";
 import {
   type MemoryAnchor,
+  MemoryAnchorFieldsSchema,
+  MemoryAnchorResolutionSchema,
   type MemorySceneCommand,
   MemoryStateSchema,
   type MemoryWorkingCommand,
-  SceneMemoryUpdateSchema,
+  SCENE_MEMORY_CHARS,
   SceneSummaryProposalSchema,
 } from "../systems/memory/schema";
 import { NpcStateSchema } from "../systems/npc/schema";
@@ -150,7 +152,30 @@ function itemCount(world: WorldState, id: string): number {
   );
 }
 
-/** 只接受本轮确有原文证据的增量；无效更新整份拒绝，不能覆盖已保存的提要或锚点。 */
+/** 对证据比对做无损标点与空白归一化：不放宽事实本身，只避免中英文引号、破折号或多余空白误杀合法引用。 */
+function normalizeEvidenceText(text: string): string {
+  return text
+    .replace(/[「」『』“”‘’"]/g, '"')
+    .replace(/[——–―—]+/g, "-")
+    .replace(/……|…/g, "...")
+    .replace(/：/g, ":")
+    .replace(/，/g, ",")
+    .replace(/。/g, ".")
+    .replace(/！/g, "!")
+    .replace(/？/g, "?")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/\s+/g, "");
+}
+
+function evidenceMatches(source: string, quote: string): boolean {
+  if (source.includes(quote)) return true;
+  const normalizedQuote = normalizeEvidenceText(quote);
+  if (normalizedQuote.length < 2) return false;
+  return normalizeEvidenceText(source).includes(normalizedQuote);
+}
+
+/** 仅接受本轮确有原文证据的增量；单条锚点或勾销不合格时只跳过该条并记录说明，保留合法提要与其余锚点。 */
 export function readSceneMemory(
   raw: unknown,
   before: WorldState,
@@ -158,69 +183,150 @@ export function readSceneMemory(
   input: TurnInput,
   narrative: string,
 ): WorkingMemoryResult {
-  const parsed = SceneMemoryUpdateSchema.safeParse(raw);
-  if (!parsed.success)
-    return { notes: [`场景记忆更新未保存：${issueText(parsed.error)}；保留此前记忆`] };
-  const update = parsed.data;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return { notes: ["场景记忆更新未保存：sceneMemory 不是对象；保留此前记忆"] };
+  }
+  const obj = raw as Record<string, unknown>;
+  const rawText = typeof obj.text === "string" ? obj.text.trim() : "";
+  if (rawText.length === 0) {
+    return { notes: ["场景记忆更新未保存：提要 text 为空；保留此前记忆"] };
+  }
+  const text = [...rawText].slice(0, SCENE_MEMORY_CHARS).join("");
+  const notes: string[] = [];
+  if (text.length < rawText.length) {
+    notes.push(`场景记忆提要超过 ${SCENE_MEMORY_CHARS} 字，已保留前 ${SCENE_MEMORY_CHARS} 字`);
+  }
+
   const memory = MemoryStateSchema.parse(before.slices.memory ?? {});
   const roster = NpcStateSchema.parse(after.slices.npc).npcs;
   const clock = WorldClockStateSchema.parse(before.slices.world);
-  const errors: string[] = [];
-  const seen = new Set<string>();
-  for (const anchor of update.anchors) {
-    if (seen.has(anchor.id)) errors.push(`新增锚点 ${anchor.id} 重复`);
-    seen.add(anchor.id);
-    const old = memory.anchors[anchor.id];
-    if (old && (old.text !== anchor.text || old.kind !== anchor.kind))
-      errors.push(`锚点 ${anchor.id} 不能改写旧事实`);
-    for (const person of anchor.people)
-      if (!roster[person]) errors.push(`锚点 ${anchor.id} 引用了未知人物 ${person}`);
-    if (anchor.kind === "fact" && anchor.evidence.source !== "narrative")
-      errors.push(
-        `锚点 ${anchor.id} 的已发生事实不能仅凭玩家输入成立；打算用 plan、自述用 report，实际结果须有正文证据`,
-      );
-    if (anchor.kind !== "fact" && anchor.settlement)
-      errors.push(`锚点 ${anchor.id} 不是已发生事实，不能挂结算结果`);
-  }
-  const resolved = new Set<string>();
-  for (const resolution of update.resolve) {
-    const anchor = memory.anchors[resolution.id];
-    if (resolved.has(resolution.id)) errors.push(`锚点 ${resolution.id} 重复给出结果`);
-    resolved.add(resolution.id);
-    if (!anchor || anchor.resolution !== null)
-      errors.push(`锚点 ${resolution.id} 不是已有未解决事项`);
-    else if (anchor.kind === "fact" || anchor.kind === "report")
-      errors.push(`锚点 ${resolution.id} 不是待办，不能勾销`);
-    else if (resolution.outcome === "answered" && anchor.kind !== "question")
-      errors.push(`锚点 ${resolution.id} 不是待解问题`);
-    else if (resolution.outcome === "fulfilled" && anchor.kind === "question")
-      errors.push(`锚点 ${resolution.id} 应记录答案而非兑现`);
-    if (resolution.outcome === "fulfilled" && resolution.evidence.source !== "narrative")
-      errors.push(`锚点 ${resolution.id} 兑现须有正文结果，玩家输入中的行动意图不能单独结清承诺`);
-  }
-  for (const entry of [...update.anchors, ...update.resolve]) {
-    const source = entry.evidence.source === "input" ? input.text : narrative;
-    if (!source.includes(entry.evidence.quote))
-      errors.push(
-        `锚点 ${entry.id} 的证据不在本轮${entry.evidence.source === "input" ? "输入" : "正文"}中`,
-      );
-    for (const claim of entry.settlement ?? []) {
+
+  const checkSettlement = (
+    id: string,
+    settlement: readonly (
+      | { readonly type: "item"; readonly id: string; readonly delta: number }
+      | { readonly type: "money"; readonly delta: number }
+    )[],
+  ): string | undefined => {
+    for (const claim of settlement) {
       const actual =
         claim.type === "money"
           ? EconomyStateSchema.parse(after.slices.economy).eddies -
             EconomyStateSchema.parse(before.slices.economy).eddies
           : itemCount(after, claim.id) - itemCount(before, claim.id);
-      if (actual !== claim.delta)
-        errors.push(
-          `锚点 ${entry.id} 声称的${claim.type === "money" ? "欧元" : claim.id}净变化 ${claim.delta} 与本轮实际结算 ${actual} 不符`,
-        );
+      if (actual !== claim.delta) {
+        return `锚点 ${id} 声称的${claim.type === "money" ? "欧元" : claim.id}净变化 ${claim.delta} 与本轮实际结算 ${actual} 不符`;
+      }
     }
+    return undefined;
+  };
+
+  const rawAnchors = Array.isArray(obj.anchors) ? obj.anchors : [];
+  if (obj.anchors !== undefined && !Array.isArray(obj.anchors)) {
+    notes.push("场景记忆 anchors 格式不是数组，已忽略新增锚点");
   }
-  if (errors.length > 0)
-    return { notes: [`场景记忆更新未保存：${errors.join("；")}；保留此前记忆`] };
+  const anchors: MemoryWorkingCommand["anchors"][number][] = [];
+  const seen = new Set<string>();
+  for (const [index, rawAnchor] of rawAnchors.entries()) {
+    const parsed = MemoryAnchorFieldsSchema.safeParse(rawAnchor);
+    if (!parsed.success) {
+      notes.push(`新增锚点[${index}] 格式无效已跳过：${issueText(parsed.error)}`);
+      continue;
+    }
+    const anchor = parsed.data;
+    const itemErrors: string[] = [];
+    if (seen.has(anchor.id)) itemErrors.push(`新增锚点 ${anchor.id} 重复`);
+    const old = memory.anchors[anchor.id];
+    if (old && (old.text !== anchor.text || old.kind !== anchor.kind)) {
+      itemErrors.push(`锚点 ${anchor.id} 不能改写旧事实`);
+    }
+    for (const person of anchor.people) {
+      if (!roster[person]) itemErrors.push(`锚点 ${anchor.id} 引用了未知人物 ${person}`);
+    }
+    if (anchor.kind === "fact" && anchor.evidence.source !== "narrative") {
+      itemErrors.push(
+        `锚点 ${anchor.id} 的已发生事实不能仅凭玩家输入成立；打算用 plan、自述用 report，实际结果须有正文证据`,
+      );
+    }
+    if (anchor.kind !== "fact" && anchor.settlement) {
+      itemErrors.push(`锚点 ${anchor.id} 不是已发生事实，不能挂结算结果`);
+    }
+    const source = anchor.evidence.source === "input" ? input.text : narrative;
+    if (!evidenceMatches(source, anchor.evidence.quote)) {
+      itemErrors.push(
+        `锚点 ${anchor.id} 的证据不在本轮${anchor.evidence.source === "input" ? "输入" : "正文"}中`,
+      );
+    }
+    if (anchor.settlement) {
+      const mismatch = checkSettlement(anchor.id, anchor.settlement);
+      if (mismatch) itemErrors.push(mismatch);
+    }
+    if (itemErrors.length > 0) {
+      notes.push(`新增锚点 ${anchor.id} 已跳过：${itemErrors.join("；")}`);
+      continue;
+    }
+    seen.add(anchor.id);
+    anchors.push(anchor);
+  }
+
+  const rawResolve = Array.isArray(obj.resolve) ? obj.resolve : [];
+  if (obj.resolve !== undefined && !Array.isArray(obj.resolve)) {
+    notes.push("场景记忆 resolve 格式不是数组，已忽略锚点勾销");
+  }
+  const resolve: MemoryWorkingCommand["resolve"][number][] = [];
+  const resolved = new Set<string>();
+  for (const [index, rawRes] of rawResolve.entries()) {
+    const parsed = MemoryAnchorResolutionSchema.safeParse(rawRes);
+    if (!parsed.success) {
+      notes.push(`锚点勾销[${index}] 格式无效已跳过：${issueText(parsed.error)}`);
+      continue;
+    }
+    const resolution = parsed.data;
+    const itemErrors: string[] = [];
+    const anchor = memory.anchors[resolution.id];
+    if (resolved.has(resolution.id)) itemErrors.push(`锚点 ${resolution.id} 重复给出结果`);
+    if (!anchor || anchor.resolution !== null) {
+      itemErrors.push(`锚点 ${resolution.id} 不是已有未解决事项`);
+    } else if (anchor.kind === "fact" || anchor.kind === "report") {
+      itemErrors.push(`锚点 ${resolution.id} 不是待办，不能勾销`);
+    } else if (resolution.outcome === "answered" && anchor.kind !== "question") {
+      itemErrors.push(`锚点 ${resolution.id} 不是待解问题`);
+    } else if (resolution.outcome === "fulfilled" && anchor.kind === "question") {
+      itemErrors.push(`锚点 ${resolution.id} 应记录答案而非兑现`);
+    }
+    if (resolution.outcome === "fulfilled" && resolution.evidence.source !== "narrative") {
+      itemErrors.push(
+        `锚点 ${resolution.id} 兑现须有正文结果，玩家输入中的行动意图不能单独结清承诺`,
+      );
+    }
+    const source = resolution.evidence.source === "input" ? input.text : narrative;
+    if (!evidenceMatches(source, resolution.evidence.quote)) {
+      itemErrors.push(
+        `锚点 ${resolution.id} 的证据不在本轮${resolution.evidence.source === "input" ? "输入" : "正文"}中`,
+      );
+    }
+    if (resolution.settlement) {
+      const mismatch = checkSettlement(resolution.id, resolution.settlement);
+      if (mismatch) itemErrors.push(mismatch);
+    }
+    if (itemErrors.length > 0) {
+      notes.push(`锚点勾销 ${resolution.id} 已跳过：${itemErrors.join("；")}`);
+      continue;
+    }
+    resolved.add(resolution.id);
+    resolve.push(resolution);
+  }
+
   return {
-    command: { type: "memory.working", scene: clock.scene, place: clock.location, ...update },
-    notes: [],
+    command: {
+      type: "memory.working",
+      scene: clock.scene,
+      place: clock.location,
+      text,
+      anchors,
+      resolve,
+    },
+    notes,
   };
 }
 

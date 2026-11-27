@@ -1,13 +1,18 @@
 import type { ViewContext } from "../../kernel/system";
+import { cyberwareCatalog } from "../cyberware";
 import { HealthStateSchema } from "../health";
 import {
+  type ClothingSlot,
   defaultInstanceStateFromDef,
   formatWeaponWithMods,
   InventoryStateSchema,
   itemCatalog,
+  PROTECTION_COVERAGE_LABELS,
+  PROTECTION_LEVEL_LABELS,
+  summarizeGearEffects,
   withWorldObjects,
 } from "../inventory";
-import type { NpcState } from "../npc";
+import { bodyView, currentVitals, type NpcState } from "../npc";
 import {
   BODY_PART_LABELS,
   CombatStateSchema,
@@ -67,12 +72,63 @@ export function combatView({ world, data }: ViewContext) {
         id,
         ...(baseId && baseId !== id ? { baseId } : {}),
         name,
+        kind: def?.kind ?? "misc",
+        rarity: def?.rarity ?? "common",
+        ...(def?.iconic ? { iconic: true } : {}),
+        ...(def?.ability ? { ability: def.ability } : {}),
       };
     });
   const lootable = (state: string) => state === "down" || state === "dead";
+  const foeNpcIds = new Set((active?.foes ?? []).flatMap((f) => (f.npc !== null ? [f.npc] : [])));
+  const chromeCatalog = data.cyberware === undefined ? undefined : cyberwareCatalog(data);
+  const activeAllies = active
+    ? Object.values(npcs)
+        .filter((n) => n.alive && n.following && !foeNpcIds.has(n.id))
+        .map((n) => {
+          const vitals = currentVitals(n, data, now);
+          const wound = bodyView(n, data, now).wound;
+          const gearIds = n.body?.gear ?? [];
+          const weapons = gearIds
+            .filter((id) => catalog?.get(id)?.kind === "weapon")
+            .map((id) => catalog?.get(id)?.name ?? id);
+          const chromes = (n.body?.cyberware ?? [])
+            .slice(0, 3)
+            .map((id) => chromeCatalog?.get(id)?.name ?? id);
+          const npcClothing: Partial<Record<ClothingSlot, string>> = {};
+          if (catalog) {
+            for (const id of gearIds) {
+              const def = catalog.get(id);
+              if (def?.kind === "clothing" && def.clothingSlot && !npcClothing[def.clothingSlot]) {
+                npcClothing[def.clothingSlot] = id;
+              }
+            }
+          }
+          const npcEffects = catalog
+            ? summarizeGearEffects({ clothing: npcClothing, backpack: {}, objects }, catalog)
+            : null;
+          const armorSummary = npcEffects
+            ? (["torso", "head", "limbs"] as const).flatMap((part) => {
+                const level = npcEffects.protection[part];
+                return level
+                  ? [`${PROTECTION_COVERAGE_LABELS[part]}${PROTECTION_LEVEL_LABELS[level]}`]
+                  : [];
+              })
+            : [];
+          return {
+            id: n.id,
+            name: n.name,
+            role: n.role,
+            condition: vitals.condition,
+            wound,
+            gearSummary: [...weapons, ...chromes].slice(0, 4),
+            armorSummary,
+          };
+        })
+    : [];
   return {
     active: active && {
       district: active.district,
+      allies: activeAllies,
       foes: active.foes.map((f) => ({
         id: f.id,
         npc: f.npc,

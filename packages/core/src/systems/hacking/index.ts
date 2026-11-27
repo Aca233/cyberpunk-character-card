@@ -39,7 +39,7 @@ export const hacking = defineSystem<
   HackCommand | BreachCommand | DiveCommand | NpcHackCommand | DeckLoadCommand
 >({
   id: "hacking",
-  dependsOn: ["cyberware", "combat", "world", "npc", "health", "tension", "inventory"],
+  dependsOn: ["cyberware", "combat", "world", "npc", "health", "tension", "inventory", "stealth"],
   state: HackingStateSchema,
   initial: () => ({
     deck: null,

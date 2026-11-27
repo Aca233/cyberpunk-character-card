@@ -39,27 +39,38 @@ export function catalogSection(
       item.category === undefined
         ? ITEM_KIND_LABELS[item.kind]
         : WEAPON_CATEGORY_LABELS[item.category];
-    const notes = [
-      ...(item.weaponType ? [WEAPON_TYPE_LABELS[item.weaponType]] : []),
-      ...(item.modSlot && item.modFits
-        ? [
-            `${MOD_SLOT_LABELS[item.modSlot]}，配${item.modFits.map((c) => WEAPON_CATEGORY_LABELS[c]).join("、")}`,
-          ]
-        : []),
-      ...(item.rarity ? [RARITY_LABELS[item.rarity]] : []),
-      ...(item.iconic ? ["不朽"] : []),
-      ...(item.price === undefined ? [] : [String(item.price)]),
-    ];
-    const line = `- ${item.id} ${item.name}${notes.length > 0 ? `｜${notes.join("｜")}` : ""}${includeAbilities && item.ability ? `：${item.ability}` : ""}`;
-    groups.set(group, [...(groups.get(group) ?? []), line]);
+    if (includeAbilities) {
+      const notes = [
+        ...(item.weaponType ? [WEAPON_TYPE_LABELS[item.weaponType]] : []),
+        ...(item.modSlot && item.modFits
+          ? [
+              `${MOD_SLOT_LABELS[item.modSlot]}，配${item.modFits.map((c) => WEAPON_CATEGORY_LABELS[c]).join("、")}`,
+            ]
+          : []),
+        ...(item.rarity ? [RARITY_LABELS[item.rarity]] : []),
+        ...(item.iconic ? ["不朽"] : []),
+        ...(item.price === undefined ? [] : [String(item.price)]),
+      ];
+      const line = `- ${item.id} ${item.name}${notes.length > 0 ? `｜${notes.join("｜")}` : ""}${item.ability ? `：${item.ability}` : ""}`;
+      groups.set(group, [...(groups.get(group) ?? []), line]);
+    } else {
+      const entry = `${item.id} ${item.name}`;
+      groups.set(group, [...(groups.get(group) ?? []), entry]);
+    }
   }
-  const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
+  const body = includeAbilities
+    ? [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n")
+    : [...groups].map(([group, entries]) => `${group}：${entries.join("、")}`).join("\n");
   const rendered = `【物品表】
 下表是物品模板，不是存在资格白名单。已有物件使用其稳定 id，正文用名称。剧情实际取得目录外物件时，item gain 同时写 definition（id、name、kind、ability 等定义）和 origin（来源/此前归属）；普通工具、信物用 misc，消耗品用 consumable。新定义只登记一次，以后保持同一 id，禁止重复获得同一个独立物件。拿起环境物件同样可以登记，不受是否正在交战限制。
 - 治疗品与手雷的 charges 是这份实物的余量；切场、休息和结束战斗均不补满。补充必须确实购买、制作或取得另一份物品。工具和信物使用后保留，只有 consumable 的 use 才消耗掉。
 - 独立物件交给已有卡的人时写 item lose，recipient 写人物 id；对方交还时写 item gain 同一物件 id，代码同步双方装备，不另发同一物件的 npcGear。
 - 武器取得后放进随身背包（item gain），可按现场条件取用；随身不等于正在持用。实际持用变化由 weaponHold 记录，不用写 item equip；item equip / unequip 只用于穿着衣服或切换快捷治疗品/手雷。
-每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）${includeAbilities ? "：能力" : "；本轮相关能力另列在用户消息里。完整索引始终保留，未展开能力不代表物件不存在，也不能据此重复新建同名物件"}。不同武器类型决定实际性能与战术作用（动能跳弹、技术充能穿墙、智能自寻的，但智能武器需要相应义体/握把联锁才能自导）。参考价不是成交价，交易以实际卖方、货源和已确认报价为准；不朽标签说明特殊来历，不禁止真实持有人转让，也不能据目录凭空购买。
+${
+  includeAbilities
+    ? "每行是：id 名称｜武器类型｜稀有度｜参考价（欧元）：能力。不同武器类型决定实际性能与战术作用（动能跳弹、技术充能穿墙、智能自寻的，但智能武器需要相应义体/握把联锁才能自导）。参考价不是成交价，交易以实际卖方、货源和已确认报价为准；不朽标签说明特殊来历，不禁止真实持有人转让，也不能据目录凭空购买。"
+    : "以下按分类以「id 名称」列出完整模板索引；本轮相关物品的详细能力与成交价另列在用户消息与交易条件里。未展开能力不代表物件不存在，禁止据此重复新建同名物件；交易以实际卖方、货源和已确认报价为准。"
+}
 改装件只对实际装着它的那把武器生效（【当前状态】随身武器括号里写着的），例如使用装有消音器的枪才压低枪口爆鸣；装卸在界面上做，你不发指令。
 ${body}`;
   if (typeof raw === "object" && raw !== null) {

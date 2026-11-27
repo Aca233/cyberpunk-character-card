@@ -53,17 +53,27 @@ export function cyberwareSection(
   if (parts.length === 0) return undefined;
   const groups = new Map<string, string[]>();
   for (const p of parts) {
-    const notes = [RARITY_LABELS[p.rarity], p.iconic ? "不朽" : String(p.price)];
     const group = SLOT_LABELS[p.slot];
-    groups.set(group, [
-      ...(groups.get(group) ?? []),
-      `- ${p.id} ${p.name}｜${notes.join("｜")}${includeAbilities ? `：${p.ability}` : ""}`,
-    ]);
+    if (includeAbilities) {
+      const notes = [RARITY_LABELS[p.rarity], p.iconic ? "不朽" : String(p.price)];
+      groups.set(group, [
+        ...(groups.get(group) ?? []),
+        `- ${p.id} ${p.name}｜${notes.join("｜")}：${p.ability}`,
+      ]);
+    } else {
+      groups.set(group, [...(groups.get(group) ?? []), `${p.id} ${p.name}`]);
+    }
   }
-  const body = [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n");
+  const body = includeAbilities
+    ? [...groups].map(([group, lines]) => `${group}\n${lines.join("\n")}`).join("\n")
+    : [...groups].map(([group, entries]) => `${group}：${entries.join("、")}`).join("\n");
   const rendered = `【义体表】
 cyberware 指令的 id 只能用下面这些，正文里用名称。
-每行是：id 名称｜稀有度｜参考价（欧元）${includeAbilities ? "：能力" : "；本轮相关能力另列在用户消息里，未展开的义体仍可按索引引用"}。这是设备目录，不代表眼前诊所有货；成交以指定医生的货架与已确认报价为准，不能按标签或参考价直接生成交易。
+${
+  includeAbilities
+    ? "每行是：id 名称｜稀有度｜参考价（欧元）：能力。这是设备目录，不代表眼前诊所有货；成交以指定医生的货架与已确认报价为准，不能按标签或参考价直接生成交易。"
+    : "以下按部位以「id 名称」列出完整目录索引；本轮相关义体的详细能力与报价另列在用户消息与交易条件里。这是设备目录，不代表眼前诊所有货；成交以指定医生的货架与已确认报价为准。"
+}
 ${body}`;
   if (typeof raw === "object" && raw !== null) {
     let byMode = cyberwareRenderCache.get(raw);

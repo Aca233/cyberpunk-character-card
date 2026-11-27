@@ -80,14 +80,16 @@ export const inventoryStatus: readonly SystemStatus[] = [
       );
       if (inv.clothing.length > 0) {
         const clothLines = inv.clothing.map((c) => {
-          const tags = [
-            c.label,
-            ...(c.styleLabel ? [c.styleLabel] : []),
-            ...(c.concealsCoatWeapon ? ["可掩风衣档短枪"] : []),
-          ];
-          return `${names[c.id] ?? c.id}［${c.id}］（${tags.join("·")}）`;
+          const tags = [c.label, ...(c.styleLabel ? [c.styleLabel] : []), ...c.effectTags];
+          const trait = summarizeAbility(c.ability, 44);
+          return `${names[c.id] ?? c.id}［${c.id}］（${tags.join("·")}${trait ? `；${trait}` : ""}）`;
         });
-        lines.push(`穿着（只影响身份、门面和伪装，没有护甲）：${clothLines.join("、")}`);
+        lines.push(`穿着：${clothLines.join("、")}`);
+      }
+      if (inv.gearEffects.badges.length > 0) {
+        lines.push(
+          `当前装备与着装生效效果：${inv.gearEffects.badges.join("、")}（防弹/防护、散热、抗性、伪装与隐匿在交火、潜行、环境危害与门禁裁决中直接生效）`,
+        );
       }
       if (inv.healing)
         lines.push(
@@ -100,8 +102,19 @@ export const inventoryStatus: readonly SystemStatus[] = [
       const backpack = Object.entries(inv.backpack).filter(
         ([id]) => inv.details[id]?.kind !== "weapon",
       );
-      if (backpack.length > 0)
-        lines.push(`背包：${backpack.map(([id, n]) => `${id}×${n}`).join("、")}`);
+      if (backpack.length > 0) {
+        const bagLines = backpack.map(([id, n]) => {
+          const detail = inv.details[id];
+          const label = names[id] ?? id;
+          const qty = n > 1 ? `×${n}` : "";
+          const tags = detail?.effectTags ?? [];
+          const summary =
+            detail && detail.kind !== "clothing" ? summarizeAbility(detail.ability, 40) : undefined;
+          const meta = [...tags, ...(summary ? [summary] : [])].join("；");
+          return `${label}［${id}］${qty}${meta ? `（${meta}）` : ""}`;
+        });
+        lines.push(`背包：${bagLines.join("、")}`);
+      }
       // 物品栏精简（用户定的方案 A）：零件不再出现，不写进【当前状态】；存档里的零件数照旧留着
       return lines;
     },

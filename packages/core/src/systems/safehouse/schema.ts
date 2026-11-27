@@ -108,7 +108,7 @@ export const HomeCommandSchema = z
   .object({
     type: z.literal("home"),
     action: z.enum(["gain", "lose"]),
-    id: z.string().min(1),
+    id: z.string().min(1).describe("住所稳定 id（lose 填已有住所 id）"),
     name: z.string().min(1).max(24).optional(),
     location: z.string().min(1).optional(),
     reason: z.string().trim().min(1).max(80),

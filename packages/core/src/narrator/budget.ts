@@ -31,9 +31,9 @@ export const BUDGET_LABELS: Readonly<Record<BudgetPart, string>> = {
   reply: "留给回复",
 };
 
-/** 规格的表：32K 模型一列、128K 以上一列（token） */
+/** 规格的表：32K 模型一列、128K 以上一列（token）；14 个常驻规则模块归入静态 system 层走 KV 缓存后，rules 对应调宽 */
 const SMALL: Readonly<Record<BudgetPart, number>> = {
-  rules: 4000,
+  rules: 10000,
   world: 2000,
   character: 1500,
   hot: 4000,
@@ -43,7 +43,7 @@ const SMALL: Readonly<Record<BudgetPart, number>> = {
   reply: 4000,
 };
 const LARGE: Readonly<Record<BudgetPart, number>> = {
-  rules: 6000,
+  rules: 12000,
   world: 6000,
   character: 3000,
   hot: 12000,

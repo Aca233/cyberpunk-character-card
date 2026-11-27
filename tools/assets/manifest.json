@@ -167,19 +167,71 @@
         "atlas": "common/icons_keyboard",
         "slot": "kb_tab"
       },
-      { "id": "key.b", "atlas": "common/icons_keyboard", "slot": "kb_b" },
-      { "id": "key.d", "atlas": "common/icons_keyboard", "slot": "kb_d" },
-      { "id": "key.e", "atlas": "common/icons_keyboard", "slot": "kb_e" },
-      { "id": "key.i", "atlas": "common/icons_keyboard", "slot": "kb_i" },
-      { "id": "key.j", "atlas": "common/icons_keyboard", "slot": "kb_j" },
-      { "id": "key.k", "atlas": "common/icons_keyboard", "slot": "kb_k" },
-      { "id": "key.m", "atlas": "common/icons_keyboard", "slot": "kb_m" },
-      { "id": "key.n", "atlas": "common/icons_keyboard", "slot": "kb_n" },
-      { "id": "key.o", "atlas": "common/icons_keyboard", "slot": "kb_o" },
-      { "id": "key.p", "atlas": "common/icons_keyboard", "slot": "kb_p" },
-      { "id": "key.q", "atlas": "common/icons_keyboard", "slot": "kb_q" },
-      { "id": "key.r", "atlas": "common/icons_keyboard", "slot": "kb_r" },
-      { "id": "key.t", "atlas": "common/icons_keyboard", "slot": "kb_t" },
+      {
+        "id": "key.b",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_b"
+      },
+      {
+        "id": "key.d",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_d"
+      },
+      {
+        "id": "key.e",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_e"
+      },
+      {
+        "id": "key.i",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_i"
+      },
+      {
+        "id": "key.j",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_j"
+      },
+      {
+        "id": "key.k",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_k"
+      },
+      {
+        "id": "key.m",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_m"
+      },
+      {
+        "id": "key.n",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_n"
+      },
+      {
+        "id": "key.o",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_o"
+      },
+      {
+        "id": "key.p",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_p"
+      },
+      {
+        "id": "key.q",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_q"
+      },
+      {
+        "id": "key.r",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_r"
+      },
+      {
+        "id": "key.t",
+        "atlas": "common/icons_keyboard",
+        "slot": "kb_t"
+      },
       {
         "id": "attr.body",
         "atlas": "common/attributes_icons",
@@ -249,7 +301,11 @@
         "atlas": "fullscreen/menu_background",
         "slot": "tex_header"
       },
-      { "id": "menu.nightCity", "atlas": "fullscreen/bg_nc", "slot": "bg_nc" },
+      {
+        "id": "menu.nightCity",
+        "atlas": "fullscreen/bg_nc",
+        "slot": "bg_nc"
+      },
       {
         "id": "tarot.fool",
         "atlas": "fullscreen/atlas_tarot1",
@@ -437,12 +493,36 @@
         "atlas": "common/braindance_icons",
         "slot": "braindance_timeline_indicator"
       },
-      { "id": "braindance.pause", "atlas": "common/braindance_icons", "slot": "pause" },
-      { "id": "braindance.recording", "atlas": "common/braindance_icons", "slot": "recording1" },
-      { "id": "braindance.timeline", "atlas": "widgets/atlas_braindance", "slot": "timeline" },
-      { "id": "braindance.clue", "atlas": "widgets/atlas_braindance", "slot": "clue_marker" },
-      { "id": "braindance.timeFrame", "atlas": "widgets/atlas_braindance", "slot": "time_frame" },
-      { "id": "braindance.frame", "atlas": "widgets/atlas_braindance", "slot": "frame_fluff" }
+      {
+        "id": "braindance.pause",
+        "atlas": "common/braindance_icons",
+        "slot": "pause"
+      },
+      {
+        "id": "braindance.recording",
+        "atlas": "common/braindance_icons",
+        "slot": "recording1"
+      },
+      {
+        "id": "braindance.timeline",
+        "atlas": "widgets/atlas_braindance",
+        "slot": "timeline"
+      },
+      {
+        "id": "braindance.clue",
+        "atlas": "widgets/atlas_braindance",
+        "slot": "clue_marker"
+      },
+      {
+        "id": "braindance.timeFrame",
+        "atlas": "widgets/atlas_braindance",
+        "slot": "time_frame"
+      },
+      {
+        "id": "braindance.frame",
+        "atlas": "widgets/atlas_braindance",
+        "slot": "frame_fluff"
+      }
     ],
     "hud": [
       {
@@ -908,57 +988,161 @@
       }
     ],
     "cyberware": [
-      { "id": "cyber.frontalCortex", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_brain" },
-      { "id": "cyber.eyes", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_eyes" },
-      { "id": "cyber.nervous", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_nervous" },
-      { "id": "cyber.os", "atlas": "fullscreen/hub_atlas", "slot": "ico_cyberware" },
+      {
+        "id": "cyber.frontalCortex",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_brain"
+      },
+      {
+        "id": "cyber.eyes",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_eyes"
+      },
+      {
+        "id": "cyber.nervous",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_nervous"
+      },
+      {
+        "id": "cyber.os",
+        "atlas": "fullscreen/hub_atlas",
+        "slot": "ico_cyberware"
+      },
       {
         "id": "cyber.circulatory",
         "atlas": "fullscreen/atlas_cyberware",
         "slot": "slot_cardiovascular"
       },
-      { "id": "cyber.integumentary", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_skin" },
+      {
+        "id": "cyber.integumentary",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_skin"
+      },
       {
         "id": "cyber.skeleton",
         "atlas": "fullscreen/atlas_cyberware",
         "slot": "slot_muscoskeletal"
       },
-      { "id": "cyber.hands", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_hands" },
-      { "id": "cyber.arms", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_arms" },
-      { "id": "cyber.legs", "atlas": "fullscreen/atlas_cyberware", "slot": "slot_legs" },
+      {
+        "id": "cyber.hands",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_hands"
+      },
+      {
+        "id": "cyber.arms",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_arms"
+      },
+      {
+        "id": "cyber.legs",
+        "atlas": "fullscreen/atlas_cyberware",
+        "slot": "slot_legs"
+      },
       {
         "id": "cyber.disabled",
         "atlas": "widgets/atlas_buffinfo",
         "slot": "cyberware_disabled_icon"
       },
-      { "id": "cyber.bodySkin", "atlas": "fullscreen/man_body", "slot": "ma_intergumentary" },
-      { "id": "cyber.bodySkeleton", "atlas": "fullscreen/man_body", "slot": "ma_full_skeleton" },
-      { "id": "cyber.bodyNervous", "atlas": "fullscreen/man_body", "slot": "ma_nervous" },
-      { "id": "cyber.bodyCirculatory", "atlas": "fullscreen/man_body", "slot": "ma_circular" },
-      { "id": "cyber.bodyImmune", "atlas": "fullscreen/man_body", "slot": "ma_immune" },
+      {
+        "id": "cyber.bodySkin",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_intergumentary"
+      },
+      {
+        "id": "cyber.bodySkeleton",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_full_skeleton"
+      },
+      {
+        "id": "cyber.bodyNervous",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_nervous"
+      },
+      {
+        "id": "cyber.bodyCirculatory",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_circular"
+      },
+      {
+        "id": "cyber.bodyImmune",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_immune"
+      },
       {
         "id": "cyber.bodyFrontalCortex",
         "atlas": "fullscreen/man_body",
         "slot": "ma_pfrontal_cortex"
       },
-      { "id": "cyber.bodyEyes", "atlas": "fullscreen/man_body", "slot": "ma_ocular" },
-      { "id": "cyber.bodyOs", "atlas": "fullscreen/man_body", "slot": "ma_operating_system" },
-      { "id": "cyber.bodyArms", "atlas": "fullscreen/man_body", "slot": "ma_arms" },
-      { "id": "cyber.bodyHands", "atlas": "fullscreen/man_body", "slot": "ma_hands" },
-      { "id": "cyber.bodyLegs", "atlas": "fullscreen/man_body", "slot": "ma_legs" },
-      { "id": "cyber.cellShape", "atlas": "fullscreen/inventory4_atlas", "slot": "item_shape" },
-      { "id": "cyber.cellFrame", "atlas": "fullscreen/inventory4_atlas", "slot": "item_frame" },
-      { "id": "cyber.cellLeft", "atlas": "fullscreen/inventory4_atlas", "slot": "item_left_frame" },
+      {
+        "id": "cyber.bodyEyes",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_ocular"
+      },
+      {
+        "id": "cyber.bodyOs",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_operating_system"
+      },
+      {
+        "id": "cyber.bodyArms",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_arms"
+      },
+      {
+        "id": "cyber.bodyHands",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_hands"
+      },
+      {
+        "id": "cyber.bodyLegs",
+        "atlas": "fullscreen/man_body",
+        "slot": "ma_legs"
+      },
+      {
+        "id": "cyber.cellShape",
+        "atlas": "fullscreen/inventory4_atlas",
+        "slot": "item_shape"
+      },
+      {
+        "id": "cyber.cellFrame",
+        "atlas": "fullscreen/inventory4_atlas",
+        "slot": "item_frame"
+      },
+      {
+        "id": "cyber.cellLeft",
+        "atlas": "fullscreen/inventory4_atlas",
+        "slot": "item_left_frame"
+      },
       {
         "id": "cyber.cellRarity",
         "atlas": "fullscreen/inventory4_atlas",
         "slot": "item_left_rarity"
       },
-      { "id": "cyber.cellTexture", "atlas": "fullscreen/atlas_inventory", "slot": "texture_1slot" },
-      { "id": "cyber.gaugeBg", "atlas": "fullscreen/cw_bars_assets", "slot": "cw_barbg" },
-      { "id": "cyber.gaugeMask", "atlas": "fullscreen/cw_bars_assets", "slot": "cw_mask" },
-      { "id": "cyber.gaugeBar", "atlas": "fullscreen/cw_bars_assets", "slot": "bar_long1" },
-      { "id": "cyber.gaugeLabel", "atlas": "fullscreen/cw_bars_assets", "slot": "counterLabel" },
+      {
+        "id": "cyber.cellTexture",
+        "atlas": "fullscreen/atlas_inventory",
+        "slot": "texture_1slot"
+      },
+      {
+        "id": "cyber.gaugeBg",
+        "atlas": "fullscreen/cw_bars_assets",
+        "slot": "cw_barbg"
+      },
+      {
+        "id": "cyber.gaugeMask",
+        "atlas": "fullscreen/cw_bars_assets",
+        "slot": "cw_mask"
+      },
+      {
+        "id": "cyber.gaugeBar",
+        "atlas": "fullscreen/cw_bars_assets",
+        "slot": "bar_long1"
+      },
+      {
+        "id": "cyber.gaugeLabel",
+        "atlas": "fullscreen/cw_bars_assets",
+        "slot": "counterLabel"
+      },
       {
         "id": "cyber.gaugeLabelStroke",
         "atlas": "fullscreen/cw_bars_assets",
@@ -991,7 +1175,11 @@
         "atlas": "common/item_icons9",
         "slot": "cw_eyes_kiroshioptics"
       },
-      { "id": "cyberArt.kiroshiMk2", "atlas": "common/item_icons7", "slot": "cw_eyes_2eye" },
+      {
+        "id": "cyberArt.kiroshiMk2",
+        "atlas": "common/item_icons7",
+        "slot": "cw_eyes_2eye"
+      },
       {
         "id": "cyberArt.kiroshiClairvoyant",
         "atlas": "common/item_icons11",
@@ -1117,20 +1305,36 @@
         "atlas": "common/item_icons5",
         "slot": "cw_skeleton_endoskeleton"
       },
-      { "id": "cyberArt.clutchPadding", "atlas": "common/item_icons16", "slot": "cw_hands_recoil" },
-      { "id": "cyberArt.smartLink", "atlas": "common/item_icons9", "slot": "cw_hands_smartlink" },
+      {
+        "id": "cyberArt.clutchPadding",
+        "atlas": "common/item_icons16",
+        "slot": "cw_hands_recoil"
+      },
+      {
+        "id": "cyberArt.smartLink",
+        "atlas": "common/item_icons9",
+        "slot": "cw_hands_smartlink"
+      },
       {
         "id": "cyberArt.ballisticCoprocessor",
         "atlas": "common/item_icons10",
         "slot": "cw_hands_recoil_iconic"
       },
-      { "id": "cyberArt.gorillaArms", "atlas": "common/item_icons7", "slot": "cw_arms_strongarms" },
+      {
+        "id": "cyberArt.gorillaArms",
+        "atlas": "common/item_icons7",
+        "slot": "cw_arms_strongarms"
+      },
       {
         "id": "cyberArt.mantisBlades",
         "atlas": "common/item_icons12",
         "slot": "cw_arms_mantisblades"
       },
-      { "id": "cyberArt.monowire", "atlas": "common/item_icons13", "slot": "cw_arms_nanowires" },
+      {
+        "id": "cyberArt.monowire",
+        "atlas": "common/item_icons13",
+        "slot": "cw_arms_nanowires"
+      },
       {
         "id": "cyberArt.projectileLaunchSystem",
         "atlas": "common/item_icons13",
@@ -1186,15 +1390,31 @@
         "atlas": "common/item_icons7",
         "slot": "cw_skeleton_kerenziovboostsystem"
       },
-      { "id": "cyberArt.quantumTuner", "atlas": "common/item_icons7", "slot": "TimeBank" },
-      { "id": "cyberArt.kiroshiStalker", "atlas": "common/item_icons6", "slot": "cw_eyes_4eye" },
-      { "id": "cyberArt.atomicSensors", "atlas": "common/item_icons5", "slot": "TroubleFinder" },
+      {
+        "id": "cyberArt.quantumTuner",
+        "atlas": "common/item_icons7",
+        "slot": "TimeBank"
+      },
+      {
+        "id": "cyberArt.kiroshiStalker",
+        "atlas": "common/item_icons6",
+        "slot": "cw_eyes_4eye"
+      },
+      {
+        "id": "cyberArt.atomicSensors",
+        "atlas": "common/item_icons5",
+        "slot": "TroubleFinder"
+      },
       {
         "id": "cyberArt.tyrosineInjector",
         "atlas": "common/item_icons5",
         "slot": "cw_painspliter"
       },
-      { "id": "cyberArt.stabber", "atlas": "common/item_icons11", "slot": "cw_toxinmixer" },
+      {
+        "id": "cyberArt.stabber",
+        "atlas": "common/item_icons11",
+        "slot": "cw_toxinmixer"
+      },
       {
         "id": "cyberArt.adrenalineConverter",
         "atlas": "common/item_icons5",
@@ -1245,7 +1465,11 @@
         "atlas": "common/item_icons7",
         "slot": "cw_system_berserkc4"
       },
-      { "id": "cyberArt.threatEvac", "atlas": "common/item_icons5", "slot": "CatchMeIfYouCan" },
+      {
+        "id": "cyberArt.threatEvac",
+        "atlas": "common/item_icons5",
+        "slot": "CatchMeIfYouCan"
+      },
       {
         "id": "cyberArt.adrenalineBooster",
         "atlas": "common/item_icons9",
@@ -1331,19 +1555,31 @@
         "atlas": "common/item_icons5",
         "slot": "cw_skeleton_neurasync_adapters"
       },
-      { "id": "cyberArt.ramRecoup", "atlas": "common/item_icons18", "slot": "CompilingSkeleton" },
+      {
+        "id": "cyberArt.ramRecoup",
+        "atlas": "common/item_icons18",
+        "slot": "CompilingSkeleton"
+      },
       {
         "id": "cyberArt.scarab",
         "atlas": "common/item_icons5",
         "slot": "cw_skeleton_rapidmusclenurish"
       },
-      { "id": "cyberArt.scarCoalescer", "atlas": "common/item_icons7", "slot": "NoPainNoGain" },
+      {
+        "id": "cyberArt.scarCoalescer",
+        "atlas": "common/item_icons7",
+        "slot": "NoPainNoGain"
+      },
       {
         "id": "cyberArt.kineticFrame",
         "atlas": "common/item_icons13",
         "slot": "cw_skeleton_microvibrationsgenerator"
       },
-      { "id": "cyberArt.paraBellum", "atlas": "common/item_icons5", "slot": "T_1000" },
+      {
+        "id": "cyberArt.paraBellum",
+        "atlas": "common/item_icons5",
+        "slot": "T_1000"
+      },
       {
         "id": "cyberArt.microgenerator",
         "atlas": "common/item_icons5",
@@ -1354,7 +1590,11 @@
         "atlas": "common/item_icons6",
         "slot": "cw_hands_knifesharpener"
       },
-      { "id": "cyberArt.lynxPaws", "atlas": "common/item_icons6", "slot": "cw_legs_catpaws" },
+      {
+        "id": "cyberArt.lynxPaws",
+        "atlas": "common/item_icons6",
+        "slot": "cw_legs_catpaws"
+      },
       {
         "id": "cyberArt.chitin",
         "atlas": "common/item_icons9",
@@ -1365,9 +1605,21 @@
         "atlas": "common/item_icons6",
         "slot": "cw_legs_speed_iconic"
       },
-      { "id": "cyberArt.faceplate", "atlas": "common/item_icons19", "slot": "cw_facemask" },
-      { "id": "cyberArt.tygerTattoo", "atlas": "common/item_icons16", "slot": "icon_tattoo_tyger" },
-      { "id": "cyberArt.powerGrip", "atlas": "common/item_icons7", "slot": "cw_hands_powergrip" },
+      {
+        "id": "cyberArt.faceplate",
+        "atlas": "common/item_icons19",
+        "slot": "cw_facemask"
+      },
+      {
+        "id": "cyberArt.tygerTattoo",
+        "atlas": "common/item_icons16",
+        "slot": "icon_tattoo_tyger"
+      },
+      {
+        "id": "cyberArt.powerGrip",
+        "atlas": "common/item_icons7",
+        "slot": "cw_hands_powergrip"
+      },
       {
         "id": "cyberArt.biodyneDeck",
         "atlas": "common/item_icons6",
@@ -1530,8 +1782,16 @@
         "atlas": "common/item_icons0",
         "slot": "outfit_player_outfit_item_outfit_02_q005_militech_suit__Male_TPP_"
       },
-      { "id": "itemArt.corpoBadge", "atlas": "common/item_icons0", "slot": "ncart_pass" },
-      { "id": "itemArt.saikaScope", "atlas": "common/item_icons8", "slot": "saika_default" },
+      {
+        "id": "itemArt.corpoBadge",
+        "atlas": "common/item_icons0",
+        "slot": "ncart_pass"
+      },
+      {
+        "id": "itemArt.saikaScope",
+        "atlas": "common/item_icons8",
+        "slot": "saika_default"
+      },
       {
         "id": "itemArt.nomadDuster",
         "atlas": "common/item_icons20",
@@ -1557,8 +1817,16 @@
         "atlas": "common/item_icons22",
         "slot": "clothing_player_inner_torso_item_set_01_netrunner_01_t1__Male_TPP_"
       },
-      { "id": "itemArt.mod", "atlas": "common/item_icons4", "slot": "mod_generic" },
-      { "id": "itemArt.healthBooster", "atlas": "common/item_icons12", "slot": "health_booster" },
+      {
+        "id": "itemArt.mod",
+        "atlas": "common/item_icons4",
+        "slot": "mod_generic"
+      },
+      {
+        "id": "itemArt.healthBooster",
+        "atlas": "common/item_icons12",
+        "slot": "health_booster"
+      },
       {
         "id": "itemArt.psychoSuppressant",
         "atlas": "common/item_icons21",
@@ -1569,9 +1837,21 @@
         "atlas": "common/item_icons20",
         "slot": "inhaler_1_royce_blacklace"
       },
-      { "id": "itemArt.glitter", "atlas": "common/item_icons20", "slot": "inhaler_7_glitter" },
-      { "id": "itemArt.strixSilencer", "atlas": "common/item_icons13", "slot": "silencer_2" },
-      { "id": "itemArt.alectoSilencer", "atlas": "common/item_icons13", "slot": "silencer_4" },
+      {
+        "id": "itemArt.glitter",
+        "atlas": "common/item_icons20",
+        "slot": "inhaler_7_glitter"
+      },
+      {
+        "id": "itemArt.strixSilencer",
+        "atlas": "common/item_icons13",
+        "slot": "silencer_2"
+      },
+      {
+        "id": "itemArt.alectoSilencer",
+        "atlas": "common/item_icons13",
+        "slot": "silencer_4"
+      },
       {
         "id": "itemArt.kanetsuguScope",
         "atlas": "common/item_icons9",
@@ -1582,7 +1862,11 @@
         "atlas": "common/item_icons1",
         "slot": "w_att__scope_sniper_03"
       },
-      { "id": "itemArt.shard", "atlas": "common/item_icons2", "slot": "undefined_shard_None_" },
+      {
+        "id": "itemArt.shard",
+        "atlas": "common/item_icons2",
+        "slot": "undefined_shard_None_"
+      },
       {
         "id": "itemArt.maxdoc",
         "atlas": "common/item_icons13",
@@ -1593,8 +1877,16 @@
         "atlas": "common/item_icons14",
         "slot": "injector_13_bounce_back"
       },
-      { "id": "itemArt.frag", "atlas": "common/item_icons13", "slot": "grenade_frag_normal" },
-      { "id": "itemArt.emp", "atlas": "common/item_icons14", "slot": "grenade_emp_normal" },
+      {
+        "id": "itemArt.frag",
+        "atlas": "common/item_icons13",
+        "slot": "grenade_frag_normal"
+      },
+      {
+        "id": "itemArt.emp",
+        "atlas": "common/item_icons14",
+        "slot": "grenade_emp_normal"
+      },
       {
         "id": "itemArt.incendiary",
         "atlas": "common/item_icons13",
@@ -1605,10 +1897,601 @@
         "atlas": "common/item_icons13",
         "slot": "grenade_flash_normal_1_militech"
       },
-      { "id": "itemArt.recon", "atlas": "common/item_icons13", "slot": "grenade_recon_normal" },
-      { "id": "itemArt.nicola", "atlas": "common/item_icons18", "slot": "nicola" },
-      { "id": "itemArt.hawtdawg", "atlas": "common/item_icons13", "slot": "food_hawt_dawg_cheese" },
-      { "id": "itemArt.coffee", "atlas": "common/item_icons13", "slot": "coffee_drip" }
+      {
+        "id": "itemArt.recon",
+        "atlas": "common/item_icons13",
+        "slot": "grenade_recon_normal"
+      },
+      {
+        "id": "itemArt.nicola",
+        "atlas": "common/item_icons18",
+        "slot": "nicola"
+      },
+      {
+        "id": "itemArt.hawtdawg",
+        "atlas": "common/item_icons13",
+        "slot": "food_hawt_dawg_cheese"
+      },
+      {
+        "id": "itemArt.coffee",
+        "atlas": "common/item_icons13",
+        "slot": "coffee_drip"
+      },
+      {
+        "id": "itemArt.maxdocMk2",
+        "atlas": "common/item_icons20",
+        "slot": "inhaler_3_health_beriteback"
+      },
+      {
+        "id": "itemArt.maxdocMk3",
+        "atlas": "common/item_icons20",
+        "slot": "inhaler_6_ripperdoc_med"
+      },
+      {
+        "id": "itemArt.bounceBackMk2",
+        "atlas": "common/item_icons14",
+        "slot": "injector_1_orange"
+      },
+      {
+        "id": "itemArt.smokeGrenade",
+        "atlas": "common/item_icons14",
+        "slot": "grenade_smoke_normal"
+      },
+      {
+        "id": "itemArt.hemostaticGel",
+        "atlas": "common/item_icons14",
+        "slot": "injector_2_wound"
+      },
+      {
+        "id": "itemArt.adrenalineShot",
+        "atlas": "common/item_icons0",
+        "slot": "stamina_booster"
+      },
+      {
+        "id": "itemArt.synthCigs",
+        "atlas": "common/item_icons14",
+        "slot": "base_junk_item_cigarette_pack_b"
+      },
+      {
+        "id": "itemArt.realLiquor",
+        "atlas": "common/item_icons10",
+        "slot": "alcohol_tequila_especial"
+      },
+      {
+        "id": "itemArt.streetBeanie",
+        "atlas": "common/item_icons0",
+        "slot": "clothing_player_head_item_h1_cap_01_old_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.nomadHeadwrap",
+        "atlas": "common/item_icons19",
+        "slot": "clothing_player_head_item_h1_scarf_01_old_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.tacticalHelmet",
+        "atlas": "common/item_icons0",
+        "slot": "clothing_player_head_item_h1_helmet_11_basic_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.nomadWeldingCap",
+        "atlas": "common/item_icons19",
+        "slot": "clothing_player_head_item_set_01_techie_01_h1__Male_TPP_"
+      },
+      {
+        "id": "itemArt.fixerFedora",
+        "atlas": "common/item_icons11",
+        "slot": "clothing_player_head_item_h1_hat_04_basic_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.balaclavaHood",
+        "atlas": "common/item_icons13",
+        "slot": "clothing_player_head_item_h1_balaclava_02_old_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.netrunnerCoolingCrown",
+        "atlas": "common/item_icons14",
+        "slot": "clothing_player_head_item_set_01_media_01_h1__Male_TPP_"
+      },
+      {
+        "id": "itemArt.ncpdRiotHelmet",
+        "atlas": "common/item_icons1",
+        "slot": "clothing_player_head_item_h1_helmet_07_basic_02__Male_TPP_"
+      },
+      {
+        "id": "itemArt.arasakaKabutoHelm",
+        "atlas": "common/item_icons1",
+        "slot": "clothing_player_head_item_h1_helmet_12_basic_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.maxtacVisorHelmet",
+        "atlas": "common/item_icons0",
+        "slot": "clothing_player_head_item_h1_helmet_11_rich_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.mirrorShades",
+        "atlas": "common/item_icons12",
+        "slot": "clothing_player_face_item_f1_glasses_05_basic_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.corpoGlasses",
+        "atlas": "common/item_icons1",
+        "slot": "clothing_player_face_item_f1_glasses_03_basic_02__Male_TPP_"
+      },
+      {
+        "id": "itemArt.techGoggles",
+        "atlas": "common/item_icons13",
+        "slot": "clothing_player_face_item_set_01_techie_01_f1__Male_TPP_"
+      },
+      {
+        "id": "itemArt.respiratorMask",
+        "atlas": "common/item_icons1",
+        "slot": "clothing_player_face_item_f1_mask_02_basic_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.corpoSmartSpecs",
+        "atlas": "common/item_icons13",
+        "slot": "clothing_player_face_item_set_01_corporate_01_f1__Male_TPP_"
+      },
+      {
+        "id": "itemArt.militechGasMask",
+        "atlas": "common/item_icons11",
+        "slot": "clothing_player_face_item_f1_mask_02_old_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.netrunnerInfovisor",
+        "atlas": "common/item_icons3",
+        "slot": "clothing_player_face_item_set_01_netrunner_01_f1__Male_TPP_"
+      },
+      {
+        "id": "itemArt.thermalTacticalVisor",
+        "atlas": "common/item_icons12",
+        "slot": "clothing_player_face_item_f1_tech_04_rich_03__Male_TPP_"
+      },
+      {
+        "id": "itemArt.opticalScramblerMask",
+        "atlas": "common/item_icons11",
+        "slot": "clothing_player_face_item_f1_mask_02_rich_02__Male_TPP_"
+      },
+      {
+        "id": "itemArt.johnnyAviators",
+        "atlas": "common/item_icons13",
+        "slot": "clothing_player_face_item_f1_glasses_01_q005_johnny__Male_TPP_"
+      },
+      {
+        "id": "itemArt.kimonoHaori",
+        "atlas": "common/item_icons14",
+        "slot": "clothing_player_outer_torso_item_t2_formal_05_rich_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.neonPvcJacket",
+        "atlas": "common/item_icons0",
+        "slot": "clothing_player_outer_torso_item_t2_jacket_15_basic_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.longTrenchcoat",
+        "atlas": "common/item_icons20",
+        "slot": "clothing_player_outer_torso_item_set_01_fixer_01_t2__Male_TPP_"
+      },
+      {
+        "id": "itemArt.workApron",
+        "atlas": "common/item_icons1",
+        "slot": "clothing_player_outer_torso_item_t2_jumpsuit_01_basic_02__Male_TPP_"
+      },
+      {
+        "id": "itemArt.clubDress",
+        "atlas": "common/item_icons1",
+        "slot": "clothing_player_outer_torso_item_t2_dress_02_basic_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.tygerBomberJacket",
+        "atlas": "common/item_icons10",
+        "slot": "clothing_player_outer_torso_item_t2_jacket_03_rich_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.moxNeonBolero",
+        "atlas": "common/item_icons10",
+        "slot": "clothing_player_outer_torso_item_t2_jacket_13_rich_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.valentinoGoldJacket",
+        "atlas": "common/item_icons18",
+        "slot": "clothing_player_outer_torso_item_set_01_rockerboy_01_t2__Male_TPP_"
+      },
+      {
+        "id": "itemArt.maelstromSpikeVest",
+        "atlas": "common/item_icons1",
+        "slot": "clothing_player_outer_torso_item_t2_vest_01_old_02__Male_TPP_"
+      },
+      {
+        "id": "itemArt.ncpdPatrolVest",
+        "atlas": "common/item_icons0",
+        "slot": "outfit_player_outfit_item_outfit_02_sq029_police_suit__Male_TPP_"
+      },
+      {
+        "id": "itemArt.hazmatOvercoat",
+        "atlas": "common/item_icons0",
+        "slot": "outfit_player_outfit_item_ep1_outfit_01__q305__hazmat__Male_TPP_"
+      },
+      {
+        "id": "itemArt.arasakaPlateVest",
+        "atlas": "common/item_icons11",
+        "slot": "clothing_player_outer_torso_item_t2_vest_16_rich_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.aldecaldoRallyJacket",
+        "atlas": "common/item_icons11",
+        "slot": "clothing_player_outer_torso_item_t2_jacket_10_q114_aldecaldo__Male_TPP_"
+      },
+      {
+        "id": "itemArt.arasakaExecutiveCoat",
+        "atlas": "common/item_icons20",
+        "slot": "clothing_player_outer_torso_item_t2_coat_03_q005_steel_dragons__Male_TPP_"
+      },
+      {
+        "id": "itemArt.netwatchTrenchcoat",
+        "atlas": "common/item_icons0",
+        "slot": "outfit_player_outfit_item_ep1_outfit_01__q301_nusa_agent__Male_TPP_"
+      },
+      {
+        "id": "itemArt.militechHeavyRig",
+        "atlas": "common/item_icons15",
+        "slot": "clothing_player_outer_torso_item_set_01_solo_01_t2__Male_TPP_"
+      },
+      {
+        "id": "itemArt.traumaResponseArmor",
+        "atlas": "common/item_icons0",
+        "slot": "outfit_player_outfit_item_outfit_02__trauma__Male_TPP_"
+      },
+      {
+        "id": "itemArt.stealthAssassinCoat",
+        "atlas": "common/item_icons0",
+        "slot": "outfit_player_outfit_item_ep1_outfit_01__mq304__assassin__Male_TPP_"
+      },
+      {
+        "id": "itemArt.edgerunnerJacket",
+        "atlas": "common/item_icons19",
+        "slot": "clothing_player_outer_torso_item_t2_jacket_21_edgerunners_01__Male_TPP_"
+      },
+      {
+        "id": "itemArt.samuraiJacket",
+        "atlas": "common/item_icons9",
+        "slot": "clothing_player_outer_torso_item_t2_jacket_01_sq031_silverhand_samurai__Male_TPP_"
+      },
+      {
+        "id": "itemArt.streetTee",
+        "atlas": "common/item_icons0",
+        "slot": "clothing_player_inner_torso_item_t1_tshirt_03_q000_street__Male_"
+      },
+      {
+        "id": "itemArt.silkShirt",
+        "atlas": "common/item_icons10",
+        "slot": "clothing_player_inner_torso_item_t1_formal_01_rich_02__Male_TPP_"
+      },
+      {
+        "id": "itemArt.turtleneckKnit",
+        "atlas": "common/item_icons10",
+        "slot": "clothing_player_inner_torso_item_set_01_corporate_01_t1__Male_TPP_"
+      },
+      {
+        "id": "itemArt.samuraiTourTee",
+        "atlas": "common/item_icons5",
+        "slot": "clothing_player_inner_torso_item_t1_tshirt_02_samurai_world_tour__Male_"
+      },
+      {
+        "id": "itemArt.kevlarUndershirt",
+        "atlas": "common/item_icons20",
+        "slot": "clothing_player_inner_torso_item_set_01_techie_01_t1__Male_"
+      },
+      {
+        "id": "itemArt.soloCompressionTop",
+        "atlas": "common/item_icons4",
+        "slot": "clothing_player_inner_torso_item_set_01_solo_01_t1__Male_"
+      },
+      {
+        "id": "itemArt.thermalStealthLiner",
+        "atlas": "common/item_icons20",
+        "slot": "clothing_player_inner_torso_item_set_01_nomad_01_t1__Male_"
+      },
+      {
+        "id": "itemArt.milNetrunnerSuit",
+        "atlas": "common/item_icons11",
+        "slot": "clothing_player_inner_torso_item_t1_tshirt_09_basic_01__Male_"
+      },
+      {
+        "id": "itemArt.cargoPants",
+        "atlas": "common/item_icons17",
+        "slot": "clothing_player_legs_item_l1_pants_07_basic_01__Male_"
+      },
+      {
+        "id": "itemArt.tailoredSlacks",
+        "atlas": "common/item_icons22",
+        "slot": "clothing_player_legs_item_set_01_corporate_01_l1__Male_"
+      },
+      {
+        "id": "itemArt.leatherPants",
+        "atlas": "common/item_icons22",
+        "slot": "clothing_player_legs_item_set_01_rockerboy_01_l1__Male_"
+      },
+      {
+        "id": "itemArt.nomadReinforcedPants",
+        "atlas": "common/item_icons21",
+        "slot": "clothing_player_legs_item_set_01_nomad_01_l1__Male_"
+      },
+      {
+        "id": "itemArt.tacticalKneePants",
+        "atlas": "common/item_icons22",
+        "slot": "clothing_player_legs_item_set_01_solo_01_l1__Male_"
+      },
+      {
+        "id": "itemArt.netrunnerWeavePants",
+        "atlas": "common/item_icons21",
+        "slot": "clothing_player_legs_item_set_01_netrunner_01_l1__Male_"
+      },
+      {
+        "id": "itemArt.yorinobuFormalSlacks",
+        "atlas": "common/item_icons22",
+        "slot": "clothing_player_legs_item_l1_formal_01_q005_yorinobu_cloth__Male_"
+      },
+      {
+        "id": "itemArt.combatBoots",
+        "atlas": "common/item_icons0",
+        "slot": "clothing_player_feet_item_s1_boots_08_basic_01__Male_"
+      },
+      {
+        "id": "itemArt.streetSneakers",
+        "atlas": "common/item_icons12",
+        "slot": "clothing_player_feet_item_s1_casual_01_basic_01__Male_"
+      },
+      {
+        "id": "itemArt.dressShoes",
+        "atlas": "common/item_icons13",
+        "slot": "clothing_player_feet_item_set_01_corporate_01_s1__Male_"
+      },
+      {
+        "id": "itemArt.rockerStuddedBoots",
+        "atlas": "common/item_icons12",
+        "slot": "clothing_player_feet_item_set_01_rockerboy_01_s1__Male_"
+      },
+      {
+        "id": "itemArt.netrunnerGroundBoots",
+        "atlas": "common/item_icons13",
+        "slot": "clothing_player_feet_item_set_01_netrunner_01_s1__Male_"
+      },
+      {
+        "id": "itemArt.silentStalkerBoots",
+        "atlas": "common/item_icons13",
+        "slot": "clothing_player_feet_item_set_01_fixer_01_s1__Male_"
+      },
+      {
+        "id": "itemArt.militechExoBoots",
+        "atlas": "common/item_icons12",
+        "slot": "clothing_player_feet_item_set_01_techie_01_s1__Male_"
+      },
+      {
+        "id": "itemArt.modBigMag",
+        "atlas": "common/item_icons6",
+        "slot": "wmod_simple01"
+      },
+      {
+        "id": "itemArt.modKneel",
+        "atlas": "common/item_icons5",
+        "slot": "wmod_simple02"
+      },
+      {
+        "id": "itemArt.modBleedout",
+        "atlas": "common/item_icons8",
+        "slot": "wmod_tyger_melee"
+      },
+      {
+        "id": "itemArt.modParallax",
+        "atlas": "common/item_icons5",
+        "slot": "wmod_simple05"
+      },
+      {
+        "id": "itemArt.modSmartTarget",
+        "atlas": "common/item_icons14",
+        "slot": "wmod_simple12"
+      },
+      {
+        "id": "itemArt.modSmartLink",
+        "atlas": "common/item_icons6",
+        "slot": "wmod_simple16"
+      },
+      {
+        "id": "itemArt.modKineticWeight",
+        "atlas": "common/item_icons8",
+        "slot": "wmod_wraiths_melee"
+      },
+      {
+        "id": "itemArt.modArcCoil",
+        "atlas": "common/item_icons5",
+        "slot": "Mod_Shock_n_Awe"
+      },
+      {
+        "id": "itemArt.holoPhone",
+        "atlas": "common/item_icons11",
+        "slot": "undefined_crowd_talking_cellphone_None_"
+      },
+      {
+        "id": "itemArt.toolKit",
+        "atlas": "common/item_icons11",
+        "slot": "undefined_crowd_tool_d_screwdriver_None_"
+      },
+      {
+        "id": "itemArt.medKit",
+        "atlas": "common/item_icons14",
+        "slot": "MedicalGauze"
+      },
+      {
+        "id": "itemArt.lockpickSet",
+        "atlas": "common/item_icons13",
+        "slot": "undefined_ripperdoc_screwdriver_None_"
+      },
+      {
+        "id": "itemArt.ncpdBadge",
+        "atlas": "common/item_icons14",
+        "slot": "jaguar_badge"
+      },
+      {
+        "id": "itemArt.tarotDeck",
+        "atlas": "common/item_icons11",
+        "slot": "postcard"
+      },
+      {
+        "id": "itemArt.rosaryBeads",
+        "atlas": "common/item_icons13",
+        "slot": "q306_metal_pin_badge"
+      },
+      {
+        "id": "itemArt.goldChain",
+        "atlas": "common/item_icons11",
+        "slot": "golden_chain_GenericGangJunkItem1"
+      },
+      {
+        "id": "itemArt.cigarCase",
+        "atlas": "common/item_icons13",
+        "slot": "cigar_casinoRichJunkItem3"
+      },
+      {
+        "id": "itemArt.tacticalChestRig",
+        "atlas": "common/item_icons0",
+        "slot": "carry_capacity_booster"
+      },
+      {
+        "id": "itemArt.heavyDuffelPack",
+        "atlas": "common/item_icons11",
+        "slot": "q204_duffel_bag"
+      },
+      {
+        "id": "itemArt.signalJammer",
+        "atlas": "common/item_icons6",
+        "slot": "cmod_powerfulfabric01"
+      },
+      {
+        "id": "itemArt.thermalMonocular",
+        "atlas": "common/item_icons10",
+        "slot": "cwf_kiroshioptics3"
+      },
+      {
+        "id": "itemArt.opticalCloak",
+        "atlas": "common/item_icons2",
+        "slot": "cmod_powerfulfabric08"
+      },
+      {
+        "id": "itemArt.glassCutter",
+        "atlas": "common/item_icons13",
+        "slot": "undefined_tool_t_cutter_None_"
+      },
+      {
+        "id": "itemArt.magGrappleKit",
+        "atlas": "common/item_icons11",
+        "slot": "undefined_workshop_tool_driller_None_"
+      },
+      {
+        "id": "itemArt.faradayPouch",
+        "atlas": "common/item_icons12",
+        "slot": "shard_case_container_entropy"
+      },
+      {
+        "id": "itemArt.iceBreakerSpike",
+        "atlas": "common/item_icons18",
+        "slot": "q003_chip_cracked"
+      },
+      {
+        "id": "itemArt.clonedKeycard",
+        "atlas": "common/item_icons0",
+        "slot": "shard_case_container_neokitsch"
+      },
+      {
+        "id": "itemArt.relayBeacon",
+        "atlas": "common/item_icons2",
+        "slot": "sq017_spike_trap"
+      },
+      {
+        "id": "itemArt.cetusSilencer",
+        "atlas": "common/item_icons13",
+        "slot": "silencer_1"
+      },
+      {
+        "id": "itemArt.sniperSilencer",
+        "atlas": "common/item_icons13",
+        "slot": "silencer_3"
+      },
+      {
+        "id": "itemArt.rc7Compensator",
+        "atlas": "common/item_icons3",
+        "slot": "w_att_power_09"
+      },
+      {
+        "id": "itemArt.strigoiBrake",
+        "atlas": "common/item_icons12",
+        "slot": "w_att_power_11"
+      },
+      {
+        "id": "itemArt.heavyBrake",
+        "atlas": "common/item_icons0",
+        "slot": "w_att_power_13"
+      },
+      {
+        "id": "itemArt.vantageScope",
+        "atlas": "common/item_icons12",
+        "slot": "w_att_scope_short_06"
+      },
+      {
+        "id": "itemArt.smartOptic",
+        "atlas": "common/item_icons13",
+        "slot": "scope_rail_generic"
+      },
+      {
+        "id": "itemArt.thermalScope",
+        "atlas": "common/item_icons3",
+        "slot": "w_att__scope_long_05"
+      },
+      {
+        "id": "itemArt.weakpointScope",
+        "atlas": "common/item_icons4",
+        "slot": "scope_generic"
+      },
+      {
+        "id": "itemArt.modQuickReload",
+        "atlas": "common/item_icons5",
+        "slot": "wmod_simple03"
+      },
+      {
+        "id": "itemArt.modApCore",
+        "atlas": "common/item_icons7",
+        "slot": "wmod_simple04"
+      },
+      {
+        "id": "itemArt.modPyroRounds",
+        "atlas": "common/item_icons5",
+        "slot": "Mod_Pyro"
+      },
+      {
+        "id": "itemArt.modToxinCoat",
+        "atlas": "common/item_icons8",
+        "slot": "wmod_valentinos_melee"
+      },
+      {
+        "id": "itemArt.modEmpRounds",
+        "atlas": "common/item_icons8",
+        "slot": "wmod_simple17"
+      },
+      {
+        "id": "itemArt.modThermalEdge",
+        "atlas": "common/item_icons8",
+        "slot": "wmod_arasaka_melee"
+      },
+      {
+        "id": "itemArt.modSwissCheese",
+        "atlas": "common/item_icons8",
+        "slot": "wmod_tyger_ranged"
+      },
+      {
+        "id": "itemArt.modZeroRecoil",
+        "atlas": "common/item_icons5",
+        "slot": "Mod_Pacifier"
+      }
     ],
     "weapons": [
       {
@@ -1756,7 +2639,11 @@
         "atlas": "common/item_icons1",
         "slot": "weapon_Preset_Liberty_Rogue_None__Dex_Liberty"
       },
-      { "id": "weaponArt.nowaki", "atlas": "common/assets_preview4", "slot": "w_arasaka_nowaki" },
+      {
+        "id": "weaponArt.nowaki",
+        "atlas": "common/assets_preview4",
+        "slot": "w_arasaka_nowaki"
+      },
       {
         "id": "weaponArt.rasetsu",
         "atlas": "common/item_icons2",
@@ -2101,29 +2988,149 @@
         "id": "weaponArt.overwatch",
         "atlas": "common/item_icons3",
         "slot": "weapon_Preset_Grad_Default_None__Panam_Grad"
+      },
+      {
+        "id": "weaponArt.sor22",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Sor22_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.kyubiModX",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Kyubi_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.mk31Hmg",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_HMG_Default_None__Default"
+      },
+      {
+        "id": "weaponArt.defenderMilSpec",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Defender_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.kenshinSpecOps",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Kenshin_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.overtureHeavy",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Overture_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.shingenTac",
+        "atlas": "common/item_icons0",
+        "slot": "weapon_Preset_Shingen_Default_None__Default_Neon_Military_Pimp"
+      },
+      {
+        "id": "weaponArt.senkohSpec",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Senkoh_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.ajaxMilSpec",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Ajax_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.crusher",
+        "atlas": "common/item_icons1",
+        "slot": "weapon_Preset_Crusher_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.thermalKatanaMil",
+        "atlas": "common/item_icons3",
+        "slot": "weapon_Preset_Katana_Default_None__Military"
+      },
+      {
+        "id": "weaponArt.gorillaMaul",
+        "atlas": "common/item_icons2",
+        "slot": "weapon_Preset_Hammer_Default_None__Sasquatch_Hammer"
       }
     ],
     "portrait": [
-      { "id": "portrait.unknown", "atlas": "common/avatars2", "slot": "unknown" },
-      { "id": "portrait.judy", "atlas": "common/avatars1", "slot": "judy" },
-      { "id": "portrait.regina", "atlas": "common/avatars1", "slot": "regina" },
-      { "id": "portrait.viktor", "atlas": "common/avatars_ep1", "slot": "ep1_viktor" },
-      { "id": "portrait.jackie", "atlas": "common/avatars2", "slot": "jackie_a" },
+      {
+        "id": "portrait.unknown",
+        "atlas": "common/avatars2",
+        "slot": "unknown"
+      },
+      {
+        "id": "portrait.judy",
+        "atlas": "common/avatars1",
+        "slot": "judy"
+      },
+      {
+        "id": "portrait.regina",
+        "atlas": "common/avatars1",
+        "slot": "regina"
+      },
+      {
+        "id": "portrait.viktor",
+        "atlas": "common/avatars_ep1",
+        "slot": "ep1_viktor"
+      },
+      {
+        "id": "portrait.jackie",
+        "atlas": "common/avatars2",
+        "slot": "jackie_a"
+      },
       {
         "id": "portrait.rogue",
         "atlas": "fullscreen/photomode_npc_icons_atlas",
         "slot": "rogue_old"
       },
-      { "id": "portrait.wakako", "atlas": "common/avatars2", "slot": "wakako" },
-      { "id": "portrait.misty", "atlas": "common/avatars1", "slot": "misty" },
-      { "id": "portrait.dex", "atlas": "common/avatars0", "slot": "dex" },
-      { "id": "portrait.padre", "atlas": "common/avatars1", "slot": "padre" },
-      { "id": "portrait.panam", "atlas": "common/avatars1", "slot": "panam" },
-      { "id": "portrait.river", "atlas": "common/avatars1", "slot": "river" },
-      { "id": "portrait.kerry", "atlas": "common/avatars1", "slot": "kerry" },
-      { "id": "portrait.takemura", "atlas": "common/avatars2", "slot": "takemura" },
-      { "id": "portrait.hanako", "atlas": "common/avatars0", "slot": "hanako" },
-      { "id": "portrait.yorinobu", "atlas": "common/avatars2", "slot": "yorinobu" },
+      {
+        "id": "portrait.wakako",
+        "atlas": "common/avatars2",
+        "slot": "wakako"
+      },
+      {
+        "id": "portrait.misty",
+        "atlas": "common/avatars1",
+        "slot": "misty"
+      },
+      {
+        "id": "portrait.dex",
+        "atlas": "common/avatars0",
+        "slot": "dex"
+      },
+      {
+        "id": "portrait.padre",
+        "atlas": "common/avatars1",
+        "slot": "padre"
+      },
+      {
+        "id": "portrait.panam",
+        "atlas": "common/avatars1",
+        "slot": "panam"
+      },
+      {
+        "id": "portrait.river",
+        "atlas": "common/avatars1",
+        "slot": "river"
+      },
+      {
+        "id": "portrait.kerry",
+        "atlas": "common/avatars1",
+        "slot": "kerry"
+      },
+      {
+        "id": "portrait.takemura",
+        "atlas": "common/avatars2",
+        "slot": "takemura"
+      },
+      {
+        "id": "portrait.hanako",
+        "atlas": "common/avatars0",
+        "slot": "hanako"
+      },
+      {
+        "id": "portrait.yorinobu",
+        "atlas": "common/avatars2",
+        "slot": "yorinobu"
+      },
       {
         "id": "portrait.smasher",
         "atlas": "fullscreen/photomode_npc_icons_atlas",
@@ -2139,27 +3146,111 @@
         "atlas": "fullscreen/photomode_npc_icons_atlas",
         "slot": "kurt_hansen"
       },
-      { "id": "portrait.meredith", "atlas": "common/avatars1", "slot": "meredith" },
-      { "id": "portrait.bryceMosley", "atlas": "common/avatars0", "slot": "bryce" },
-      { "id": "portrait.songbird", "atlas": "common/avatars2", "slot": "songbird" },
-      { "id": "portrait.reed", "atlas": "common/avatars_ep1", "slot": "ep1_reed1" },
-      { "id": "portrait.alex", "atlas": "common/avatars_ep1", "slot": "ep1_alex" },
-      { "id": "portrait.dino", "atlas": "common/avatars0", "slot": "dino" },
-      { "id": "portrait.elCapitan", "atlas": "common/avatars1", "slot": "muamar" },
-      { "id": "portrait.mrHands", "atlas": "common/avatars_tooltips", "slot": "c_mr_hands" },
-      { "id": "portrait.dakota", "atlas": "common/avatars0", "slot": "dakota" },
-      { "id": "portrait.evelyn", "atlas": "common/avatars0", "slot": "evelyn" },
-      { "id": "portrait.tBug", "atlas": "common/avatars2", "slot": "t-bug" },
-      { "id": "portrait.mamaWelles", "atlas": "common/avatars1", "slot": "mama" },
-      { "id": "portrait.claire", "atlas": "common/avatars0", "slot": "claire" },
-      { "id": "portrait.nix", "atlas": "common/avatars1", "slot": "nix" },
-      { "id": "portrait.saul", "atlas": "common/avatars2", "slot": "saul" },
-      { "id": "portrait.mitch", "atlas": "common/avatars1", "slot": "mitch" },
-      { "id": "portrait.carol", "atlas": "common/avatars0", "slot": "carol" },
-      { "id": "portrait.placide", "atlas": "common/avatars1", "slot": "placide" },
-      { "id": "portrait.brigitte", "atlas": "common/avatars1", "slot": "maman" },
-      { "id": "portrait.wilson", "atlas": "common/avatars2", "slot": "wilson" },
-      { "id": "portrait.fingers", "atlas": "common/avatars_tooltips", "slot": "ripper_fingers" },
+      {
+        "id": "portrait.meredith",
+        "atlas": "common/avatars1",
+        "slot": "meredith"
+      },
+      {
+        "id": "portrait.bryceMosley",
+        "atlas": "common/avatars0",
+        "slot": "bryce"
+      },
+      {
+        "id": "portrait.songbird",
+        "atlas": "common/avatars2",
+        "slot": "songbird"
+      },
+      {
+        "id": "portrait.reed",
+        "atlas": "common/avatars_ep1",
+        "slot": "ep1_reed1"
+      },
+      {
+        "id": "portrait.alex",
+        "atlas": "common/avatars_ep1",
+        "slot": "ep1_alex"
+      },
+      {
+        "id": "portrait.dino",
+        "atlas": "common/avatars0",
+        "slot": "dino"
+      },
+      {
+        "id": "portrait.elCapitan",
+        "atlas": "common/avatars1",
+        "slot": "muamar"
+      },
+      {
+        "id": "portrait.mrHands",
+        "atlas": "common/avatars_tooltips",
+        "slot": "c_mr_hands"
+      },
+      {
+        "id": "portrait.dakota",
+        "atlas": "common/avatars0",
+        "slot": "dakota"
+      },
+      {
+        "id": "portrait.evelyn",
+        "atlas": "common/avatars0",
+        "slot": "evelyn"
+      },
+      {
+        "id": "portrait.tBug",
+        "atlas": "common/avatars2",
+        "slot": "t-bug"
+      },
+      {
+        "id": "portrait.mamaWelles",
+        "atlas": "common/avatars1",
+        "slot": "mama"
+      },
+      {
+        "id": "portrait.claire",
+        "atlas": "common/avatars0",
+        "slot": "claire"
+      },
+      {
+        "id": "portrait.nix",
+        "atlas": "common/avatars1",
+        "slot": "nix"
+      },
+      {
+        "id": "portrait.saul",
+        "atlas": "common/avatars2",
+        "slot": "saul"
+      },
+      {
+        "id": "portrait.mitch",
+        "atlas": "common/avatars1",
+        "slot": "mitch"
+      },
+      {
+        "id": "portrait.carol",
+        "atlas": "common/avatars0",
+        "slot": "carol"
+      },
+      {
+        "id": "portrait.placide",
+        "atlas": "common/avatars1",
+        "slot": "placide"
+      },
+      {
+        "id": "portrait.brigitte",
+        "atlas": "common/avatars1",
+        "slot": "maman"
+      },
+      {
+        "id": "portrait.wilson",
+        "atlas": "common/avatars2",
+        "slot": "wilson"
+      },
+      {
+        "id": "portrait.fingers",
+        "atlas": "common/avatars_tooltips",
+        "slot": "ripper_fingers"
+      },
       {
         "id": "portrait.charlesBucks",
         "atlas": "common/avatars_tooltips",
@@ -2170,22 +3261,151 @@
         "atlas": "common/avatars_tooltips",
         "slot": "ripper_cassius"
       },
-      { "id": "portrait.jeffersonPeralez", "atlas": "common/avatars0", "slot": "jefferson" },
-      { "id": "portrait.elizabethPeralez", "atlas": "common/avatars0", "slot": "elizabeth" },
-      { "id": "portrait.delamain", "atlas": "common/avatars0", "slot": "delamain" },
-      { "id": "portrait.blueMoon", "atlas": "common/avatars0", "slot": "blue_moon" },
-      { "id": "portrait.lizzyWizzy", "atlas": "common/avatars1", "slot": "lizzy" },
-      { "id": "portrait.mrBlueEyes", "atlas": "common/avatars1", "slot": "mr_blue_eyes" },
-      { "id": "portrait.ozob", "atlas": "common/avatars1", "slot": "ozob" },
-      { "id": "portrait.coachFred", "atlas": "common/avatars0", "slot": "fred" },
-      { "id": "portrait.scorpion", "atlas": "common/avatars2", "slot": "scorpion" },
-      { "id": "portrait.cassidy", "atlas": "common/avatars0", "slot": "cassidy" },
-      { "id": "portrait.nancy", "atlas": "common/avatars1", "slot": "nancy" },
-      { "id": "portrait.emmerick", "atlas": "common/avatars0", "slot": "emmerick" },
-      { "id": "portrait.weyland", "atlas": "common/avatars2", "slot": "weyland" },
-      { "id": "portrait.pepe", "atlas": "common/avatars1", "slot": "pepe" },
-      { "id": "portrait.kirk", "atlas": "common/avatars1", "slot": "kirk" },
-      { "id": "portrait.redMenace", "atlas": "common/avatars1", "slot": "red_menace" }
+      {
+        "id": "portrait.jeffersonPeralez",
+        "atlas": "common/avatars0",
+        "slot": "jefferson"
+      },
+      {
+        "id": "portrait.elizabethPeralez",
+        "atlas": "common/avatars0",
+        "slot": "elizabeth"
+      },
+      {
+        "id": "portrait.delamain",
+        "atlas": "common/avatars0",
+        "slot": "delamain"
+      },
+      {
+        "id": "portrait.blueMoon",
+        "atlas": "common/avatars0",
+        "slot": "blue_moon"
+      },
+      {
+        "id": "portrait.lizzyWizzy",
+        "atlas": "common/avatars1",
+        "slot": "lizzy"
+      },
+      {
+        "id": "portrait.mrBlueEyes",
+        "atlas": "common/avatars1",
+        "slot": "mr_blue_eyes"
+      },
+      {
+        "id": "portrait.ozob",
+        "atlas": "common/avatars1",
+        "slot": "ozob"
+      },
+      {
+        "id": "portrait.coachFred",
+        "atlas": "common/avatars0",
+        "slot": "fred"
+      },
+      {
+        "id": "portrait.scorpion",
+        "atlas": "common/avatars2",
+        "slot": "scorpion"
+      },
+      {
+        "id": "portrait.cassidy",
+        "atlas": "common/avatars0",
+        "slot": "cassidy"
+      },
+      {
+        "id": "portrait.nancy",
+        "atlas": "common/avatars1",
+        "slot": "nancy"
+      },
+      {
+        "id": "portrait.emmerick",
+        "atlas": "common/avatars0",
+        "slot": "emmerick"
+      },
+      {
+        "id": "portrait.weyland",
+        "atlas": "common/avatars2",
+        "slot": "weyland"
+      },
+      {
+        "id": "portrait.pepe",
+        "atlas": "common/avatars1",
+        "slot": "pepe"
+      },
+      {
+        "id": "portrait.kirk",
+        "atlas": "common/avatars1",
+        "slot": "kirk"
+      },
+      {
+        "id": "portrait.redMenace",
+        "atlas": "common/avatars1",
+        "slot": "red_menace"
+      },
+      {
+        "id": "portrait.sandraDorsett",
+        "atlas": "common/avatars1",
+        "slot": "sandra"
+      },
+      {
+        "id": "portrait.arthurJenkins",
+        "atlas": "common/avatars0",
+        "slot": "jenkins"
+      },
+      {
+        "id": "portrait.anthonyGilchrist",
+        "atlas": "common/avatars0",
+        "slot": "anthony"
+      },
+      {
+        "id": "portrait.changHoonNam",
+        "atlas": "common/avatars_ep1",
+        "slot": "ep1_chang"
+      },
+      {
+        "id": "portrait.linaMalina",
+        "atlas": "common/avatars_ep1",
+        "slot": "ep1_lina"
+      },
+      {
+        "id": "portrait.rachelCasich",
+        "atlas": "common/avatars1",
+        "slot": "rachel"
+      },
+      {
+        "id": "portrait.jossKutcher",
+        "atlas": "common/avatars1",
+        "slot": "joss"
+      },
+      {
+        "id": "portrait.zaneJagger",
+        "atlas": "common/avatars2",
+        "slot": "zane"
+      },
+      {
+        "id": "portrait.purpleForce",
+        "atlas": "fullscreen/photomode_npc_icons_atlas",
+        "slot": "purple_force"
+      },
+      {
+        "id": "portrait.faridaNazeri",
+        "atlas": "common/avatars_tooltips",
+        "slot": "ripper_farida"
+      },
+      {
+        "id": "portrait.anthonyAnderson",
+        "atlas": "common/avatars_tooltips",
+        "slot": "ripper_anderson"
+      },
+      {
+        "id": "portrait.ninaKraviz",
+        "atlas": "common/avatars_tooltips",
+        "slot": "ripper_charterhill"
+      },
+      {
+        "id": "portrait.robertRainwater",
+        "atlas": "common/avatars_tooltips",
+        "slot": "ripper_kabuki2"
+      }
     ],
     "vehicles": [
       {
@@ -2264,66 +3484,278 @@
         "id": "map.roads",
         "file": "map/night_city_roads.png"
       },
-      { "id": "map.poi.fixer", "atlas": "common/mappin_icons", "slot": "fixer" },
-      { "id": "map.poi.ripperdoc", "atlas": "common/mappin_icons", "slot": "ripperdoc" },
-      { "id": "map.poi.gun", "atlas": "common/mappin_icons", "slot": "gun" },
-      { "id": "map.poi.melee", "atlas": "common/mappin_icons", "slot": "melee" },
-      { "id": "map.poi.netrunner", "atlas": "common/mappin_icons", "slot": "netservice" },
-      { "id": "map.poi.clothes", "atlas": "common/mappin_icons", "slot": "clothes" },
-      { "id": "map.poi.meds", "atlas": "common/mappin_icons", "slot": "medicine" },
-      { "id": "map.poi.junk", "atlas": "common/mappin_icons", "slot": "junk_shop" },
-      { "id": "map.poi.food", "atlas": "common/mappin_icons", "slot": "food_vendor" },
-      { "id": "map.poi.bar", "atlas": "common/mappin_icons", "slot": "bar" },
-      { "id": "map.poi.apartment", "atlas": "common/mappin_icons", "slot": "apartment" },
-      { "id": "map.poi.rent", "atlas": "common/mappin_icons", "slot": "apartment_to_buy" },
-      { "id": "map.poi.autofixer", "atlas": "common/mappin_icons", "slot": "car_to_buy" },
-      { "id": "map.poi.quest", "atlas": "common/mappin_icons", "slot": "quest" },
-      { "id": "map.poi.player", "atlas": "common/mappin_icons", "slot": "V_owned" },
-      { "id": "map.poi.police", "atlas": "common/mappin_icons", "slot": "map_bounty" },
-      { "id": "gang.maelstrom", "atlas": "common/gang_logos", "slot": "logo_maelstrom" },
-      { "id": "gang.tygerClaws", "atlas": "common/gang_logos", "slot": "logo_tygerclaws" },
-      { "id": "gang.valentinos", "atlas": "common/gang_logos", "slot": "logo_valentinos" },
-      { "id": "gang.sixthStreet", "atlas": "common/gang_logos", "slot": "logo_6thstreet" },
-      { "id": "gang.animals", "atlas": "common/gang_logos", "slot": "logo_animals" },
-      { "id": "gang.voodooBoys", "atlas": "common/gang_logos", "slot": "logo_voodooboys" },
-      { "id": "gang.mox", "atlas": "common/gang_logos", "slot": "logo_themox" },
-      { "id": "gang.scavengers", "atlas": "common/gang_logos", "slot": "logo_scavengers" },
-      { "id": "gang.wraiths", "atlas": "common/gang_logos", "slot": "logo_wraiths" },
-      { "id": "gang.aldecaldos", "atlas": "common/gang_logos", "slot": "logo_aldecados" },
-      { "id": "gang.barghest", "atlas": "common/gang_logos", "slot": "logo_barghest" },
-      { "id": "map.filterCellBg", "atlas": "common/atlas_shapes_sync", "slot": "cell_bg" },
-      { "id": "map.filterCellFg", "atlas": "common/atlas_shapes_sync", "slot": "cell_fg" },
-      { "id": "qh.cellBg", "atlas": "common/atlas_shapes_sync", "slot": "qh_cell_bg" },
-      { "id": "qh.cellFg", "atlas": "common/atlas_shapes_sync", "slot": "qh_cell_fg" },
-      { "id": "breach.frameBg", "atlas": "common/atlas_shapes_sync", "slot": "frame_large_bg" },
-      { "id": "breach.frameFg", "atlas": "common/atlas_shapes_sync", "slot": "frame_large_fg" },
-      { "id": "breach.bufferEmpty", "atlas": "fullscreen/atlas_minigame", "slot": "buffer_empty" },
-      { "id": "breach.bufferOn", "atlas": "fullscreen/atlas_minigame", "slot": "buffer_activated" },
-      { "id": "breach.glow", "atlas": "fullscreen/atlas_minigame", "slot": "frame_glow" },
-      { "id": "map.filterBoxBg", "atlas": "common/atlas_shapes_sync", "slot": "color_bg" },
-      { "id": "map.filterBoxFg", "atlas": "common/atlas_shapes_sync", "slot": "color_fg" },
-      { "id": "map.tooltipBg", "atlas": "common/atlas_shapes_sync", "slot": "tooltip_map_bg" },
-      { "id": "map.tooltipFg", "atlas": "common/atlas_shapes_sync", "slot": "tooltip_map_fg" },
-      { "id": "map.shadowSmall", "atlas": "common/shadow_blobs", "slot": "shadowBlobSquare_small" },
-      { "id": "map.shadowText", "atlas": "common/shadow_blobs", "slot": "shadowBlobText" },
-      { "id": "map.panelBg", "atlas": "common/atlas_shapes_sync", "slot": "cell_flip_bg" },
-      { "id": "map.panelFg", "atlas": "common/atlas_shapes_sync", "slot": "cell_flip_fg" },
-      { "id": "map.pinDest", "atlas": "common/mappin_icons", "slot": "fast_travel" },
-      { "id": "map.pinShadow", "atlas": "common/shadow_blobs", "slot": "shadowBlobSquare_big" },
-      { "id": "map.pinPlayer", "atlas": "widgets/atlas_minimap", "slot": "player" },
-      { "id": "map.pinPing", "atlas": "common/braindance_icons", "slot": "recording1" }
+      {
+        "id": "map.poi.fixer",
+        "atlas": "common/mappin_icons",
+        "slot": "fixer"
+      },
+      {
+        "id": "map.poi.ripperdoc",
+        "atlas": "common/mappin_icons",
+        "slot": "ripperdoc"
+      },
+      {
+        "id": "map.poi.gun",
+        "atlas": "common/mappin_icons",
+        "slot": "gun"
+      },
+      {
+        "id": "map.poi.melee",
+        "atlas": "common/mappin_icons",
+        "slot": "melee"
+      },
+      {
+        "id": "map.poi.netrunner",
+        "atlas": "common/mappin_icons",
+        "slot": "netservice"
+      },
+      {
+        "id": "map.poi.clothes",
+        "atlas": "common/mappin_icons",
+        "slot": "clothes"
+      },
+      {
+        "id": "map.poi.meds",
+        "atlas": "common/mappin_icons",
+        "slot": "medicine"
+      },
+      {
+        "id": "map.poi.junk",
+        "atlas": "common/mappin_icons",
+        "slot": "junk_shop"
+      },
+      {
+        "id": "map.poi.food",
+        "atlas": "common/mappin_icons",
+        "slot": "food_vendor"
+      },
+      {
+        "id": "map.poi.bar",
+        "atlas": "common/mappin_icons",
+        "slot": "bar"
+      },
+      {
+        "id": "map.poi.apartment",
+        "atlas": "common/mappin_icons",
+        "slot": "apartment"
+      },
+      {
+        "id": "map.poi.rent",
+        "atlas": "common/mappin_icons",
+        "slot": "apartment_to_buy"
+      },
+      {
+        "id": "map.poi.autofixer",
+        "atlas": "common/mappin_icons",
+        "slot": "car_to_buy"
+      },
+      {
+        "id": "map.poi.quest",
+        "atlas": "common/mappin_icons",
+        "slot": "quest"
+      },
+      {
+        "id": "map.poi.player",
+        "atlas": "common/mappin_icons",
+        "slot": "V_owned"
+      },
+      {
+        "id": "map.poi.police",
+        "atlas": "common/mappin_icons",
+        "slot": "map_bounty"
+      },
+      {
+        "id": "gang.maelstrom",
+        "atlas": "common/gang_logos",
+        "slot": "logo_maelstrom"
+      },
+      {
+        "id": "gang.tygerClaws",
+        "atlas": "common/gang_logos",
+        "slot": "logo_tygerclaws"
+      },
+      {
+        "id": "gang.valentinos",
+        "atlas": "common/gang_logos",
+        "slot": "logo_valentinos"
+      },
+      {
+        "id": "gang.sixthStreet",
+        "atlas": "common/gang_logos",
+        "slot": "logo_6thstreet"
+      },
+      {
+        "id": "gang.animals",
+        "atlas": "common/gang_logos",
+        "slot": "logo_animals"
+      },
+      {
+        "id": "gang.voodooBoys",
+        "atlas": "common/gang_logos",
+        "slot": "logo_voodooboys"
+      },
+      {
+        "id": "gang.mox",
+        "atlas": "common/gang_logos",
+        "slot": "logo_themox"
+      },
+      {
+        "id": "gang.scavengers",
+        "atlas": "common/gang_logos",
+        "slot": "logo_scavengers"
+      },
+      {
+        "id": "gang.wraiths",
+        "atlas": "common/gang_logos",
+        "slot": "logo_wraiths"
+      },
+      {
+        "id": "gang.aldecaldos",
+        "atlas": "common/gang_logos",
+        "slot": "logo_aldecados"
+      },
+      {
+        "id": "gang.barghest",
+        "atlas": "common/gang_logos",
+        "slot": "logo_barghest"
+      },
+      {
+        "id": "map.filterCellBg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "cell_bg"
+      },
+      {
+        "id": "map.filterCellFg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "cell_fg"
+      },
+      {
+        "id": "qh.cellBg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "qh_cell_bg"
+      },
+      {
+        "id": "qh.cellFg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "qh_cell_fg"
+      },
+      {
+        "id": "breach.frameBg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "frame_large_bg"
+      },
+      {
+        "id": "breach.frameFg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "frame_large_fg"
+      },
+      {
+        "id": "breach.bufferEmpty",
+        "atlas": "fullscreen/atlas_minigame",
+        "slot": "buffer_empty"
+      },
+      {
+        "id": "breach.bufferOn",
+        "atlas": "fullscreen/atlas_minigame",
+        "slot": "buffer_activated"
+      },
+      {
+        "id": "breach.glow",
+        "atlas": "fullscreen/atlas_minigame",
+        "slot": "frame_glow"
+      },
+      {
+        "id": "map.filterBoxBg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "color_bg"
+      },
+      {
+        "id": "map.filterBoxFg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "color_fg"
+      },
+      {
+        "id": "map.tooltipBg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "tooltip_map_bg"
+      },
+      {
+        "id": "map.tooltipFg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "tooltip_map_fg"
+      },
+      {
+        "id": "map.shadowSmall",
+        "atlas": "common/shadow_blobs",
+        "slot": "shadowBlobSquare_small"
+      },
+      {
+        "id": "map.shadowText",
+        "atlas": "common/shadow_blobs",
+        "slot": "shadowBlobText"
+      },
+      {
+        "id": "map.panelBg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "cell_flip_bg"
+      },
+      {
+        "id": "map.panelFg",
+        "atlas": "common/atlas_shapes_sync",
+        "slot": "cell_flip_fg"
+      },
+      {
+        "id": "map.pinDest",
+        "atlas": "common/mappin_icons",
+        "slot": "fast_travel"
+      },
+      {
+        "id": "map.pinShadow",
+        "atlas": "common/shadow_blobs",
+        "slot": "shadowBlobSquare_big"
+      },
+      {
+        "id": "map.pinPlayer",
+        "atlas": "widgets/atlas_minimap",
+        "slot": "player"
+      },
+      {
+        "id": "map.pinPing",
+        "atlas": "common/braindance_icons",
+        "slot": "recording1"
+      }
     ],
     "cursor": [
-      { "id": "cursor.arrowShadow", "atlas": "widgets/cursor_inventory", "slot": "mouse_shadow" },
-      { "id": "cursor.arrowFrame", "atlas": "widgets/cursor_inventory", "slot": "mouse_frame" },
-      { "id": "cursor.handShadow", "atlas": "widgets/cursor_inventory", "slot": "hand_shadow" },
-      { "id": "cursor.hand", "atlas": "widgets/cursor_inventory", "slot": "hand" },
+      {
+        "id": "cursor.arrowShadow",
+        "atlas": "widgets/cursor_inventory",
+        "slot": "mouse_shadow"
+      },
+      {
+        "id": "cursor.arrowFrame",
+        "atlas": "widgets/cursor_inventory",
+        "slot": "mouse_frame"
+      },
+      {
+        "id": "cursor.handShadow",
+        "atlas": "widgets/cursor_inventory",
+        "slot": "hand_shadow"
+      },
+      {
+        "id": "cursor.hand",
+        "atlas": "widgets/cursor_inventory",
+        "slot": "hand"
+      },
       {
         "id": "cursor.invalidFluff",
         "atlas": "widgets/cursor_inventory",
         "slot": "mouse_invalid_fluff"
       },
-      { "id": "cursor.clickDot", "atlas": "widgets/cursor_inventory", "slot": "hov_dot" }
+      {
+        "id": "cursor.clickDot",
+        "atlas": "widgets/cursor_inventory",
+        "slot": "hov_dot"
+      }
     ],
     "backdrop": [
       {
@@ -2336,7 +3768,11 @@
         "atlas": "common/assets_fullscreen27",
         "slot": "l_afterlife_full"
       },
-      { "id": "backdrop.kabuki", "atlas": "common/assets_fullscreen29", "slot": "l_kabuki_full" },
+      {
+        "id": "backdrop.kabuki",
+        "atlas": "common/assets_fullscreen29",
+        "slot": "l_kabuki_full"
+      },
       {
         "id": "backdrop.megabuildingH10",
         "atlas": "common/assets_fullscreen26",
@@ -2367,7 +3803,12 @@
         "atlas": "common/assets_fullscreen28",
         "slot": "l_grand_imperial_mall_full"
       },
-      { "id": "backdrop.dogtown", "atlas": "fullscreen/bg_dt", "slot": "bg_dt", "maxRes": "1080p" },
+      {
+        "id": "backdrop.dogtown",
+        "atlas": "fullscreen/bg_dt",
+        "slot": "bg_dt",
+        "maxRes": "1080p"
+      },
       {
         "id": "backdrop.dogtownStatue",
         "atlas": "ep1_gui/static_ls_01",
@@ -2389,13 +3830,21 @@
         "atlas": "common/assets_fullscreen27",
         "slot": "l_badlands_full"
       },
-      { "id": "backdrop.watson", "atlas": "common/assets_fullscreen26", "slot": "l_watson_full" },
+      {
+        "id": "backdrop.watson",
+        "atlas": "common/assets_fullscreen26",
+        "slot": "l_watson_full"
+      },
       {
         "id": "backdrop.westbrook",
         "atlas": "common/assets_fullscreen3",
         "slot": "l_westbrook_full"
       },
-      { "id": "backdrop.heywood", "atlas": "common/assets_fullscreen29", "slot": "l_heywood_full" },
+      {
+        "id": "backdrop.heywood",
+        "atlas": "common/assets_fullscreen29",
+        "slot": "l_heywood_full"
+      },
       {
         "id": "backdrop.cityCenter",
         "atlas": "common/assets_fullscreen0",
@@ -2469,7 +3918,11 @@
         "atlas": "common/assets_fullscreen28",
         "slot": "l_downtown_full"
       },
-      { "id": "backdrop.glen", "atlas": "common/assets_fullscreen2", "slot": "l_glen_full" },
+      {
+        "id": "backdrop.glen",
+        "atlas": "common/assets_fullscreen2",
+        "slot": "l_glen_full"
+      },
       {
         "id": "backdrop.wellsprings",
         "atlas": "common/assets_fullscreen26",
@@ -2480,7 +3933,11 @@
         "atlas": "common/assets_fullscreen31",
         "slot": "l_vista_del_rey_full"
       },
-      { "id": "backdrop.arroyo", "atlas": "common/assets_fullscreen27", "slot": "l_arroyo_full" },
+      {
+        "id": "backdrop.arroyo",
+        "atlas": "common/assets_fullscreen27",
+        "slot": "l_arroyo_full"
+      },
       {
         "id": "backdrop.ranchoCoronado",
         "atlas": "common/assets_fullscreen3",
@@ -2526,7 +3983,11 @@
         "atlas": "common/assets_fullscreen2",
         "slot": "l_pacifica_chapel_full"
       },
-      { "id": "backdrop.ncart", "atlas": "common/assets_fullscreen30", "slot": "l_ncart_full" },
+      {
+        "id": "backdrop.ncart",
+        "atlas": "common/assets_fullscreen30",
+        "slot": "l_ncart_full"
+      },
       {
         "id": "backdrop.nomadCamp",
         "atlas": "common/assets_fullscreen30",

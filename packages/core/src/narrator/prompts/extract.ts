@@ -7,9 +7,11 @@ import { ExtractDocSchema } from "../block";
 import { commandDoc, schemaDoc } from "../doc";
 import { extractCatalogData, extractCatalogDetails, worldObjectsIndexSection } from "./catalogs";
 import {
+  ALWAYS_ON_MODULE_IDS,
   activeOpening,
   CORE_COMMANDS,
   formatInput,
+  jobTemplatesForExtract,
   type NarratorPlan,
   type NarratorPrompt,
   type PromptExtras,
@@ -20,8 +22,8 @@ import {
 import { BOOKKEEPING_BASE, modulesBlock, systemMessage, userMessage } from "./layers";
 import { npcEquipmentReference } from "./npc-equipment";
 
-/** ④ 抽取：辅助模型，低温，只输出 JSON */
-export const EXTRACT_TEMPERATURE = 0.2;
+/** ④ 抽取：辅助模型，零温客观记账，只输出 JSON */
+export const EXTRACT_TEMPERATURE = 0;
 
 /** L1 */
 export const EXTRACT_STAGE = `【这一步：抽取】
@@ -45,14 +47,13 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 - 跨地点行动里的 tension 必须写 location 指向事发地点；在原地破坏后逃走，不能把损坏记到目的地。未写地点时沿用本次行动起点。
 - 场外提问的轮次不会交给你。
 
-【events：事实归属与因果】
-- events 必填，每组写 {"id":"本轮唯一小写英文数字连字符","requires":[],"entries":["changes[0]"]}。changes 和 messages 的每一条必须恰好归属一组；没有事实条目才写 events: []，不把建议选项或整场摘要放进 entries。
-- 先写完 changes 和 messages，再按数组索引逐项分配：changes 从 changes[0] 开始，messages 从 messages[0] 开始；当前索引必须先归属，才能写下一个索引。比如 changes 有 5 条，events 中必须依次覆盖 changes[0]、changes[1]、changes[2]、changes[3]、changes[4]；不能先写 changes[4] 再回头补 changes[3]。同一事件连续包含多条时按索引递增写在同一组；属于不同事件时先声明较小索引所属事件。
-- 同组条目全成或全撤，只把不能拆开的同一件事放在一起；独立事件分组。付款与交付属于同一组，trade 等已统一处理钱货的指令不要再拆出重复款项或物品；人物出场/定型（meet、npcUpdate、doing）与局势风声（threadTold）、传闻/记忆等独立观测事实不要硬绑在同一组，避免一条附带提示未生效连累人物出场回滚。
-- requires 写成功前提，只能引用前面已经列出的事件 id 或保留值 "$action"；独立事件明确写 []。依赖失败，本事件也不发生。事件和组内 entries 按事实原先顺序列出，changes 的索引与 messages 的索引各自从 0 递增，不能交错分组后重排发生顺序。
+【events：按事件直接组织指令与因果】
+- events 必填，按发生顺序列出，每组写 {"id":"本轮唯一小写英文数字连字符","requires":[],"changes":[...],"messages":[...]}（无来信时省略 messages；每组至少包含一条指令或来信，无任何事实条目时写 events: []，不把建议选项或整场摘要放进 events）。
+- 同组条目全成或全撤，只把不能拆开的同一件事放在一起；独立事件拆成不同组。付款与交付属于同一组，trade 等已统一处理钱货的指令不要再拆出重复款项或物品；人物出场/定型（meet、npcUpdate、doing）与局势风声（threadTold）、传闻/记忆等独立观测事实不要硬绑在同一组，避免一条附带提示未生效连累人物出场回滚。
+- requires 写成功前提，只能引用排在前面的事件 id 或保留值 "$action"；独立事件明确写 []。依赖失败，本事件也不发生。
 - 本轮主行动成功才会发生的事必须 requires: ["$action"]；即使没有单列 hack、breach 等指令，成功拿到的钱、物品、权限或其他成果仍须声明这个前提。后续成果还依赖某事件时也列该事件 id。例如接入 access 依赖 "$action"，从该网络转款 proceeds 依赖 ["$action","access"]。
 - 尝试失败仍实际发生的时间消耗、伤害、费用、报警或其他后果，不依赖行动成功；独立来款（如朋友偿还旧债）也不依赖 "$action"。依事实分组，不能为了保留成功收益把它伪装成独立事件，也不能把所有条目一律绑定主行动。
-- 事后确认消息跟随它所确认的事件：放在同组或另组并 requires 对应事件，避免事情没办成却收到完成通知。无关消息单独分组。
+- 事后确认消息跟随它所确认的事件：直接写在同一组的 messages 里，或单列一组并 requires 对应事件，避免事情没办成却收到完成通知。无关消息单独分组（该组 changes 写 []）。
 - world 的纯时间推进可以独立成组；location 代表实际抵达，必须放在抵达事件中，或依赖已成功的抵达事件。若抵达取决于本轮主行动成功，还须声明 "$action"；不能把换地点混在独立计时组里绕过失败的出行。
 
 【场景记忆】
@@ -71,39 +72,17 @@ export const EXTRACT_STAGE = `【这一步：抽取】
 【标记】
 - 正文停在生死瞬间（子弹出膛、刀到眼前、车要撞上）时写 "clutch": true：用来标记千钧一发的危机瞬间；只在实际发生时标记，不以场景配额制造或禁止危险。
 - 一场戏收尾、换地点或跳过一段时间时写 "sceneEnd": true；这一轮很重要、以后要记住时写 "pin": true。
-- 收场（sceneEnd 为 true）时，这一场里和玩家角色有过实质来往的有卡人物，每人写一条 memory：一句话记这一场你们之间发生了什么（帮了谁、欠了什么、闹翻了没有），只写正文里写了的；已经记过的同一件事不重复写。`;
+- 收场（sceneEnd 为 true）时，这一场里和玩家角色有过实质来往的有卡人物，每人写一条 memory：id 必须填【人物】里该人物卡的 id（如 yoko-tsuru、ozob，切勿给记忆内容自造事件 slug），text 一句话记这一场你们之间发生了什么（帮了谁、欠了什么、闹翻了没有），只写正文里写了的；已经记过的同一件事不重复写；不同人物的 memory 拆成独立事件组，避免互相连累。`;
 
 /** ④ 抽取的例子 */
-export const EXTRACT_EXAMPLE = `{"changes": [{"type": "world", "activity": "observe", "time": "2077-04-12 21:14"}], "events": [{"id":"observe-time","requires":[],"entries":["changes[0]"]}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
-
-/**
- * 抽取阶段固定常驻的规则模块（所有非 ooc 回合均激活）：
- * 归入 system 提示词，使约 28K 字的常驻模块规则与指令 schema 跨回合稳定命中提示缓存，
- * 同时大幅缩小每轮未缓存的 user 消息体量，降低辅助模型首包耗时与代理断连风险。
- */
-const ALWAYS_ON_EXTRACT_MODULE_IDS: ReadonlySet<string> = new Set([
-  "economy",
-  "places",
-  "npcs",
-  "factions",
-  "reputation",
-  "habits",
-  "jobs",
-  "cyberware",
-  "events",
-  "phone",
-  "notes",
-  "chronicle",
-  "arcs",
-  "shards",
-]);
+export const EXTRACT_EXAMPLE = `{"events": [{"id": "observe-time", "requires": [], "changes": [{"type": "world", "activity": "observe", "time": "2077-04-12 21:14"}]}], "sceneMemory": {"text": "你在歌舞伎市场的拉面摊旁观察中间人。他说要找人收拾你，但没有动手，双方仍在对峙。", "anchors": [{"id": "fixer-threat-at-stall", "kind": "fact", "text": "中间人在拉面摊旁扬言找人收拾你；威胁尚未付诸行动。", "people": [], "keywords": ["中间人", "拉面摊", "威胁"], "evidence": {"source": "narrative", "quote": "找人收拾你"}}], "resolve": []}, "choices": [{"text": "坐到他旁边，点一碗合成拉面"}, {"text": "借着雨声退到二楼铁皮棚檐下继续盯着", "source": "过往：曾当过帮派哨兵"}], "dropped": ["中间人说要“找人收拾你”：只是威胁，没发生"]}`;
 
 let extractCore: string | undefined;
 let extractStaticModulesText: string | undefined;
 
 function staticExtractModules(): string | undefined {
   if (extractStaticModulesText === undefined) {
-    const fixed = registry.rules.filter((m) => ALWAYS_ON_EXTRACT_MODULE_IDS.has(m.id));
+    const fixed = registry.rules.filter((m) => ALWAYS_ON_MODULE_IDS.has(m.id));
     extractStaticModulesText = modulesBlock("extract", fixed) ?? "";
   }
   return extractStaticModulesText === "" ? undefined : extractStaticModulesText;
@@ -148,15 +127,18 @@ export function buildExtractPrompt(
   const view = projectState(world, records, extras.data);
   const data = extractCatalogData(world, extras.data ?? {});
   const modules = stageModules(world, plan.input, extras, narrative);
-  const details = extractCatalogDetails(
-    world,
-    view,
-    data,
-    `${plan.input.text}\n${narrative}`,
-    modules.some((m) => m.id === "hacking"),
-  );
+  const details =
+    extras.includeCatalogDetails === false
+      ? undefined
+      : extractCatalogDetails(
+          world,
+          view,
+          data,
+          `${plan.input.text}\n${narrative}`,
+          modules.some((m) => m.id === "hacking"),
+        );
   // 常驻抽取模块放在可缓存 system 层；只有本轮按状态动态激活的模块才放进 user 层
-  const dynamicModules = modules.filter((m) => !ALWAYS_ON_EXTRACT_MODULE_IDS.has(m.id));
+  const dynamicModules = modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
   const staticModulesText = staticExtractModules();
   const dynamicModulesText = modulesBlock("extract", dynamicModules);
   const worldObjectIndex = worldObjectsIndexSection(world);
@@ -164,11 +146,13 @@ export function buildExtractPrompt(
     extras.includeNpcEquipment === false
       ? undefined
       : npcEquipmentReference(world, extras.data, true);
+  const jobTemplates = jobTemplatesForExtract(data, `${plan.input.text}\n${narrative}`);
   const content = userMessage({
     modules: dynamicModulesText,
     scene: situation(world, records, view, plan, { ...extras, opening }, "extract"),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
+      jobTemplates,
       npcEquipment,
       worldObjectIndex,
       details,

@@ -2,10 +2,11 @@ import { z } from "zod";
 import { defineAction } from "../../kernel/system";
 import { CyberwareStateSchema, cyberwareCatalog } from "../cyberware";
 import { HealthStateSchema } from "../health";
+import { InventoryStateSchema } from "../inventory";
 import { WorldClockStateSchema } from "../world";
 import { deathKnown } from "./apply";
 import { onStage } from "./prompt";
-import { NpcStateSchema } from "./schema";
+import { NPC_GEAR_MAX, NpcStateSchema } from "./schema";
 
 /**
  * 点一下立刻扫描（用户定的，计划第十二节第 14 条）：在场的人名字格和档案里的「扫描」按钮。
@@ -22,6 +23,14 @@ export const CompanionActionSchema = z.strictObject({
   type: z.literal("npcCompanion"),
   id: z.string().min(1).max(64),
   following: z.boolean(),
+});
+
+/** 非战斗时与身边的同行同伴原子交接随身武器或物品（保留定制武器配件与归属） */
+export const NpcExchangeGearActionSchema = z.strictObject({
+  type: z.literal("npcExchangeGear"),
+  id: z.string().min(1).max(64),
+  action: z.enum(["give", "take"]),
+  item: z.string().min(1).max(120),
 });
 
 /** 人物的界面操作：扫描与同行管理，统一由操作入口结算 */
@@ -65,6 +74,76 @@ export const npcActions = {
         }
       }
       return [{ type: "npcCompanion", id: npc.id, following: action.following }];
+    },
+  }),
+  npcExchangeGear: defineAction({
+    schema: NpcExchangeGearActionSchema,
+    commands: (action, { world }) => {
+      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
+      if (combat) return "交战中交接装备需要在行动里描述";
+      const health = HealthStateSchema.parse(world.slices.health);
+      if (health.condition !== "up") return "当前无法自行交接装备";
+      const npc = NpcStateSchema.parse(world.slices.npc).npcs[action.id];
+      if (!npc?.met) return "没有这个已结识的人物";
+      if (deathKnown(npc) || !npc.alive) return `${npc.name} 已经死了`;
+      if (!npc.following) return `${npc.name} 当前没有与你同行，先结伴同行再分配装备`;
+      const clock = WorldClockStateSchema.parse(world.slices.world);
+      const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+      if (!onStage(npc, stage)) return `${npc.name} 不在现场，无法当面交接装备`;
+
+      const gear = npc.body?.gear ?? [];
+      const inventory = InventoryStateSchema.parse(world.slices.inventory);
+      if (action.action === "give") {
+        if ((inventory.backpack[action.item] ?? 0) < 1) {
+          return "背包里没有这件物品（若正穿戴或挂在快捷栏，请先卸下放回背包）";
+        }
+        const slotted = (world.slices.shards as { slotted?: readonly string[] } | undefined)
+          ?.slotted;
+        if (slotted?.includes(action.item)) {
+          return "请先从个人神经芯片槽拔下后再交给同伴";
+        }
+        if (gear.includes(action.item)) {
+          return `${npc.name} 身上已经带着这件装备了`;
+        }
+        if (gear.length >= NPC_GEAR_MAX) {
+          return `${npc.name} 的随身装备栏已满（最多 ${NPC_GEAR_MAX} 件），请先取回一件`;
+        }
+        // inventory.apply 的 item(lose, recipient: npc.id) 会自动转移独立物件归属并 emit npcGear(add)
+        return [
+          {
+            type: "item",
+            action: "lose",
+            id: action.item,
+            recipient: npc.id,
+            reason: `交给同行同伴${npc.name}`,
+          },
+        ];
+      }
+
+      if (!gear.includes(action.item)) {
+        return `${npc.name} 身上没有这件装备`;
+      }
+      const tracked = inventory.objects[action.item];
+      if (tracked && tracked.holder === npc.id) {
+        // 独立物件（定制武器/剧情物件/芯片）由 item(gain) 核验原持有人并自动 emit npcGear(remove)
+        return [
+          {
+            type: "item",
+            action: "gain",
+            id: action.item,
+            reason: `从同行同伴${npc.name}处取回`,
+          },
+        ];
+      }
+      return [
+        { type: "npcGear", id: npc.id, action: "remove", item: action.item },
+        {
+          type: "item",
+          action: "gain",
+          id: action.item,
+          reason: `从同行同伴${npc.name}处取回`,
+        },
+      ];
     },
   }),
 };

@@ -48,6 +48,7 @@ export function serviceWorld(draft: Draft<CyberwareState>, ctx: SystemContext) {
       health: ctx.read("health"),
       world: ctx.read("world"),
       npc: ctx.read("npc"),
+      factions: ctx.read("factions"),
       commerce: ctx.read("commerce"),
     },
   };

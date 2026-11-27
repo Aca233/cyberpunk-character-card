@@ -11,6 +11,7 @@ import type {
   ImageStyleConfig,
   InstalledWorkshopPack,
   Loadout,
+  npcRules,
   PhoneChatRequest,
   PlayerView,
   ProseBlock,
@@ -326,44 +327,21 @@ export interface CharacterEntry {
 export interface BoardData {
   readonly modules: readonly BoardModule[];
   readonly acquaintances?: readonly Acquaintance[];
-  readonly cyberware: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly slot: string;
-    readonly slotLabel: string;
-    readonly category?: cyberwareRules.CyberwareCategoryId;
-    readonly categoryLabel?: string;
-    /** 稀有度，给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）；旧后端没有 */
-    readonly rarity?: string;
-    readonly humanityCost: number;
-    readonly deckProfile?: string;
-    readonly deckTraits?: readonly string[];
-    readonly programSlots?: number;
-    readonly ram?: number;
-    readonly armor?: boolean;
-    readonly accelerator?: boolean;
-    readonly exclusiveGroup?: cyberwareRules.ExclusiveGroup;
-    readonly defaultArmSide?: cyberwareRules.ArmSide;
-    readonly capacityBonus?: number;
-    readonly safeLineBonus?: number;
-    readonly chassisProfile?: cyberwareRules.ChassisProfile;
-    readonly variantGroup?: string;
-    readonly variantKey?: cyberwareRules.ElementVariantKey;
-    readonly smartLink?: boolean;
-    readonly carryBonus?: number;
-    readonly defenses?: readonly cyberwareRules.CyberwareDefense[];
-    readonly custom?: boolean;
-    readonly packId?: string;
-    readonly checks?: readonly string[];
-    readonly attributes?: Readonly<Record<string, number>>;
-    readonly ability: string;
-  }[];
+  readonly cyberware: readonly BoardCyberwareOption[];
   /** 捏人能选成旧识的原作人物；服务端只给公开的几项 */
   readonly npcs: readonly CanonNpcBrief[];
-  /** 开局行装可选随身武器（普通/罕见/稀有） */
+  /** 供自建/修改 NPC 使用的全量义体目录（含传说与不朽） */
+  readonly npcCyberware?: readonly NpcCyberwareOption[];
+  /** 开局行装可选随身武器（含全部稀有度、不朽与自建/工坊武器） */
   readonly weapons?: readonly StartWeaponOption[];
+  /** 开局行装可选非武器随身物品（治疗品、手雷、服装、改装件、消耗品、杂物与自建/工坊物品） */
+  readonly items?: readonly StartItemOption[];
   /** 开局行装可选专属载具 */
   readonly vehicles?: readonly StartVehicleOption[];
+  /** 可选势力列表（供自建/修改 NPC 表单选择） */
+  readonly factions?: readonly BoardFactionOption[];
+  /** 可选常驻地点列表（供自建/修改 NPC 表单选择） */
+  readonly locations?: readonly BoardLocationOption[];
   /** 出身自带的开局行装表（同建档时 pickLoadouts 用的那张）；旧后端没有 */
   readonly loadouts?: readonly Loadout[];
   /** 物品、载具、程序、义体 id → 中文名 */
@@ -374,7 +352,33 @@ export interface StartWeaponOption {
   readonly id: string;
   readonly name: string;
   readonly category?: string;
+  readonly weaponType?: string;
   readonly rarity: string;
+  readonly iconic?: boolean;
+  readonly price?: number;
+  readonly art?: string;
+  readonly customImage?: string;
+  readonly ability: string;
+  readonly custom?: boolean;
+  readonly packId?: string;
+}
+
+export interface StartItemOption {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly rarity: string;
+  readonly iconic?: boolean;
+  readonly price?: number;
+  readonly charges?: number;
+  readonly healPercent?: number;
+  readonly suppressant?: boolean;
+  readonly clothingSlot?: string;
+  readonly clothingStyle?: string;
+  readonly modSlot?: string;
+  readonly modFits?: readonly string[];
+  readonly art?: string;
+  readonly customImage?: string;
   readonly ability: string;
   readonly custom?: boolean;
   readonly packId?: string;
@@ -389,6 +393,44 @@ export interface StartVehicleOption {
   readonly note?: string;
 }
 
+export interface BoardCyberwareOption {
+  readonly id: string;
+  readonly name: string;
+  readonly slot: string;
+  readonly slotLabel: string;
+  readonly category?: cyberwareRules.CyberwareCategoryId;
+  readonly categoryLabel?: string;
+  /** 稀有度，给格子左边竖条染色（用户 2026-10-31："怎么没有稀有度颜色区分"）；旧后端没有 */
+  readonly rarity?: string;
+  readonly iconic?: boolean;
+  readonly humanityCost: number;
+  readonly deckProfile?: string;
+  readonly deckTraits?: readonly string[];
+  readonly programSlots?: number;
+  readonly ram?: number;
+  readonly armor?: boolean;
+  readonly accelerator?: boolean;
+  readonly exclusiveGroup?: cyberwareRules.ExclusiveGroup;
+  readonly defaultArmSide?: cyberwareRules.ArmSide;
+  readonly capacityBonus?: number;
+  readonly safeLineBonus?: number;
+  readonly chassisProfile?: cyberwareRules.ChassisProfile;
+  readonly variantGroup?: string;
+  readonly variantKey?: cyberwareRules.ElementVariantKey;
+  readonly smartLink?: boolean;
+  readonly carryBonus?: number;
+  readonly defenses?: readonly cyberwareRules.CyberwareDefense[];
+  readonly art?: string;
+  readonly customImage?: string;
+  readonly custom?: boolean;
+  readonly packId?: string;
+  readonly checks?: readonly string[];
+  readonly attributes?: Readonly<Record<string, number>>;
+  readonly ability: string;
+}
+
+export type NpcCyberwareOption = BoardCyberwareOption;
+
 export interface CanonNpcBrief {
   readonly id: string;
   readonly name: string;
@@ -397,7 +439,21 @@ export interface CanonNpcBrief {
   readonly look: string;
   readonly faction?: string;
   readonly circle?: string;
+  readonly gearCount?: number;
+  readonly cyberwareCount?: number;
   readonly packId?: string;
+}
+
+export interface BoardFactionOption {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: string;
+}
+
+export interface BoardLocationOption {
+  readonly id: string;
+  readonly name: string;
+  readonly district: string;
 }
 
 export type KeyStatus = "configured" | "missing" | "notNeeded";
@@ -1018,6 +1074,11 @@ export const api = {
   deleteCharacter: (id: string) =>
     request<{ ok: true }>("DELETE", `/characters/${encodeURIComponent(id)}`),
   characterBoard: () => request<BoardData>("GET", "/characters/board"),
+  characterBoardNpc: (npcId: string, variant?: "male") =>
+    request<{ npc: npcRules.NpcCard }>(
+      "GET",
+      `/characters/board/npcs/${encodeURIComponent(npcId)}${variant ? `?variant=${variant}` : ""}`,
+    ).then((r) => r.npc),
   workshopPackages: () =>
     request<{ packages: InstalledWorkshopPack[] }>("GET", "/workshop").then((r) => r.packages),
   generateWorkshopPack: (
@@ -1062,6 +1123,19 @@ export const api = {
   /** 自写模块交给辅助模型解读；会花一次模型调用 */
   interpretModule: (input: { slot: BoardSlot; text: string; board: Board }) =>
     request<{ module: BoardModule; warnings: string[] }>("POST", "/characters/interpret", input),
+  /** 一句话生成或局部润色 NPC 人物卡；走辅助模型 */
+  interpretNpc: (input: {
+    readonly text: string;
+    readonly existing?:
+      | {
+          readonly [K in keyof npcRules.NpcCard]?: npcRules.NpcCard[K] | undefined;
+        }
+      | undefined;
+    readonly preserveSpoilers?: boolean | undefined;
+  }) =>
+    request<{ npc: npcRules.NpcCard }>("POST", "/characters/interpret-npc", input).then(
+      (r) => r.npc,
+    ),
   /** 角色正文的一个区块交给辅助模型写，流式；会花一次模型调用 */
   streamProse,
   /** 一键成稿：一次写外貌、背景故事、性格、说话方式并补旧识，流式；会花一次模型调用 */
@@ -1078,6 +1152,10 @@ export const api = {
     characterId: string;
     /** 地图上选中的开局地点 id（用户定的，2026-10-30：“在地图上选择”）；不传沿用默认开局 */
     startLocation?: string;
+    /** 本地持久化的原作/世界 NPC 改写档案 */
+    npcOverrides?: readonly npcRules.NpcCard[];
+    /** 本地持久化的自建 NPC 档案 */
+    customNpcs?: readonly npcRules.NpcCard[];
   }) => request<SaveSummary>("POST", "/saves", input),
   deleteSave: (saveId: string) =>
     request<{ ok: true }>("DELETE", `/saves/${encodeURIComponent(saveId)}`),

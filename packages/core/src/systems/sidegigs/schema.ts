@@ -26,6 +26,8 @@ export const GigDefSchema = z.object({
   opponent: z.string().min(1).max(20),
   /** 地点表里的 id */
   location: z.string().min(1),
+  /** 看场/主办势力 id（可选；联动势力态度、帮派成员/熟人押金折扣与敌对禁赛） */
+  faction: z.string().min(1).optional(),
   tier: OpponentTierSchema,
   /** 报名押金 */
   stake: z.number().int().min(0).max(20_000),
@@ -59,7 +61,7 @@ export const SidegigCommandSchema = z
   .object({
     type: z.literal("sidegig"),
     action: z.enum(["enter", "win", "lose", "quit"]),
-    id: z.string().min(1),
+    id: z.string().min(1).describe("拳赛或赛车赛事 id"),
     /** 赛车现场只有一辆可用车可省略；多辆时明确本场参赛车。 */
     vehicle: z.string().min(1).optional(),
     reason: z.string().trim().min(1).max(80).optional(),

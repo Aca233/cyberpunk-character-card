@@ -1,8 +1,13 @@
 import { z } from "zod";
 import { SetCharacterSchema } from "../systems/character/schema";
 import { ArmSideSchema } from "../systems/cyberware/schema";
-import { SeedNpcSchema } from "../systems/npc/schema";
-import { START_CYBERWARE_MAX, StartCyberwareSchema, StartKitSchema } from "./board";
+import { NpcCardSchema, SeedNpcSchema } from "../systems/npc/schema";
+import {
+  NPC_OVERRIDES_MAX,
+  START_CYBERWARE_MAX,
+  StartCyberwareSchema,
+  StartKitSchema,
+} from "./board";
 import { WorkshopPackSchema } from "./workshop";
 
 /** 开档时角色卡的快照：之后改角色卡不影响已有存档 */
@@ -31,6 +36,8 @@ export const BoardStartSchema = z.object({
     .array(SeedNpcSchema.pick({ id: true, relation: true, ledger: true }))
     .max(100)
     .default([]),
+  /** 建档时对原作/工坊人物卡的角色级覆写（按 id 盖过默认卡面，保留旧识关系与人情） */
+  npcOverrides: z.array(NpcCardSchema).max(NPC_OVERRIDES_MAX).default([]),
 });
 export type BoardStart = z.infer<typeof BoardStartSchema>;
 export type StartAcquaintance = BoardStart["acquaintances"][number];

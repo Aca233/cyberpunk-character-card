@@ -1,13 +1,14 @@
 import { defineSystem } from "../../kernel/system";
 import type { NpcState } from "../npc";
 import { jobsActions } from "./actions";
-import { acceptJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
+import { acceptJob, crewJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
 import { jobsEvents } from "./events";
 import { jobsObjectives } from "./objectives";
 import { jobsRules } from "./prompt";
 import {
   JobAcceptSchema,
   type JobCommand,
+  JobCrewSchema,
   JobEndSchema,
   JobNoteSchema,
   JobOfferSchema,
@@ -31,6 +32,7 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
     jobOffer: JobOfferSchema,
     jobAccept: JobAcceptSchema,
     jobNote: JobNoteSchema,
+    jobCrew: JobCrewSchema,
     jobEnd: JobEndSchema,
   },
   internal: { "jobs.seedFixer": SeedFixerSchema },
@@ -56,6 +58,20 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
         return acceptJob(draft, command, ctx.now);
       case "jobNote":
         return noteJob(draft, command);
+      case "jobCrew": {
+        const npcs = ctx.read<NpcState>("npc").npcs;
+        return crewJob(draft, command, (id) => {
+          const card = npcs[id];
+          return card
+            ? {
+                name: card.name,
+                alive: card.alive,
+                met: card.met,
+                hasGrudge: card.ledger.some((e) => e.settledAt === null && e.kind === "grudge"),
+              }
+            : undefined;
+        });
+      }
       case "jobEnd":
         return endJob(draft, command, ctx.now);
     }

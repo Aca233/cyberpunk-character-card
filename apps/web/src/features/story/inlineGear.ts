@@ -1,6 +1,6 @@
 import { cyberware as CONTENT_CYBERWARE, items as CONTENT_ITEMS } from "@cp/content";
 import { cyberwareRules, economyRules, inventoryRules } from "@cp/core";
-import type { AssetId } from "../../assets";
+import type { GearArtId } from "../../assets/customArt";
 import { itemArtOf } from "./art";
 import type { View } from "./view";
 
@@ -17,7 +17,7 @@ export interface InlineGearItem {
   readonly weaponTypeLabel?: string | undefined;
   readonly ability: string;
   readonly statusTag?: string | undefined;
-  readonly art?: AssetId | undefined;
+  readonly art?: GearArtId | undefined;
   readonly aliases?: readonly string[] | undefined;
 }
 

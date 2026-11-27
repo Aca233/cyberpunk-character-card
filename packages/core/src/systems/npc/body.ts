@@ -19,8 +19,12 @@ import {
   type ItemDef,
   type ItemKind,
   itemCatalog,
+  itemEffectTags,
   MOD_SLOT_LABELS,
+  PROTECTION_COVERAGE_LABELS,
+  PROTECTION_LEVEL_LABELS,
   rarityOf,
+  summarizeGearEffects,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
   type WeaponInstanceState,
@@ -498,6 +502,7 @@ export interface GearDetail {
   readonly rarityLabel: string | null;
   readonly iconic: boolean;
   readonly ability: string | null;
+  readonly effectTags: readonly string[];
 }
 
 const CLOTHING_SLOT_ORDER: Readonly<Record<ClothingSlot, number>> = {
@@ -554,8 +559,37 @@ function gearDetails(ids: readonly string[], data: Data): GearDetail[] {
       rarityLabel: baseDef?.iconic ? "不朽" : rarity ? RARITY_LABELS[rarity] : null,
       iconic: Boolean(baseDef?.iconic),
       ability: baseDef?.ability ?? null,
+      effectTags: baseDef ? itemEffectTags(baseDef) : [],
     };
   });
+}
+
+function npcGearEffects(ids: readonly string[], data: Data) {
+  const items = itemCatalog(data);
+  const clothing: Partial<Record<ClothingSlot, string>> = {};
+  const backpack: Record<string, number> = {};
+  for (const id of ids) {
+    const def = items.get(id);
+    if (def?.kind === "clothing" && def.clothingSlot && !clothing[def.clothingSlot]) {
+      clothing[def.clothingSlot] = id;
+    } else {
+      backpack[id] = (backpack[id] ?? 0) + 1;
+    }
+  }
+  return summarizeGearEffects({ clothing, backpack, objects: {} }, items);
+}
+
+function armorSummaryFromProtection(
+  protection: Readonly<
+    Partial<Record<"head" | "torso" | "limbs", "light" | "ballistic" | "heavy">>
+  >,
+): string[] {
+  const result: string[] = [];
+  for (const part of ["head", "torso", "limbs"] as const) {
+    const level = protection[part];
+    if (level) result.push(`${PROTECTION_COVERAGE_LABELS[part]}${PROTECTION_LEVEL_LABELS[level]}`);
+  }
+  return result;
 }
 
 /** 一件义体的稳定标识、名字、部位和效果说明（义体表的 ability） */
@@ -649,10 +683,14 @@ export function bodyLine(npc: Pick<Npc, "body" | "vitals">, data: Data, now: num
     );
   const weapons = details.filter((item) => item.kind === "weapon");
   const belongings = details.filter((item) => item.kind !== "clothing" && item.kind !== "weapon");
+  const gearEffects = npcGearEffects(body.gear, data);
   const chrome = chromeDetails(body.cyberware, data);
   const segments = [`身体状态：${woundText}`];
   if (clothing.length > 0) {
     segments.push(`衣着：${clothing.map((item) => `${item.name}（${item.subLabel}）`).join("、")}`);
+  }
+  if (gearEffects.badges.length > 0) {
+    segments.push(`着装防护与效果：${gearEffects.badges.join("、")}`);
   }
   segments.push(`武装：${weapons.length ? weapons.map((item) => item.name).join("、") : "无"}`);
   if (belongings.length > 0) {
@@ -704,12 +742,17 @@ export function scanTacticalProfile(
     .filter((d): d is NonNullable<typeof d> => d !== undefined);
   const chrome = chromeDetails(body.cyberware, data);
   const details = gearDetails(body.gear, data);
+  const gearEffects = npcGearEffects(body.gear, data);
   const weapons = details.filter((item) => item.kind === "weapon");
   const injuries = projectInjuries(v.injuries);
 
   const hasDeck = chrome.some((c) => c.netTag === "deck");
   const hasSelfIce = chrome.some((c) => c.netTag === "selfIce");
   const hasArmor = chromeDefs.some((d) => d.armor);
+  const hasHeavyGearArmor =
+    gearEffects.protection.torso === "heavy" || gearEffects.protection.head === "heavy";
+  const hasBallisticGearArmor =
+    gearEffects.protection.torso === "ballistic" || gearEffects.protection.head === "ballistic";
   const hasAccel = chromeDefs.some((d) => d.accelerator);
   const hasArmWeapon = chromeDefs.some((d) => d.slot === "arms");
   const hasBehaviorChip = chromeDefs.some((d) => d.behaviorChip);
@@ -757,7 +800,7 @@ export function scanTacticalProfile(
   } else if (
     hasAccel ||
     highGradeChrome.length >= 2 ||
-    (hasArmor && (hasArmWeapon || hasHeavyWeapon || hasDeck)) ||
+    ((hasArmor || hasHeavyGearArmor) && (hasArmWeapon || hasHeavyWeapon || hasDeck)) ||
     chrome.length >= 5
   ) {
     threat = "high";
@@ -765,6 +808,8 @@ export function scanTacticalProfile(
   } else if (
     chrome.length >= 2 ||
     hasArmor ||
+    hasHeavyGearArmor ||
+    hasBallisticGearArmor ||
     hasDeck ||
     hasArmWeapon ||
     hasHeavyWeapon ||
@@ -796,6 +841,20 @@ export function scanTacticalProfile(
     const armorName = chromeDefs.find((d) => d.armor)?.name ?? "护甲义体";
     tips.push(
       `带${armorName}：常规轻口径手枪正面难破防，优先用技术武器、大口径、近战或瞄准无甲弱点`,
+    );
+  }
+  const wornArmorParts = (["head", "torso", "limbs"] as const).flatMap((part) => {
+    const level = gearEffects.protection[part];
+    return level === "heavy" || level === "ballistic"
+      ? [`${PROTECTION_COVERAGE_LABELS[part]}${PROTECTION_LEVEL_LABELS[level]}`]
+      : [];
+  });
+  if (wornArmorParts.length > 0) {
+    summaryBits.push(`穿戴护甲：${wornArmorParts.join("、")}`);
+    tips.push(
+      hasHeavyGearArmor
+        ? `身穿重型护甲（${wornArmorParts.join("、")}）：普通枪弹正面难击穿，优先用穿甲/技术武器、大口径或瞄准无甲缝隙`
+        : `穿有防弹护具（${wornArmorParts.join("、")}）：正面抗弹较强，建议点射未防护部位或用破甲火力压制`,
     );
   }
   if (hasArmWeapon) {
@@ -847,6 +906,8 @@ export interface NpcBodyView {
   readonly wound: string;
   readonly injuries: readonly NpcInjuryView[];
   readonly gear: readonly GearDetail[];
+  readonly armorSummary: readonly string[];
+  readonly gearBadges: readonly string[];
   readonly scan: {
     readonly chrome: readonly ChromeDetail[];
     readonly humanityStage: string;
@@ -862,10 +923,13 @@ export interface NpcBodyView {
 export function bodyView(npc: Pick<Npc, "body" | "vitals">, data: Data, now: number): NpcBodyView {
   const body = filledBody(npc.body);
   const v = currentVitals(npc, data, now);
+  const gearEffects = npcGearEffects(body.gear, data);
   const view: NpcBodyView = {
     wound: woundLabel(v),
     injuries: projectInjuries(v.injuries),
     gear: gearDetails(body.gear, data),
+    armorSummary: armorSummaryFromProtection(gearEffects.protection),
+    gearBadges: gearEffects.badges,
     scan: null,
   };
   if (v.scannedAt === null) return view;

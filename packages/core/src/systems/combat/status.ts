@@ -1,9 +1,16 @@
 import type { StatusContext, SystemStatus } from "../../kernel/system";
+import {
+  type inventoryView,
+  PROTECTION_COVERAGE_LABELS,
+  PROTECTION_LEVEL_DESC,
+  PROTECTION_LEVEL_LABELS,
+} from "../inventory";
 import type { combatView } from "./view";
 
 /** 【当前状态】里战斗的几行：正在打的这一架、没捡走的东西；案底里的伤、疤、找上门的人、流言、录像 */
 
 type CombatView = ReturnType<typeof combatView>;
+type InventoryView = ReturnType<typeof inventoryView>;
 
 const combatOf = (ctx: StatusContext) => ctx.views.combat as CombatView;
 
@@ -11,7 +18,7 @@ const goods = (items: readonly { id: string; name: string }[]) =>
   items.map((i) => `${i.name}（${i.id}）`).join("、");
 
 /** 正在打的这一架，和打完没捡走的 */
-function fightLines(view: CombatView): string[] {
+function fightLines(view: CombatView, inv?: InventoryView): string[] {
   const a = view.active;
   if (!a) {
     return view.loot.map(
@@ -24,7 +31,36 @@ function fightLines(view: CombatView): string[] {
     if (f.carry.length > 0) bits.push(`身上有${goods(f.carry)}，能捡`);
     return `${f.name}（${bits.join("，")}）`;
   });
-  return [`正在打：${foes.join("、")}；过程写在正文里，只把后果发成 combat 指令`];
+  const lines = [`正在打：${foes.join("、")}；过程写在正文里，只把后果发成 combat 指令`];
+  const prot = inv?.gearEffects?.protection;
+  if (prot) {
+    const protBits = (["torso", "head", "limbs"] as const).flatMap((part) => {
+      const level = prot[part];
+      return level
+        ? [
+            `${PROTECTION_COVERAGE_LABELS[part]}${PROTECTION_LEVEL_LABELS[level]}（${PROTECTION_LEVEL_DESC[level]}）`,
+          ]
+        : [];
+    });
+    if (protBits.length > 0) {
+      lines.push(
+        `玩家当前护甲防护：${protBits.join("、")}；命中对应部位时按护甲档位与武器口径裁决伤势`,
+      );
+    }
+  }
+  if (a.allies.length > 0) {
+    const allies = a.allies.map((ally) => {
+      const bits = [`id ${ally.id}`];
+      if (ally.wound && ally.wound !== "没受伤") bits.push(ally.wound);
+      if (ally.gearSummary.length > 0) bits.push(`武装：${ally.gearSummary.join("/")}`);
+      if (ally.armorSummary.length > 0) bits.push(`防护：${ally.armorSummary.join("/")}`);
+      return `${ally.name}（${bits.join("，")}）`;
+    });
+    lines.push(
+      `我方同行参战：${allies.join("、")}；裁决战力计入其武装与伤情，若同伴受伤/阵亡/撤离直接发 npcHurt / npcDeath / npcCompanion`,
+    );
+  }
+  return lines;
 }
 
 /** 案底：还没好的伤、疤、找上门的人、还在传的流言、没了结的录像 */
@@ -88,6 +124,9 @@ function recordLines(view: CombatView): string[] {
 export const combatStatus: readonly SystemStatus[] = [
   {
     order: 280,
-    lines: (ctx) => [...fightLines(combatOf(ctx)), ...recordLines(combatOf(ctx))],
+    lines: (ctx) => [
+      ...fightLines(combatOf(ctx), ctx.views.inventory as InventoryView | undefined),
+      ...recordLines(combatOf(ctx)),
+    ],
   },
 ];

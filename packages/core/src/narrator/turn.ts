@@ -33,7 +33,7 @@ import { HealthStateSchema } from "../systems/health";
 import { withWorldObjects } from "../systems/inventory/apply";
 import { InventoryStateSchema } from "../systems/inventory/schema";
 import { memoryRecords } from "../systems/memory";
-import { NpcStateSchema } from "../systems/npc";
+import { NPC_UNDECIDED_PREFIX, NpcStateSchema, onStage } from "../systems/npc";
 import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone";
 import { registry } from "../systems/registry";
 import { currentTension } from "../systems/tension";
@@ -77,6 +77,7 @@ import { readEventPlan } from "./event-plan";
 import { applyEventCommands, type SettlementEvent } from "./event-settlement";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import { preparePurchases } from "./merchant-settlement";
+import { buildIdLookup, findIdRuleIssues, normalizeChangeIds } from "./normalize-ids";
 import {
   MacroOffscreenDocSchema,
   nextRetrySeq,
@@ -202,6 +203,36 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   "phone.receive": "收到的消息",
   "phone.reply": "回复的消息",
 };
+
+const NEW_NPC_ROLE_HINT =
+  /陌生人|兜帽|摊主|店员|酒保|服务员|保安|守卫|门卫|混混|打手|掮客|线人|接头人|雇主|警员|巡警|黑客|义体医生|技师|司机|前台|接待/;
+
+function hasUndecidedOnStage(world: WorldState): boolean {
+  const clock = WorldClockStateSchema.parse(world.slices.world);
+  const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+  return Object.values(NpcStateSchema.parse(world.slices.npc).npcs).some(
+    (npc) =>
+      npc.alive &&
+      onStage(npc, stage) &&
+      (npc.look.startsWith(NPC_UNDECIDED_PREFIX) || npc.voice.startsWith(NPC_UNDECIDED_PREFIX)),
+  );
+}
+
+/** 抽取阶段是否需要附带新人物装备选型参考：判断预判新人物、存在未定型旧识，或正文疑似出现未登记角色 */
+function narrativeNeedsNpcEquipment(
+  world: WorldState,
+  newNpcLikely: boolean,
+  narrative: string,
+): boolean {
+  if (newNpcLikely || hasUndecidedOnStage(world)) return true;
+  if (NEW_NPC_ROLE_HINT.test(narrative)) return true;
+  const clock = WorldClockStateSchema.parse(world.slices.world);
+  const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
+  const anyoneOnStage = Object.values(NpcStateSchema.parse(world.slices.npc).npcs).some(
+    (npc) => npc.alive && onStage(npc, stage),
+  );
+  return !anyoneOnStage && /[“「]/.test(narrative);
+}
 
 /** 正文和账目对不上的原因；没有关键条目出问题时为 undefined */
 export function unsettledReason(dropped: readonly Dropped[]): string | undefined {
@@ -453,9 +484,11 @@ class TurnBuilder {
         ? "判断"
         : stage === "extract"
           ? "抽取"
-          : stage === "offscreen-macro"
-            ? "宏观推演"
-            : "人物推演";
+          : stage === "extract-rules"
+            ? "实体ID"
+            : stage === "offscreen-macro"
+              ? "宏观推演"
+              : "人物推演";
     const content = `${task}\n\n原文：\n${raw}`;
     const denied = this.repairBudget.claim(stage, `${REPAIR_SYSTEM}\n${content}`);
     if (denied) {
@@ -465,8 +498,9 @@ class TurnBuilder {
     this.repairs += 1;
     this.deps.onStage?.({
       stage: "repair",
-      label: `格式修复（${stageLabel}）`,
-      detail: "修正结构化 JSON 输出",
+      label: stage === "extract-rules" ? "实体 ID 自动修正" : `格式修复（${stageLabel}）`,
+      detail:
+        stage === "extract-rules" ? "核对并修正引用错误的人物或目录 ID" : "修正结构化 JSON 输出",
     });
     const reply = await this.supplement({
       purpose: "aux",
@@ -915,13 +949,16 @@ export async function runNarratorTurn(
       }
     }
 
-    // 旧记忆：只认候选里原样抄来的标题
+    // 旧记忆：兼容纯标题与「标题｜摘要」写法
     const recalled: Memory[] = [];
     if (!ooc) {
       for (const [i, raw] of (judge.recall ?? []).entries()) {
         const where = `recall[${i}]`;
+        const text = typeof raw === "string" ? raw.trim() : "";
         const hit =
-          typeof raw === "string" ? memories.find((m) => m.title === raw.trim()) : undefined;
+          text !== ""
+            ? memories.find((m) => m.title === text || text.startsWith(`${m.title}｜`))
+            : undefined;
         if (!hit) b.drop(where, raw, "不在可调的旧记忆里", "rules");
         else if (recalled.length >= MAX_RECALL)
           b.drop(where, raw, `一轮最多调 ${MAX_RECALL} 条旧记忆`, "rules");
@@ -1019,13 +1056,24 @@ export async function runNarratorTurn(
           : `【本次交易尚不能成立】${quote.reason}。直接说明这一真实障碍即可，不要编造互相矛盾的付款通道借口；未解决前不能先写成已付款、拿货或安装。`,
       );
     }
-    // 对手的打算：只给写正文的一步，正文照它写对手的行动
+    // 抽取只认硬事实与已定条件；对手打算与人物潜台词便笺仅给正文主笔，不混入抽取
+    const extractDecided = [...decided];
     const foes =
       !ooc && typeof judge.foes === "string" && judge.foes.trim() !== ""
         ? judge.foes.trim().slice(0, FOES_CHARS)
         : undefined;
     if (foes)
       decided.push(`对手这一轮的打算（对手不会只等着挨打；按局面写进对手的行动，可以改）：${foes}`);
+    const npcPulse =
+      !ooc && !inFlashback && typeof judge.npcPulse === "string" && judge.npcPulse.trim() !== ""
+        ? judge.npcPulse.trim().slice(0, 220)
+        : undefined;
+    if (npcPulse) {
+      decided.push(
+        `【人物潜台词便笺（幕后导演参考：自然融入对方神态、停顿、话外音与反应中，切勿直接说破隐藏秘密）】${npcPulse}`,
+      );
+    }
+    const newNpcLikely = !ooc && !inFlashback && judge.newNpcLikely === true;
     // 裁决理由：仅留档在剧透视图里查看，不进游戏正文
     const ruling = rulingSpec
       ? `${rulingSpec.outcome}（${rulingSpec.reason}）`.slice(0, RULING_CHARS)
@@ -1077,7 +1125,11 @@ export async function runNarratorTurn(
         : trip !== undefined || rulingSpec !== undefined || exposure === "suspicious"
           ? "exploration"
           : "dialogue";
-    let includeNpcEquipment = extras.data !== undefined && live.input.mode !== "ooc";
+    // 新人物装备创作参考按需挂载：仅当判断预判新人物或现场存在未定型旧识时加载，常规熟人对话/独处不塞噪音
+    let includeNpcEquipment =
+      extras.data !== undefined &&
+      live.input.mode !== "ooc" &&
+      (newNpcLikely || hasUndecidedOnStage(world));
     const build = () =>
       buildNarratorPrompt(world, records, live, {
         ...extras,
@@ -1172,6 +1224,8 @@ export async function runNarratorTurn(
       confirmation,
       spend: prepared.spend,
       decided,
+      extractDecided,
+      newNpcLikely,
       loreTrace,
       loreSection,
       budgetTrace,
@@ -1208,6 +1262,8 @@ export async function runNarratorTurn(
     trip,
     purchases: preparedPurchases,
     decided,
+    extractDecided,
+    newNpcLikely,
     loreTrace,
     budgetTrace,
     promptModules,
@@ -1424,26 +1480,48 @@ export async function runNarratorTurn(
             )
             .join("\n")
         : "本轮没有确认交易意图；可以保存对方报价，不应执行购买、出售、义体服务或还款。";
+      const extractFacts = extractDecided ?? decided;
+      const needExtractEquipment = narrativeNeedsNpcEquipment(
+        world,
+        Boolean(newNpcLikely),
+        extractNarrative,
+      );
       let extract = buildExtractPrompt(
         world,
         records,
         live,
-        { ...extras, decided },
+        { ...extras, decided: extractFacts, includeNpcEquipment: needExtractEquipment },
         extractNarrative,
         tradePlansText,
       );
-      // 超出辅助模型上下文预算时优先撤下可选的 12K 新人物装备选型参考（系统层仍有完整物品与义体基表可查 ID）
+      // 超出辅助模型上下文预算时分级撤下可选参考块（系统层始终保留完整物品与义体 ID 基表）
       const auxBudget = deps.auxContextWindow
         ? Math.max(8_000, deps.auxContextWindow - (deps.auxMaxOutputTokens ?? 4_096))
         : undefined;
       if (auxBudget !== undefined) {
-        const estimated = extract.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
-        if (estimated > auxBudget) {
+        const estimateExtract = (p: ReturnType<typeof buildExtractPrompt>) =>
+          p.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+        if (needExtractEquipment && estimateExtract(extract) > auxBudget) {
           extract = buildExtractPrompt(
             world,
             records,
             live,
-            { ...extras, decided, includeNpcEquipment: false },
+            { ...extras, decided: extractFacts, includeNpcEquipment: false },
+            extractNarrative,
+            tradePlansText,
+          );
+        }
+        if (estimateExtract(extract) > auxBudget) {
+          extract = buildExtractPrompt(
+            world,
+            records,
+            live,
+            {
+              ...extras,
+              decided: extractFacts,
+              includeNpcEquipment: false,
+              includeCatalogDetails: false,
+            },
             extractNarrative,
             tradePlansText,
           );
@@ -1495,11 +1573,28 @@ export async function runNarratorTurn(
       }
     }
     const considered: string[] = settle ? readConsidered(shape.dropped) : [];
-    const eventPlan = readEventPlan(
-      settle ? shape.events : [],
-      shape.changes?.length ?? 0,
-      shape.messages?.length ?? 0,
-    );
+    let eventPlan = readEventPlan(settle ? shape.events : []);
+    if (!eventPlan.ok && settle) {
+      const fixedEvents = await b.repair(
+        "extract",
+        `下面的 events 事件清单校验失败（${eventPlan.error}）。请修成合法 JSON 对象 {"events":[...]}：每个事件含 id（本轮唯一小写英文数字连字符）、requires（仅引用排在前面的事件 id 或 "$action"，独立事件写 []）、changes（指令数组）与可选 messages，不能有空事件；不增删原文事实。`,
+        JSON.stringify(shape.events ?? []),
+      );
+      if (fixedEvents !== undefined) {
+        const candidate = Array.isArray(fixedEvents)
+          ? fixedEvents
+          : typeof fixedEvents === "object" && fixedEvents !== null && "events" in fixedEvents
+            ? (fixedEvents as { events?: unknown }).events
+            : undefined;
+        if (candidate !== undefined) {
+          const secondPlan = readEventPlan(candidate);
+          if (secondPlan.ok) {
+            eventPlan = secondPlan;
+            b.notes.push("事件因果清单格式已自动修正");
+          }
+        }
+      }
+    }
     if (!eventPlan.ok) {
       throw new NarratorStageError(
         "extract",
@@ -1510,12 +1605,15 @@ export async function runNarratorTurn(
     }
     const owner = new Map(eventPlan.events.flatMap((e) => e.entries.map((entry) => [entry, e.id])));
 
-    // 状态变化和消息集中修复；合法条目不会被送回模型，建议选项只做本地校验。
+    // 先做唯一精确名称 -> id 的确定性归一（绝不猜模糊匹配），再逐条 Zod 校验与批量格式修复。
+    const idLookup = buildIdLookup(world, deps.data ?? {}, eventPlan.changes);
     const extractEntries: ValidationEntry[] = [];
-    for (const [i, item] of (shape.changes ?? []).entries()) {
+    const rawChangeTypes = new Map<string, string>();
+    for (const [i, item] of eventPlan.changes.entries()) {
       const where = `changes[${i}]`;
       const type =
         typeof item === "object" && item !== null ? (item as { type?: unknown }).type : undefined;
+      if (typeof type === "string") rawChangeTypes.set(where, type);
       const schema = typeof type === "string" ? registry.commandSchema(type) : undefined;
       if (!schema) {
         b.drop(
@@ -1528,18 +1626,83 @@ export async function runNarratorTurn(
       }
       const proposal = registry.normalizeProposal(item);
       if (proposal.note !== undefined) noteOnce(b.notes, proposal.note);
+      const idNorm = normalizeChangeIds(proposal.value, idLookup);
+      for (const note of idNorm.notes) noteOnce(b.notes, note);
       extractEntries.push({
         key: where,
-        raw: proposal.value,
+        raw: idNorm.value,
         schema,
         priority: typeof type === "string" && (type === "world" || KEY_ITEMS[type]) ? 1 : 0,
       });
     }
     if (!inFlashback) {
-      for (const [i, item] of (shape.messages ?? []).slice(0, MESSAGES_PER_TURN).entries())
+      for (const [i, item] of eventPlan.messages.slice(0, MESSAGES_PER_TURN).entries())
         extractEntries.push({ key: `messages[${i}]`, raw: item, schema: IncomingMessageSchema });
     }
-    const extracted = await b.validateBatch("extract", extractEntries);
+    const extracted = new Map(await b.validateBatch("extract", extractEntries));
+
+    // 落盘前轻量规则预检：把错填成事件 slug 或不存在实体 id 的条目，连同合法候选清单打包做 1 次精准修正
+    const idPrecheck = findIdRuleIssues(extracted, idLookup, world, deps.data ?? {});
+    if (idPrecheck.issues.length > 0) {
+      const issueMap = new Map(idPrecheck.issues.map((item) => [item.key, item]));
+      const idRepairTask = [
+        "下面几条记账指令引用了当前存档或目录中不存在的 id（例如把事件 slug 填成了人物 id）。",
+        "请只根据下面的候选清单把错误 id 改成对应的已有规范 id；保持其余字段与原意不变，确实没有对应实体时省略该条。",
+        '只返回 {"fixes":[{"key":"原样的条目键","value":修正后的完整指令对象}]}。',
+        idPrecheck.candidates,
+      ].join("\n");
+      const idFixed = await b.repair(
+        "extract-rules",
+        idRepairTask,
+        JSON.stringify(idPrecheck.issues.map(({ key, raw, error }) => ({ key, raw, error }))),
+      );
+      const fixes =
+        typeof idFixed === "object" && idFixed !== null && "fixes" in idFixed
+          ? (idFixed as { fixes?: unknown }).fixes
+          : undefined;
+      if (Array.isArray(fixes)) {
+        const fixKeys = fixes.map((f) =>
+          typeof f === "object" && f !== null && "key" in f
+            ? (f as { key?: unknown }).key
+            : undefined,
+        );
+        for (const fix of fixes) {
+          if (
+            typeof fix !== "object" ||
+            fix === null ||
+            typeof (fix as { key?: unknown }).key !== "string"
+          ) {
+            continue;
+          }
+          const key = (fix as { key: string }).key;
+          const original = issueMap.get(key);
+          if (!original || fixKeys.filter((k) => k === key).length !== 1) continue;
+          const candidateVal = (fix as { value?: unknown }).value;
+          if (typeof candidateVal !== "object" || candidateVal === null) continue;
+          const candidateType = (candidateVal as { type?: unknown }).type;
+          if (candidateType !== original.raw.type) continue;
+          const schema =
+            typeof candidateType === "string" ? registry.commandSchema(candidateType) : undefined;
+          if (!schema) continue;
+          const normalized = normalizeChangeIds(
+            registry.normalizeProposal(candidateVal).value,
+            idLookup,
+          ).value;
+          const parsed = schema.safeParse(normalized);
+          if (!parsed.success) continue;
+          const singleCheck = findIdRuleIssues(
+            new Map([[key, parsed.data]]),
+            idLookup,
+            world,
+            deps.data ?? {},
+          );
+          if (singleCheck.issues.length === 0) {
+            extracted.set(key, parsed.data);
+            b.notes.push(`${key} 的实体 id 已自动修正`);
+          }
+        }
+      }
+    }
 
     // 装着的义体的名字：义体来源的专属选项要对得上
     const parts = cyberwareCatalog(deps.data ?? {});
@@ -1563,7 +1726,7 @@ export async function runNarratorTurn(
 
     // 代码校验第一步：白名单和逐条格式
     const proposals: Proposal[] = [];
-    for (const [i] of (shape.changes ?? []).entries()) {
+    for (const [i] of eventPlan.changes.entries()) {
       const where = `changes[${i}]`;
       const command = extracted.get(where) as Command | undefined;
       if (!command) continue;
@@ -1578,7 +1741,7 @@ export async function runNarratorTurn(
       });
     }
     // 消息：每轮最多两条；闪回里不收
-    for (const [i, item] of (shape.messages ?? []).entries()) {
+    for (const [i, item] of eventPlan.messages.entries()) {
       const where = `messages[${i}]`;
       if (inFlashback) {
         b.drop(where, item, flashbackReason, "rules");
@@ -1839,13 +2002,47 @@ export async function runNarratorTurn(
         };
       }),
     ];
-    // 收场不能绕过抵达、付款或其他未成立事件；它也受同一事务机制保护。
-    if (settle && shape.sceneEnd === true && !inFlashback)
+    // 旁枝记录类指令（人物记忆/情报/近况/笔记等）失败只拦截自身，不连坐卡死整场收尾
+    const SCENE_END_NON_BLOCKING_TYPES = new Set([
+      "learn",
+      "memory",
+      "doing",
+      "relation",
+      "tie",
+      "ledger",
+      "ledgerSettle",
+      "npcOutfit",
+      "npcScan",
+      "threadTold",
+      "note",
+      "chronicle",
+    ]);
+    const blockingEventIds = new Set<string>(setup.map((e) => e.id));
+    for (const [idx, planEvent] of eventPlan.events.entries()) {
+      const settledEvent = events[setup.length + idx];
+      if (!settledEvent) continue;
+      const dependsOnAction = settledEvent.requires.includes("$action");
+      const hasBlockingCommand = settledEvent.commands.some(
+        (c) => !SCENE_END_NON_BLOCKING_TYPES.has(c.type),
+      );
+      const hasBlockingRaw = planEvent.entries.some((entry) => {
+        if (entry.startsWith("messages[")) return true;
+        const t = rawChangeTypes.get(entry);
+        return t === undefined || !SCENE_END_NON_BLOCKING_TYPES.has(t);
+      });
+      if (dependsOnAction || hasBlockingCommand || (settledEvent.invalid && hasBlockingRaw)) {
+        blockingEventIds.add(settledEvent.id);
+      }
+    }
+    // 收场不能绕过抵达、付款、主行动或核心状态推进，但不被旁枝记忆/情报条目失败连坐阻断。
+    if (settle && shape.sceneEnd === true && !inFlashback) {
+      blockingEventIds.add("$scene-end");
       events.push({
         id: "$scene-end",
-        requires: events.map((event) => event.id),
+        requires: events.filter((event) => blockingEventIds.has(event.id)).map((event) => event.id),
         commands: [{ type: "world.endScene" }],
       });
+    }
     const applied = applyEventCommands(
       world,
       events,
@@ -1866,15 +2063,18 @@ export async function runNarratorTurn(
         b.drop(command.type, command, result.reason, "rules");
       }
     }
-    const failedEvent = applied.events.find((event) => event.status !== "applied");
-    if (failedEvent && accepted.length === 0 && applied.patches.length === 0) {
+    const anyFailedEvent = applied.events.find((event) => event.status !== "applied");
+    if (anyFailedEvent && accepted.length === 0 && applied.patches.length === 0) {
       throw new NarratorStageError(
         "extract",
-        `④ 本轮事件未能结算：${failedEvent.reason}（已保存判断与正文，点重试将直接继续记账）`,
+        `④ 本轮事件未能结算：${anyFailedEvent.reason}（已保存判断与正文，点重试将直接继续记账）`,
         true,
         "narrated",
       );
     }
+    const failedEvent = applied.events.find(
+      (event) => event.status !== "applied" && blockingEventIds.has(event.id),
+    );
     // 近期后果：按这一轮真正生效的指令归类；检定失败却什么都没发生时下一轮提醒
     const settled =
       ooc || inFlashback
@@ -1939,7 +2139,7 @@ export async function runNarratorTurn(
   const before = WorldClockStateSchema.parse(world.slices.world);
   const after = WorldClockStateSchema.parse(settledWorld.slices.world);
 
-  // ⑥ 双路并行场外演化（宏观局势 + 人物社交），自带原生 JSON Schema、L0 限额修复与 L1/L2 局部容错
+  // ⑥+⑦ 收尾辅调预准备：场外演化（宏观 + 社交）与回退场景摘要均只读取结算态，可单次 Promise.all 并行请求再按固定顺序落盘
   const dead = HealthStateSchema.parse(settledWorld.slices.health).condition === "dead";
   let currentWorld = settledWorld;
   const offscreenPatches: Patch[] = [];
@@ -1954,18 +2154,59 @@ export async function runNarratorTurn(
   const socialDue =
     offscreenEligible && trackOffscreenDue(world, settledWorld, { track: "social", ...dueOpts });
 
+  // 先在内存预览本轮场景记忆与抽取摘要是否合格，确定是否需要回退发起 ⑦ 整理场景摘要
+  const workingMemory =
+    settle && !inFlashback && unsettled === undefined
+      ? readSceneMemory(shape.sceneMemory, world, settledWorld, plan.input, narrative)
+      : undefined;
+  const memoryPreviewWorld = workingMemory?.command
+    ? registry.applyCommands(settledWorld, [workingMemory.command], applyCtx).world
+    : settledWorld;
+  let summarySkipNote: string | undefined;
+  let mergedSummary: ReturnType<typeof summaryFromExtract> | undefined;
+  let fallbackSummaryMessages: LlmMessage[] | undefined;
+  if (settle && after.scene !== before.scene) {
+    if (inFlashback) summarySkipNote = "场景摘要：闪回里不写";
+    else if (unsettled !== undefined) summarySkipNote = "场景摘要：这一轮没结算干净，不写";
+    else {
+      mergedSummary = summaryFromExtract(
+        shape.summary,
+        memoryPreviewWorld,
+        before.scene,
+        before.location,
+        {
+          input: plan.input,
+          narrative,
+        },
+      );
+      if (!mergedSummary.command) {
+        fallbackSummaryMessages = buildSummaryPrompt(
+          world,
+          memoryPreviewWorld,
+          records,
+          plan.input,
+          narrative,
+          extras,
+        );
+      }
+    }
+  }
+
+  const present = macroDue || socialDue ? presentNpcs(world, settledWorld) : new Set<string>();
+  let macroBatch: ReturnType<typeof prepareMacroOffscreenBatch> | undefined;
+  let socialBatch: ReturnType<typeof prepareSocialOffscreenBatch> | undefined;
+
   if (macroDue || socialDue) {
-    const present = presentNpcs(world, settledWorld);
     const capacity = {
       contextWindow: deps.auxContextWindow ?? 32_000,
       ...(deps.auxMaxOutputTokens === undefined
         ? {}
         : { maxOutputTokens: deps.auxMaxOutputTokens }),
     };
-    const macroBatch = macroDue
+    macroBatch = macroDue
       ? prepareMacroOffscreenBatch(settledWorld, records, extras, narrative, capacity)
       : undefined;
-    const socialBatch = socialDue
+    socialBatch = socialDue
       ? prepareSocialOffscreenBatch(settledWorld, records, extras, narrative, present, capacity)
       : undefined;
     const blockedReasons: string[] = [];
@@ -2001,42 +2242,73 @@ export async function runNarratorTurn(
     ) {
       offscreenCapacityReason = blockedReasons.join("；");
     }
+  }
 
-    if (macroBatch?.kind === "ready" || socialBatch?.kind === "ready") {
+  const macroReady = macroBatch?.kind === "ready";
+  const socialReady = socialBatch?.kind === "ready";
+  const summaryReady = fallbackSummaryMessages !== undefined;
+  let summaryReply: Reply | { failed: true } | undefined;
+
+  if (macroReady || socialReady || summaryReady) {
+    if ((macroReady || socialReady) && summaryReady) {
+      deps.onStage?.({
+        stage: "offscreen",
+        label: "⑥ 场外世界推演与摘要",
+        detail: "并行推演场外局势、人物动向与本场记忆摘要",
+      });
+    } else if (macroReady || socialReady) {
       deps.onStage?.({
         stage: "offscreen",
         label: "⑥ 场外世界推演",
         detail:
-          macroBatch?.kind === "ready" && socialBatch?.kind === "ready"
+          macroReady && socialReady
             ? "并行推演宏观局势与人物动向"
-            : macroBatch?.kind === "ready"
+            : macroReady
               ? "推演城中局势、新闻与商家经营"
               : "推演人物近况、关系与私信",
       });
+    } else {
+      deps.onStage?.({
+        stage: "summary",
+        label: "⑦ 整理场景摘要",
+        detail: "归档本场记忆与锚点",
+      });
+    }
 
-      const [macroReply, socialReply] = await Promise.all([
-        macroBatch?.kind === "ready"
-          ? b.supplement({
-              purpose: "aux",
-              temperature: OFFSCREEN_TEMPERATURE,
-              maxOutputTokens: macroBatch.maxOutputTokens,
-              messages: macroBatch.messages,
-              responseFormat: responseJsonSchema("offscreen_macro", MacroOffscreenDocSchema),
-              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-macro` } : {}),
-            })
-          : Promise.resolve(undefined),
-        socialBatch?.kind === "ready"
-          ? b.supplement({
-              purpose: "aux",
-              temperature: OFFSCREEN_TEMPERATURE,
-              maxOutputTokens: socialBatch.maxOutputTokens,
-              messages: socialBatch.messages,
-              responseFormat: responseJsonSchema("offscreen_social", SocialOffscreenDocSchema),
-              ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-social` } : {}),
-            })
-          : Promise.resolve(undefined),
-      ]);
+    const [macroReply, socialReply, resolvedSummaryReply] = await Promise.all([
+      macroBatch?.kind === "ready"
+        ? b.supplement({
+            purpose: "aux",
+            temperature: OFFSCREEN_TEMPERATURE,
+            maxOutputTokens: macroBatch.maxOutputTokens,
+            messages: macroBatch.messages,
+            responseFormat: responseJsonSchema("offscreen_macro", MacroOffscreenDocSchema),
+            ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-macro` } : {}),
+          })
+        : Promise.resolve(undefined),
+      socialBatch?.kind === "ready"
+        ? b.supplement({
+            purpose: "aux",
+            temperature: OFFSCREEN_TEMPERATURE,
+            maxOutputTokens: socialBatch.maxOutputTokens,
+            messages: socialBatch.messages,
+            responseFormat: responseJsonSchema("offscreen_social", SocialOffscreenDocSchema),
+            ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:offscreen-social` } : {}),
+          })
+        : Promise.resolve(undefined),
+      fallbackSummaryMessages !== undefined
+        ? b.supplement({
+            purpose: "aux",
+            temperature: SUMMARY_TEMPERATURE,
+            messages: fallbackSummaryMessages,
+            responseFormat: responseJsonSchema("summary", SummaryDocSchema),
+            ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:summary` } : {}),
+          })
+        : Promise.resolve(undefined),
+    ]);
+    summaryReply = resolvedSummaryReply;
 
+    if (macroReady || socialReady) {
       const tracePrompts: string[] = [];
       const traceReplies: string[] = [];
       const formatReplyText = (reply: Reply | { failed: true }) =>
@@ -2257,58 +2529,39 @@ export async function runNarratorTurn(
     ended = done.world;
     memoryPatches.push(...done.patches);
   };
-  if (settle && !inFlashback && unsettled === undefined) {
-    const working = readSceneMemory(shape.sceneMemory, world, settledWorld, plan.input, narrative);
-    considered.push(...working.notes);
-    if (working.command) saveMemory(working.command);
+  if (workingMemory !== undefined) {
+    considered.push(...workingMemory.notes);
+    if (workingMemory.command) saveMemory(workingMemory.command);
   }
-  // 正常收场复用抽取中的摘要；不合格时仍单独整理，以记忆质量为先。
-  if (settle && after.scene !== before.scene) {
-    if (inFlashback) considered.push("场景摘要：闪回里不写");
-    else if (unsettled !== undefined) considered.push("场景摘要：这一轮没结算干净，不写");
-    else {
-      const merged = summaryFromExtract(shape.summary, ended, before.scene, before.location, {
-        input: plan.input,
-        narrative,
-      });
-      considered.push(...merged.notes);
-      if (merged.command) saveMemory(merged.command);
-      else {
-        deps.onStage?.({
-          stage: "summary",
-          label: "⑦ 整理场景摘要",
-          detail: "归档本场记忆与锚点",
+  // 正常收场复用抽取中的摘要；不合格时已与场外演化并行完成恢复整理，按确定性顺序落盘。
+  if (summarySkipNote !== undefined) {
+    considered.push(summarySkipNote);
+  } else if (mergedSummary !== undefined) {
+    considered.push(...mergedSummary.notes);
+    if (mergedSummary.command) {
+      saveMemory(mergedSummary.command);
+    } else if (fallbackSummaryMessages !== undefined && summaryReply !== undefined) {
+      summaryTrace = {
+        prompt: fallbackSummaryMessages[fallbackSummaryMessages.length - 1]?.content ?? "",
+        reply:
+          "failed" in summaryReply
+            ? "（辅助请求失败，未采用不完整回复）"
+            : "blocked" in summaryReply
+              ? `（拒答：${summaryReply.blocked}）`
+              : summaryReply.text,
+      };
+      if ("failed" in summaryReply) {
+        considered.push("场景摘要请求失败，保留完整场景提要与记忆锚点");
+      } else if ("blocked" in summaryReply) {
+        considered.push(`场景摘要被辅助模型拒答：${summaryReply.blocked}`);
+      } else {
+        b.auxUsage = addUsage(b.auxUsage, summaryReply.usage);
+        const got = readSummary(summaryReply.text, ended, before.scene, before.location, {
+          input: plan.input,
+          narrative,
         });
-        const messages = buildSummaryPrompt(world, ended, records, plan.input, narrative, extras);
-        const reply = await b.supplement({
-          purpose: "aux",
-          temperature: SUMMARY_TEMPERATURE,
-          messages,
-          responseFormat: responseJsonSchema("summary", SummaryDocSchema),
-          ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:summary` } : {}),
-        });
-        summaryTrace = {
-          prompt: messages[messages.length - 1]?.content ?? "",
-          reply:
-            "failed" in reply
-              ? "（辅助请求失败，未采用不完整回复）"
-              : "blocked" in reply
-                ? `（拒答：${reply.blocked}）`
-                : reply.text,
-        };
-        if ("failed" in reply) {
-          considered.push("场景摘要请求失败，保留完整场景提要与记忆锚点");
-        } else if ("blocked" in reply) {
-          considered.push(`场景摘要被辅助模型拒答：${reply.blocked}`);
-        } else {
-          b.auxUsage = addUsage(b.auxUsage, reply.usage);
-          const got = readSummary(reply.text, ended, before.scene, before.location, {
-            input: plan.input,
-            narrative,
-          });
-          considered.push(...got.notes);
-          if (got.command) saveMemory(got.command);
-        }
+        considered.push(...got.notes);
+        if (got.command) saveMemory(got.command);
       }
     }
   }

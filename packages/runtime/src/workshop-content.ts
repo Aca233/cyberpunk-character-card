@@ -11,6 +11,8 @@ import {
 } from "@cp/content";
 import {
   customCyberwareDefs,
+  customItemDefs,
+  type inventoryRules,
   namespaceWorkshopPack,
   type StartCyberware,
   type WorkshopCatalogIndex,
@@ -72,16 +74,20 @@ function withRipperdocListings(
   });
 }
 
-/** 每份新存档基于自己冻结的内容包快照建立运行时目录（并注入角色自包含自定义义体）。 */
+/** 每份新存档基于自己冻结的内容包快照建立运行时目录（并注入角色自包含自定义义体与自建武器/物品）。 */
 export function workshopRuntime(
   packs: readonly WorkshopPack[],
   extraCyberware?: readonly StartCyberware[],
+  extraItems?: readonly inventoryRules.ItemDef[],
 ) {
   const expanded = packs.map(namespaceWorkshopPack);
   const modules = expanded.flatMap((pack) => pack.modules);
   const acquaintances = expanded.flatMap((pack) => pack.acquaintances);
   const customNpcs = expanded.flatMap((pack) => pack.npcs);
-  const customItems = expanded.flatMap((pack) => pack.items);
+  const packItems = expanded.flatMap((pack) => pack.items);
+  const existingItemIds = new Set([...items, ...packItems].map((i) => i.id));
+  const snapshotItems = customItemDefs(extraItems, existingItemIds);
+  const customItems = [...packItems, ...snapshotItems];
   const packCyberware = expanded.flatMap((pack) => pack.cyberware);
   const existingCwIds = new Set([...cyberware, ...packCyberware].map((c) => c.id));
   const snapshotCyberware = customCyberwareDefs(extraCyberware, existingCwIds);
@@ -164,7 +170,10 @@ export function requiredPackIds(
           readonly packId?: string | undefined;
           readonly id: string;
         }[];
-        readonly kit?: { readonly weapons?: readonly string[] };
+        readonly kit?: {
+          readonly weapons?: readonly string[];
+          readonly items?: readonly { readonly id: string }[];
+        };
       }
     | undefined,
 ): Set<string> {
@@ -185,6 +194,7 @@ export function requiredPackIds(
     ...(board.cyberware ?? []).map((entry) => entry.id),
     ...(board.acquaintances ?? []).map((entry) => entry.id),
     ...(board.kit?.weapons ?? []),
+    ...(board.kit?.items ?? []).map((entry) => entry.id),
   ];
   for (const id of namespacedIds) {
     const packId = workshopEntityPackId(id);

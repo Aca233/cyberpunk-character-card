@@ -1,6 +1,12 @@
 import type { ViewContext } from "../../kernel/system";
 import { CyberwareStateSchema, DECK_TRAIT_LABELS } from "../cyberware";
 import { HealthStateSchema } from "../health";
+import {
+  InventoryStateSchema,
+  itemCatalog,
+  summarizeGearEffects,
+  withWorldObjects,
+} from "../inventory";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import {
   deckOf,
@@ -61,9 +67,17 @@ export function hackingView({ world, data }: ViewContext) {
     };
   };
 
+  let thermalRelief = 0;
+  if (data.items !== undefined && world.slices.inventory !== undefined) {
+    const inv = InventoryStateSchema.parse(world.slices.inventory);
+    const catalogItems = itemCatalog(withWorldObjects(data, inv.objects));
+    thermalRelief = summarizeGearEffects(inv, catalogItems).netThermalRelief;
+  }
+
   const heat = effectiveHeatAt(state.thermal, world.time, {
     hasRecovery,
     inDiveChair: state.dive !== null,
+    thermalRelief,
   });
   const thermalLevel = thermalLevelOf(heat);
 

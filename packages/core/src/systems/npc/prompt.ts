@@ -80,9 +80,9 @@ export const npcRules: RuleModule<NpcState> = {
   - want、limit 与 secret：want 写明当下真正图谋的人/钱/权/脱身，limit 写明绝不能踩的逆鳞，别用「赚钱」「活下去」敷衍；只要不是一次过场的工具人，尽量补一条暗中的 secret（真实来历、私下买卖、把柄或软肋），只写进卡里供幕后演戏，**不要同时写进 learn** 提前剧透给玩家（除非正文当场戳破或本人自曝）。若有固定据点/店面且在地点表里，顺手填 home。
   - body：先认正文已明确的型号、衣着、随身物件与无植入事实，再结合【新人物装备选型参考】按这个人的工作、财力、装备来源和行动方式选型。gear 从【物品表】选实际穿着的衣物（外套、内搭、裤鞋、头面饰件）、武器与药剂/工具/日常随身物品 id，最多 ${NPC_GEAR_MAX} 件；普通人也应有合身衣着与随身小物，能空手的普通人不硬塞枪，持枪者按隐蔽携带、近战突入、远距压制等真实用途选枪，不默认统一手枪。
   - cyberware 从【义体表】选 0–${NPC_CHROME_MAX} 件：按夜之城常态，大多数人物（包括市民、商贩、雇员、中间人、帮派成员与佣兵）通常常配 1–3 件贴合身份、生计与财力的基础或常见义体；只有正文明确无植入、信仰排斥义体或极端拮据者才留空。普通人可按日常与生计搭配基础岐路司义眼、生物监测、合成肺叶、持握衬垫、通用义肢、防火/接地镀层等；**帮派头目、精锐打手、公司特勤、中间人与重装义体人（尤其虎爪帮、漩涡帮、巫毒帮、幽冥犬、荒坂、军用科技、康陶）应常态配置 self-ice（自我 ICE）以及贴合防线的 grounding-plating（接地镀层）/ fireproof-coating（防火涂层），帮派/公司据点里的敌方网络黑客务必实配对应档次的接入仓（如 biotech-sigma、fuyutsuki-deck、militech-paraline、arasaka-deck 等）与 self-ice**，不要把据点敌人全建成无冰白板。明确无植入或配置已定时照事实保留。仅受物理互斥约束（主接入仓与脊柱加速/狂暴可双装，重型双臂武装限 2 件，感官/时尚/亲密/暗格/工具类义体可自由叠加），智能自导须有真实联锁。只用表内 id，不写属性点或档位；候选不限制完整目录，也不证明店里有货。
-- 如果【人物】里非原作人物的「长相」或「说话」还标着「还没定」（主板/自定义旧识首次真切出场），发一条 npcUpdate 把缺失字段和初始资料一次定型；已定型人物的装备与义体只能用 npcGear / npcChrome 按真实变化增减，不用 npcUpdate 整栏覆盖。原作人物（canon）核心卡面固定，不发 npcUpdate。
+- 如果【人物】里非原作人物标着「档案未定型」或「长相」/「说话」还标着「还没定」（主板/自定义旧识首次真切出场），发一条 npcUpdate 把缺失字段和初始资料一次定型；已定型人物的装备与义体只能用 npcGear / npcChrome 按真实变化增减，不用 npcUpdate 整栏覆盖。原作人物（canon）核心卡面固定，不发 npcUpdate。
 - 玩家角色对有势力的人做的事大到组织会知道（杀了、救了、当众羞辱、替他办成大事），除了人物态度变化外，同时写一条 faction 改这个势力的态度；私下的小恩小怨只改个人态度。
-- 人物对玩家没有好感度数字，完全按真实发生过的事与彼此知情边界决定冷热：承诺、帮过的忙、冲突、背叛这类以后会被提起的事写一条 memory；欠下或结下人情与仇怨写 ledger；双方关系出现实质性变化才写 relation 更新关系定性。
+- 人物对玩家没有好感度数字，完全按真实发生过的事与彼此知情边界决定冷热：承诺、帮过的忙、冲突、背叛这类以后会被提起的事写一条 memory；欠下或结下人情与仇怨写 ledger；双方关系出现实质性变化才写 relation 更新关系定性。memory、learn、doing、relation、ledger 等指令的 id 必须填【人物】中该目标人物卡本身的 id（如 royce、yoko-tsuru、ozob），不要给单条记忆或情报另起事件 slug；不同人物的 memory/learn 拆成独立事件组，互不连累。
 - 正文透出某个有卡的人最近在做什么（本人说起、新闻、传闻、消息），写一条 doing，会替换旧的；正文没写到的不记。
 - 关系真的变了（一起扛过事、说过真心话、生死与共，或者背叛、被拆穿大谎、伤了对方在乎的人）才写一条 relation，一句话写现在的关系，会替换旧的；关系热络只说明对方愿意见你，不等于交情深。
 - 人物之间的关系不意味着消息自动互通。记录他已经得知的事时保留目击、通信或传闻来源及时间；不能仅因熟人出事就写成他已经知情。正文里透出两个有卡的人之间的关系（搭档、亲人、旧情、上下家、结仇），或者关系变了，写一条 tie，aToB、bToA 各从一边的角度写一句，会替换两人之间旧的那条；见不得光的关系 open 写 false。
@@ -211,50 +211,77 @@ export function relationBrief(npc: Pick<Npc, "relation" | "ledger" | "memories">
 }
 
 function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
+  const isExtract = stage.stage === "extract";
+  const isJudge = stage.stage === "judge";
+  const isNarrate = !isExtract && !isJudge;
+  const unfinalized =
+    !npc.canon &&
+    (npc.look.startsWith(NPC_UNDECIDED_PREFIX) || npc.voice.startsWith(NPC_UNDECIDED_PREFIX));
+  const unfinalizedHeader =
+    isExtract && unfinalized ? "；【档案未定型：需 npcUpdate 补全外貌、代词、口吻与 body】" : "";
+
   const lines = [
-    `- ${label(npc, stage)} ${npc.role}${npc.following ? "；【同行中】" : ""}${npc.met ? "" : "；还没见过玩家角色"}`,
-    // 长相和穿着分两行（用户定的，2026-11-02："长相 + 当前穿着"）；旧卡没拆时只有一行外貌
-    ...appearanceLines(npc),
-    `  说话：${npc.voice}`,
+    `- ${label(npc, stage)} ${npc.role}${npc.following ? "；【同行中】" : ""}${npc.met ? "" : "；还没见过玩家角色"}${unfinalizedHeader}`,
   ];
-  if (npc.samples.length > 0) {
-    lines.push(`  样本：${npc.samples.map((s) => `「${s}」`).join(" ")}`);
+
+  // 正文阶段给完整演出卡（长相、说话、台词样本、生平底色）；判断与抽取只保留当前穿着供裁决与换装核对
+  if (isNarrate) {
+    // 长相和穿着分两行（用户定的，2026-11-02："长相 + 当前穿着"）；旧卡没拆时只有一行外貌
+    lines.push(...appearanceLines(npc), `  说话：${npc.voice}`);
+    if (npc.samples.length > 0) {
+      lines.push(`  样本：${npc.samples.map((s) => `「${s}」`).join(" ")}`);
+    }
+    if (npc.bio) {
+      lines.push(`  生平与底色（幕后人物资料，不等于玩家已知）：${npc.bio}`);
+    }
+  } else {
+    const wearing = currentOutfit(npc);
+    if (wearing !== undefined) lines.push(`  现在穿：${wearing}`);
   }
-  if (npc.bio) {
-    lines.push(`  生平与底色（幕后人物资料，不等于玩家已知）：${npc.bio}`);
-  }
-  lines.push(`  诉求：${npc.want}`, `  底线：${npc.limit}`);
-  if (Array.isArray(stage.data?.fixerTemperaments)) {
-    const alias = npc.id === "mr-hands" ? "hands" : npc.id;
-    const temp = (
-      stage.data.fixerTemperaments as readonly {
-        readonly id: string;
-        readonly preferredStyle: string;
-        readonly taboo: string;
-      }[]
-    ).find((t) => t.id === npc.id || t.id === alias);
-    if (temp) {
-      lines.push(`  中间人做派：偏好「${temp.preferredStyle}」；忌讳「${temp.taboo}」`);
+
+  // 诉求、底线、中间人做派供正文演戏与判断裁决/潜台词便笺使用；抽取只记已发生事实，不需要幕后动机
+  if (!isExtract) {
+    lines.push(`  诉求：${npc.want}`, `  底线：${npc.limit}`);
+    if (Array.isArray(stage.data?.fixerTemperaments)) {
+      const alias = npc.id === "mr-hands" ? "hands" : npc.id;
+      const temp = (
+        stage.data.fixerTemperaments as readonly {
+          readonly id: string;
+          readonly preferredStyle: string;
+          readonly taboo: string;
+        }[]
+      ).find((t) => t.id === npc.id || t.id === alias);
+      if (temp) {
+        lines.push(`  中间人做派：偏好「${temp.preferredStyle}」；忌讳「${temp.taboo}」`);
+      }
     }
   }
+
   if (npc.age !== undefined || npc.adult !== undefined || npc.entity !== undefined) {
     lines.push(
       `  已定身份事实：${npc.age !== undefined ? `${npc.age} 岁；` : ""}${npc.adult === true ? "已确认成年；" : npc.adult === false ? "未成年；" : ""}${npc.entity === "human" ? "真人" : npc.entity === "synthetic" ? "合成人" : npc.entity === "robot" ? "机器人" : "实体身份未补定"}。这些事实不代表玩家已全部获知。`,
     );
   }
-  if (npc.secret) {
+
+  // 幕后秘密仅提供给判断（潜台词/泄密裁决）与正文（人物演出）；抽取阶段隐藏，彻底杜绝把未揭露秘密错记为玩家已知
+  if (!isExtract && npc.secret) {
     lines.push(`  幕后秘密（不等于玩家或其他 NPC 已知）：${npc.secret}`);
     lines.push(
       "  揭露条件：按当前目的、利益与底线决定是否愿意说，或由具体目击、证据和通信揭露；熟悉、人情、仇怨或一次扫描都不自动公开秘密。玩家已经得知的部分仅以知识记录和已发生正文为准。",
     );
   }
+
   if (stage.data !== undefined && stage.now !== undefined) {
     lines.push(`  ${bodyLine(npc, stage.data, stage.now)}`);
     if (npc.vitals?.scannedAt !== undefined && npc.vitals.scannedAt !== null) {
-      const tactical = scanTacticalProfile(npc, stage.data, stage.now);
-      lines.push(
-        `  【玩家已用义眼扫描此人】玩家已掌握其植入体配置、威胁档次（${tactical.threatLabel}）与骇入条件（${tactical.netLabel}）${tactical.tips.length > 0 ? `；实战情报：${tactical.tips.join("；")}` : ""}。玩家针对这些已扫出的义体、护甲弱点、旧伤或无 ICE 缺口采取行动、骇入或交涉施压时，直接享有确切情报与先手优势。`,
-      );
+      if (isExtract) {
+        lines.push("  【玩家已用义眼扫描此人】");
+      } else {
+        const tactical = scanTacticalProfile(npc, stage.data, stage.now);
+        lines.push(
+          `  【玩家已用义眼扫描此人】玩家已掌握其植入体配置、威胁档次（${tactical.threatLabel}）与骇入条件（${tactical.netLabel}）${tactical.tips.length > 0 ? `；实战情报：${tactical.tips.join("；")}` : ""}。玩家针对这些已扫出的义体、护甲弱点、旧伤或无 ICE 缺口采取行动、骇入或交涉施压时，直接享有确切情报与先手优势。`,
+        );
+      }
     }
     lines.push(
       ...behaviorChipLines(

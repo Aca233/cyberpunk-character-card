@@ -67,10 +67,29 @@ export const JobStatusSchema = z.enum([
 ]);
 export type JobStatus = z.infer<typeof JobStatusSchema>;
 
+/** 委托小队成员状态：已入伙 / 已足额分账 / 被克扣拖欠 / 已离队 */
+export const JobCrewStatusSchema = z.enum(["joined", "paid", "shorted", "left"]);
+export type JobCrewStatus = z.infer<typeof JobCrewStatusSchema>;
+
+/** 合伙接单的小队搭档与分成协议 */
+export const JobCrewMemberSchema = z.object({
+  npc: z.string().min(1),
+  name: z.string().min(1),
+  role: z.string().trim().min(1).max(40).default("搭档"),
+  /** 约定分成百分比（0–80；0 表示纯义气帮忙不分账） */
+  cutPercent: z.number().int().min(0).max(80).default(0),
+  /** 结单时实际分给该搭档的欧元；未结单为 null */
+  paid: z.number().int().min(0).nullable().default(null),
+  status: JobCrewStatusSchema.default("joined"),
+});
+export type JobCrewMember = z.infer<typeof JobCrewMemberSchema>;
+
 /** 结束时记下的结算，给结算卡看；报酬见 paid */
 export const JobSettlementSchema = z.object({
   /** 从接单到结束的人性变化；接单时还没记人性的旧委托为 null */
   humanity: z.number().int().nullable(),
+  /** 扣除搭档分成后玩家实际净到手的欧元（无小队分账时等于 paid） */
+  playerNet: z.number().int().min(0).nullable().optional(),
 });
 export type JobSettlement = z.infer<typeof JobSettlementSchema>;
 
@@ -113,6 +132,8 @@ export const JobSchema = z.object({
   summary: z.string().nullable(),
   /** 接单时的人性，结算时算这一单的人性变化 */
   humanityAtAccept: z.number().int().nullable().default(null),
+  /** 合伙参与这单委托的小队搭档与分成约定 */
+  crew: z.array(JobCrewMemberSchema).max(6).default([]),
   settlement: JobSettlementSchema.nullable().default(null),
 });
 export type Job = z.infer<typeof JobSchema>;
@@ -156,31 +177,59 @@ export const JobOfferSchema = z
   );
 export type JobOffer = z.infer<typeof JobOfferSchema>;
 
+const ExistingJobIdSchema = z.string().min(1).describe("【委托】里已有的委托 id");
+
 export const JobAcceptSchema = z
-  .object({ type: z.literal("jobAccept"), id: z.string().min(1) })
+  .object({ type: z.literal("jobAccept"), id: ExistingJobIdSchema })
   .describe("玩家角色在正文里答应接下这单");
 export type JobAccept = z.infer<typeof JobAcceptSchema>;
 
 export const JobNoteSchema = z
-  .object({ type: z.literal("jobNote"), id: z.string().min(1), note: z.string().min(1) })
+  .object({ type: z.literal("jobNote"), id: ExistingJobIdSchema, note: z.string().min(1) })
   .describe("进展笔记：这单有了实质进展、玩家选了某条路、转折被揭开时写一句");
 export type JobNote = z.infer<typeof JobNoteSchema>;
+
+export const JobCrewSchema = z
+  .object({
+    type: z.literal("jobCrew"),
+    action: z.enum(["join", "leave"]),
+    /** 委托 id */
+    id: ExistingJobIdSchema,
+    /** 搭档的人物卡 id */
+    npc: z.string().min(1).describe("【人物】里已有的人物卡 id"),
+    /** 分工定位，如「正面火力」「黑客破冰」「接应车手」 */
+    role: z.string().trim().min(1).max(40).optional(),
+    /** 约定分成百分比（0–80 整数；0 为义气帮忙不分账） */
+    cutPercent: z.number().int().min(0).max(80).optional(),
+  })
+  .describe(
+    "委托小队入伙或离队：和已结识人物谈妥一起干某单委托并约好分工和分成比例时发 join；搭档中途退出或阵亡离队时发 leave",
+  );
+export type JobCrew = z.infer<typeof JobCrewSchema>;
+
+export const JobCrewPayoutSchema = z.object({
+  npc: z.string().min(1),
+  paid: z.number().int().min(0).max(100_000),
+});
+export type JobCrewPayout = z.infer<typeof JobCrewPayoutSchema>;
 
 export const JobEndSchema = z
   .object({
     type: z.literal("jobEnd"),
-    id: z.string().min(1),
+    id: ExistingJobIdSchema,
     outcome: JobOutcomeSchema,
-    /** 实际已经收到的欧元；未到账写 0，不因完成任务自动付款 */
+    /** 实际已经收到的总欧元；未到账写 0，不因完成任务自动付款；若有入伙搭档，代码自动按约定分成扣减后将净额入玩家钱包 */
     paid: z.number().int().min(0).max(100_000).default(0),
+    /** 可选：仅当正文里玩家故意克扣、改账或另行约定实付给搭档的数额时填写；省略则自动按约定分成比例足额分账 */
+    crewPayouts: z.array(JobCrewPayoutSchema).max(6).optional(),
     summary: z.string().min(1),
   })
   .describe(
-    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；paid 仅记录实际到账，未收款写 0；不会按结局发声望或好感，关系后果应有实际事实；summary 一句话总评",
+    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；paid 记本单实际到账总报酬，未收款写 0；有入伙搭档时代码自动按约定分成% 结算玩家净到手，若玩家故意少给或黑吃黑再写 crewPayouts，代码自动给对方记欠账；summary 一句话总评",
   );
 export type JobEnd = z.infer<typeof JobEndSchema>;
 
-export type JobCommand = JobOffer | JobAccept | JobNote | JobEnd;
+export type JobCommand = JobOffer | JobAccept | JobNote | JobCrew | JobEnd;
 
 /** 只能由代码发出：开档时写入中间人 */
 export const SeedFixerSchema = z.object({

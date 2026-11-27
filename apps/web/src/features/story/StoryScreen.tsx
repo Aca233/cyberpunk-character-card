@@ -38,6 +38,7 @@ import { type SaveImagesController, SaveImagesProvider } from "../images/SaveIma
 import { imageStyleConfig, useNarrativePrefs } from "../settings/prefs";
 import { EmptyState } from "../status/StatusParts";
 import { AutofixerModal } from "./AutofixerModal";
+import { syncCustomGearArtFromView } from "./art";
 import { ChronicleBody, EndStoryModal } from "./ChroniclePanel";
 import { CityBackdrop } from "./CityBackdrop";
 import {
@@ -263,6 +264,9 @@ export function StoryScreen() {
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 2,
   });
   const view = query.data;
+  useMemo(() => {
+    syncCustomGearArtFromView(view);
+  }, [view]);
   useStoryPreload(view, bindings, client);
   const imageModalTarget = imageModal?.bind;
   const modalTurn =
@@ -459,11 +463,22 @@ export function StoryScreen() {
     () => (view ? partitionStorageGroups(view) : { own: [], elsewhere: [] }),
     [view],
   );
+  const nearbyCompanions = useMemo(
+    () => view?.npcs.filter((n) => n.alive && n.following && n.here) ?? [],
+    [view?.npcs],
+  );
+  const lootTotalCount = useMemo(
+    () => (view ? view.combat.loot.reduce((sum, group) => sum + group.items.length, 0) : 0),
+    [view],
+  );
   const inventoryViewKeys = useMemo<readonly InventoryViewKey[]>(() => {
-    const keys: InventoryViewKey[] = ["carried", ...storagePartition.own.map((g) => g.key)];
+    const keys: InventoryViewKey[] = ["carried"];
+    if (lootTotalCount > 0) keys.push("loot");
+    for (const comp of nearbyCompanions) keys.push(`npc:${comp.id}`);
+    keys.push(...storagePartition.own.map((g) => g.key));
     if (storagePartition.elsewhere.length > 0) keys.push("elsewhere");
     return keys;
-  }, [storagePartition]);
+  }, [lootTotalCount, nearbyCompanions, storagePartition]);
   const effectiveInventoryView: InventoryViewKey = inventoryViewKeys.includes(inventoryView)
     ? inventoryView
     : "carried";
@@ -1399,6 +1414,15 @@ export function StoryScreen() {
     | readonly [InventoryViewKey, string, number, boolean]
   )[] = [
     ["carried", "随身", carriedUniqueCount],
+    ...(lootTotalCount > 0
+      ? ([["loot", "战利品", lootTotalCount, !view.combat.active]] as const)
+      : []),
+    ...nearbyCompanions.map((comp): readonly [InventoryViewKey, string, number, boolean] => [
+      `npc:${comp.id}`,
+      comp.name,
+      comp.body?.gear.length ?? 0,
+      !view.combat.active,
+    ]),
     ...storagePartition.own.map((group): readonly [InventoryViewKey, string, number, boolean] => [
       group.key,
       group.name,
@@ -1450,6 +1474,26 @@ export function StoryScreen() {
             ? undefined
             : (id) => void act({ type: "unequipItem", id }, "gear")
         }
+        onOutfitPreset={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (action, opts) =>
+                act(
+                  {
+                    type: "outfitPreset",
+                    action,
+                    ...(opts?.id ? { id: opts.id } : {}),
+                    ...(opts?.name ? { name: opts.name } : {}),
+                  },
+                  "gear",
+                  true,
+                )
+        }
+        onFieldAid={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (id) => act({ type: "useFieldAid", id }, "healing", true)
+        }
         onMod={
           busy || view.death || view.ended || view.combat.active
             ? undefined
@@ -1457,6 +1501,21 @@ export function StoryScreen() {
         }
         onPlaceItem={placeItemAction}
         onTransferItem={transferItemAction}
+        onLootCombatItem={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (from, item) => act({ type: "lootCombatItem", from, item }, "loot", true)
+        }
+        onLootCombatAll={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (from) => act({ type: "lootCombatAll", ...(from ? { from } : {}) }, "loot", true)
+        }
+        onExchangeCompanionGear={
+          busy || view.death || view.ended || view.combat.active
+            ? undefined
+            : (id, action, item) => act({ type: "npcExchangeGear", id, action, item }, "gear", true)
+        }
         onBuyHome={busy ? undefined : setBuyingHome}
         onCallVehicle={
           busy || view.death || view.ended || view.combat.active
@@ -1592,6 +1651,7 @@ export function StoryScreen() {
             closePinned();
             setAtDoc(true);
           }}
+          onOpenChat={openPhoneChatWith}
           onOpenMap={openMap}
           onDraftAction={draftAction}
         />
@@ -2007,7 +2067,17 @@ export function StoryScreen() {
                   onBuy={
                     busy || view.death || view.ended
                       ? undefined
-                      : (id) => act({ type: "buyItem", shop: shop.id, id }, "shop", true)
+                      : (id, forNpc) =>
+                          act(
+                            {
+                              type: "buyItem",
+                              shop: shop.id,
+                              id,
+                              ...(forNpc ? { forNpc } : {}),
+                            },
+                            "shop",
+                            true,
+                          )
                   }
                   onSell={
                     busy || view.death || view.ended
@@ -2054,6 +2124,7 @@ export function StoryScreen() {
                         doc: doc.id,
                         ...(options?.armSide ? { armSide: options.armSide } : {}),
                         ...(options?.replace ? { replace: options.replace } : {}),
+                        ...(options?.forNpc ? { forNpc: options.forNpc } : {}),
                       },
                       "ripperdoc",
                       true,
@@ -2085,6 +2156,15 @@ export function StoryScreen() {
                     const doc = view.ripperdoc;
                     if (!doc) return;
                     await act({ type: "repairCyberware", id, doc: doc.id }, "ripperdoc", true);
+                  }
+            }
+            onPayChromeCare={
+              busy || view.death || view.ended || view.combat.active
+                ? undefined
+                : async () => {
+                    const doc = view.ripperdoc;
+                    if (!doc) return;
+                    await act({ type: "payChromeCare", doc: doc.id }, "ripperdoc", true);
                   }
             }
             onClose={() => {

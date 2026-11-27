@@ -404,7 +404,8 @@ export function TraumaMembership({
                         恶土、狗镇与暴恐机动队出动期间不提供救援；银卡不承保濒死。救援仅稳定生命体征，伤口、断肢和损坏义体仍需后续处理。
                       </p>
                       <p>
-                        会籍不自动续费；续期最多预缴十二期。升级按剩余每 30 天补差 4,000
+                        会籍不自动续费；续期最多预缴十二期。升级按剩余每 30 天补差{" "}
+                        {money(trauma.prices.platinum - trauma.prices.silver)}
                         欧元，不足一期按一期。
                       </p>
                       {trauma.lastRescue ? (

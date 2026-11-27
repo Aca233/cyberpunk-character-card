@@ -3,9 +3,11 @@ import { useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { fallbackCyberwareArtFor } from "../story/art";
 import type { CyberSlot } from "../story/CyberDoll";
 import styles from "./characters.module.css";
 import { saveLocalCustomCyberware } from "./creator";
+import { GearArtPicker } from "./GearArtPicker";
 
 type CategoryId = cyberwareRules.CyberwareCategoryId;
 
@@ -156,6 +158,8 @@ export function CustomCyberwareForm({
       ? initial.exclusiveGroup
       : "",
   );
+  const [art, setArt] = useState<string | undefined>(() => initial?.art);
+  const [customImage, setCustomImage] = useState<string | undefined>(() => initial?.customImage);
 
   const handleCategoryChange = (next: CategoryId) => {
     setCategory(next);
@@ -219,6 +223,8 @@ export function CustomCyberwareForm({
     ...(isDeck ? { deckProfile: "自定义网络接入仓" } : {}),
     ...(exclusiveGroup ? { exclusiveGroup } : {}),
     ...(category === "arms" ? { armSide } : {}),
+    ...(art ? { art } : {}),
+    ...(customImage ? { customImage } : {}),
     custom: true,
     packId: initial?.packId ?? "local",
   };
@@ -344,6 +350,18 @@ export function CustomCyberwareForm({
           </div>
         )}
       </div>
+
+      <GearArtPicker
+        group="cyberware"
+        subGroup={category}
+        fallbackArt={fallbackCyberwareArtFor({ category, slot })}
+        art={art}
+        customImage={customImage}
+        onChange={(next) => {
+          setArt(next.art);
+          setCustomImage(next.customImage);
+        }}
+      />
 
       {/* 第三行：效果与限制说明 */}
       <label className={styles.field}>

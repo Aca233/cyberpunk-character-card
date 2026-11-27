@@ -4870,6 +4870,39 @@
   cursor: var(--cp-cursor-invalid);
 }
 
+/* 拳赛与街头赛车场馆标记：放在地点图钉上方偏左，醒目赛博黄 */
+.mapSidegig {
+  position: absolute;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  margin-left: 0;
+  margin-top: -28px;
+}
+
+.mapSidegigPin {
+  position: absolute;
+  left: -12px;
+  top: -12px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  color: var(--cp-yellow);
+  background: currentColor;
+  mask: var(--icon) center / contain no-repeat;
+  cursor: var(--cp-cursor-hand);
+  transition:
+    color var(--dur-flash),
+    transform var(--dur-flash);
+}
+
+.mapSidegigPin:is(:hover, :focus-visible, [aria-pressed="true"]) {
+  outline: none;
+  color: #fff;
+  transform: scale(1.22);
+}
+
 /* NCPD 警情标记：放在地点图钉右下方，不与左下方的委托和右上角的人物重叠；点开出同一地点的路线卡 */
 .mapPolice {
   position: absolute;

@@ -1,13 +1,16 @@
-import { RADAR_ANCHORS } from "@cp/content";
+import { buildVCharacterCard, RADAR_ANCHORS, type VGender, type VOriginKey } from "@cp/content";
 import {
   type Board,
   CASH_TIER_INFO,
+  CASH_TIERS,
   type CharacterCard,
+  CUSTOM_EDDIES_MAX,
   cyberwareRules,
   FLAW_MAX,
   type ImagePromptRequest,
   PAST_MAX,
   RELATION_INFO,
+  replacedNpcIdOf,
   SKILL_MAX,
   TAROT_CARDS,
   TAROT_INFO,
@@ -51,9 +54,13 @@ import {
   emptyBoard,
   inherentCyberware,
   LOCAL_CYBERWARE_EVENT,
+  LOCAL_ITEMS_EVENT,
   LOCAL_MODULES_EVENT,
   loadLocalCustomCyberware,
+  loadLocalCustomItems,
   loadLocalCustomModules,
+  loadLocalCustomNpcs,
+  loadLocalNpcOverrides,
   mergeCreatorCatalog,
   ORIGIN_ECOSYSTEM_LABELS,
   originDefaultLoadout,
@@ -66,9 +73,18 @@ import { anchorLabel, StartMapPicker, startAnchor } from "./StartMapPicker";
 import wb from "./workbench.module.css";
 
 const PRONOUN_PRESETS: readonly string[] = ["他", "她", "TA"];
+const V_GENDER_OPTIONS: readonly { readonly id: VGender; readonly label: string }[] = [
+  { id: "female", label: "女 V · 瓦莱丽" },
+  { id: "male", label: "男 V · 文森特" },
+];
+const V_ORIGIN_OPTIONS: readonly { readonly id: VOriginKey; readonly label: string }[] = [
+  { id: "street-kid", label: "街头小子" },
+  { id: "nomad", label: "流浪者" },
+  { id: "corpo", label: "公司员工" },
+];
 
 type TraitsTab = "past" | "skill" | "flaw";
-type CyberTab = "topology" | "loadout";
+type CyberTab = "topology" | "weapons" | "items" | "kit";
 type ConnectionsTab = "people" | "map";
 
 /** 塔罗命牌卡：带光标跟随 3D 按压倾斜与全息镜面反光 */
@@ -172,6 +188,7 @@ export function CharacterCreator({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [localModules, setLocalModules] = useState(() => loadLocalCustomModules());
   const [localCyberware, setLocalCyberware] = useState(() => loadLocalCustomCyberware());
+  const [localItems, setLocalItems] = useState(() => loadLocalCustomItems());
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
   const queryClient = useQueryClient();
@@ -179,11 +196,14 @@ export function CharacterCreator({
   useEffect(() => {
     const syncModules = () => setLocalModules(loadLocalCustomModules());
     const syncChrome = () => setLocalCyberware(loadLocalCustomCyberware());
+    const syncItems = () => setLocalItems(loadLocalCustomItems());
     window.addEventListener(LOCAL_MODULES_EVENT, syncModules);
     window.addEventListener(LOCAL_CYBERWARE_EVENT, syncChrome);
+    window.addEventListener(LOCAL_ITEMS_EVENT, syncItems);
     return () => {
       window.removeEventListener(LOCAL_MODULES_EVENT, syncModules);
       window.removeEventListener(LOCAL_CYBERWARE_EVENT, syncChrome);
+      window.removeEventListener(LOCAL_ITEMS_EVENT, syncItems);
     };
   }, []);
 
@@ -191,6 +211,7 @@ export function CharacterCreator({
     () => board.cyberware.filter((c) => Boolean(c.custom && c.slot)),
     [board.cyberware],
   );
+  const boardCustomItems = useMemo(() => board.kit.customItems ?? [], [board.kit.customItems]);
   const data = useMemo(
     () =>
       boardData
@@ -199,9 +220,10 @@ export function CharacterCreator({
             localModules,
             [],
             [...localCyberware, ...boardCustomCyberware],
+            [...localItems, ...boardCustomItems],
           )
         : undefined,
-    [boardData, localModules, localCyberware, boardCustomCyberware],
+    [boardData, localModules, localCyberware, boardCustomCyberware, localItems, boardCustomItems],
   );
   const fallbackLoc = defaultStartLocationFor(card, data);
   const validBoardLoc =
@@ -270,10 +292,14 @@ export function CharacterCreator({
       };
       const savedEntry =
         isSample && !dirty && characterId ? { id: characterId } : await onSave(targetCard);
+      const globalOverrides = loadLocalNpcOverrides();
+      const globalCustomNpcs = loadLocalCustomNpcs();
       const save = await api.createSave({
         characterId: savedEntry.id,
         title: saveTitle.trim() || `${card.name.trim()}的夜之城传奇`,
         ...(startLoc ? { startLocation: startLoc } : {}),
+        ...(globalOverrides.length > 0 ? { npcOverrides: globalOverrides } : {}),
+        ...(globalCustomNpcs.length > 0 ? { customNpcs: globalCustomNpcs } : {}),
       });
       await queryClient.invalidateQueries({ queryKey: ["saves"] });
       clearDraft();
@@ -297,7 +323,7 @@ export function CharacterCreator({
   const jumpToCheck = (target: CheckTarget) => {
     const step = stepForCheckTarget(target);
     goToStep(step);
-    if (target === "kit") setCyberTab("loadout");
+    if (target === "kit") setCyberTab("kit");
     if (target === "cyber") setCyberTab("topology");
     if (target === "people") setConnectionsTab("people");
     if (target === "identity") {
@@ -403,8 +429,13 @@ export function CharacterCreator({
   const fallbackAnchor = startAnchor(fallbackLoc);
   const loadoutSummary = originDefaultLoadout(card, data);
   const weaponNames = board.kit.weapons.map(
-    (id) => data?.weapons?.find((w) => w.id === id)?.name ?? id,
+    (id) => data?.weapons?.find((w) => w.id === id)?.name ?? data?.names?.[id] ?? id,
   );
+  const itemSummary = (board.kit.items ?? []).map((entry) => {
+    const label =
+      data?.items?.find((i) => i.id === entry.id)?.name ?? data?.names?.[entry.id] ?? entry.id;
+    return entry.count > 1 ? `${label}×${entry.count}` : label;
+  });
   const customVehicleName = board.kit.vehicle
     ? (data?.vehicles?.find((v) => v.id === board.kit.vehicle)?.name ?? board.kit.vehicle)
     : null;
@@ -541,6 +572,84 @@ export function CharacterCreator({
             {/* ———— Step 01：身份与出身（公民铭牌 + 2077 命牌 + 出身背景） ———— */}
             {activeStep === "identity" && (
               <div key="step-identity" className={wb.stepBody}>
+                {replacedNpcIdOf(card) === "v" && (
+                  <section className={wb.vPresetBar} aria-label="V 预设快速调配">
+                    <div className={wb.vPresetHead}>
+                      <span className={wb.vPresetTitle}>V 预设快速调配 · 性别 × 三出身</span>
+                      <span className={wb.note}>
+                        一键切换性别与出身，自动同步背景、装备、义体与旧识；切完后仍可自由微调，开新档自动去重城内
+                        NPC 版 V。
+                      </span>
+                    </div>
+                    <div className={wb.vPresetGroups}>
+                      <div className={wb.vPresetGroup}>
+                        <span className={wb.vPresetLabel}>性别</span>
+                        {V_GENDER_OPTIONS.map((opt) => {
+                          const curGender: VGender =
+                            card.pronoun === "他" || card.name.trim() === "文森特"
+                              ? "male"
+                              : "female";
+                          const curOrigin: VOriginKey =
+                            board.origin?.id === "nomad"
+                              ? "nomad"
+                              : board.origin?.id === "corpo"
+                                ? "corpo"
+                                : "street-kid";
+                          return (
+                            <Button
+                              key={opt.id}
+                              small
+                              primary={curGender === opt.id}
+                              pressed={curGender === opt.id}
+                              onClick={() => {
+                                const next = buildVCharacterCard(opt.id, curOrigin);
+                                onChange({
+                                  ...next,
+                                  ...(card.portrait ? { portrait: card.portrait } : {}),
+                                });
+                              }}
+                            >
+                              {opt.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <div className={wb.vPresetGroup}>
+                        <span className={wb.vPresetLabel}>出身</span>
+                        {V_ORIGIN_OPTIONS.map((opt) => {
+                          const curGender: VGender =
+                            card.pronoun === "他" || card.name.trim() === "文森特"
+                              ? "male"
+                              : "female";
+                          const curOrigin: VOriginKey =
+                            board.origin?.id === "nomad"
+                              ? "nomad"
+                              : board.origin?.id === "corpo"
+                                ? "corpo"
+                                : "street-kid";
+                          return (
+                            <Button
+                              key={opt.id}
+                              small
+                              primary={curOrigin === opt.id}
+                              pressed={curOrigin === opt.id}
+                              onClick={() => {
+                                const next = buildVCharacterCard(curGender, opt.id);
+                                onChange({
+                                  ...next,
+                                  ...(card.portrait ? { portrait: card.portrait } : {}),
+                                });
+                              }}
+                            >
+                              {opt.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
                 <section className={wb.formCard} aria-label="公民身份信息">
                   <h3 className={wb.cardTitle}>身份铭牌 · CITIZEN ID</h3>
                   <div className={wb.nameGrid}>
@@ -878,7 +987,7 @@ export function CharacterCreator({
               </div>
             )}
 
-            {/* ———— Step 03：义体与行装（子标签隔离：义体拓扑 / 行装与座驾） ———— */}
+            {/* ———— Step 03：义体与行装（四分区直达：义体装配 / 随身武器 / 随身物品 / 资金与座驾） ———— */}
             {activeStep === "cyberware" && (
               <div key="step-cyberware" className={wb.stepBody}>
                 <div className={wb.subTabs} role="tablist" aria-label="义体与行装分区">
@@ -890,8 +999,8 @@ export function CharacterCreator({
                     onClick={() => setCyberTab("topology")}
                   >
                     <span>
-                      义体装配与负荷 ({board.cyberware.length + activeInherentCount} 件 ·{" "}
-                      {loadInfo.label})
+                      义体装配 ({board.cyberware.length + activeInherentCount} 件 · {loadInfo.label}
+                      )
                     </span>
                     <span
                       className={wb.subTabLine}
@@ -906,13 +1015,44 @@ export function CharacterCreator({
                     type="button"
                     role="tab"
                     className={wb.subTab}
-                    aria-selected={cyberTab === "loadout"}
-                    onClick={() => setCyberTab("loadout")}
+                    aria-selected={cyberTab === "weapons"}
+                    onClick={() => setCyberTab("weapons")}
                   >
-                    <span>
-                      行装与座驾 ({loadoutSummary.finalEddies} € · 武器 {board.kit.weapons.length}
-                      /2)
-                    </span>
+                    <span>随身武器 ({board.kit.weapons.length} 把)</span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={cyberTab === "items"}
+                    onClick={() => setCyberTab("items")}
+                  >
+                    <span>随身物品 ({board.kit.items?.length ?? 0} 种)</span>
+                    <span
+                      className={wb.subTabLine}
+                      style={{
+                        maskImage: tabLineMask,
+                        WebkitMaskImage: tabLineMask,
+                      }}
+                      aria-hidden
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    className={wb.subTab}
+                    aria-selected={cyberTab === "kit"}
+                    onClick={() => setCyberTab("kit")}
+                  >
+                    <span>专属座驾 ({effectiveVehicles[0] ?? "步行"})</span>
                     <span
                       className={wb.subTabLine}
                       style={{
@@ -1032,10 +1172,14 @@ export function CharacterCreator({
                   </div>
                 )}
 
-                {cyberTab === "loadout" && (
-                  <div className={wb.embeddedPanel}>
+                {cyberTab !== "topology" && (
+                  <div key={`loadout-${cyberTab}`} className={wb.embeddedPanel}>
                     {pickerProps ? (
-                      <LoadoutPicker {...pickerProps} />
+                      <LoadoutPicker
+                        {...pickerProps}
+                        section={cyberTab}
+                        onSwitchSection={(next) => setCyberTab(next)}
+                      />
                     ) : (
                       <p className={wb.note}>正在加载开局行装目录…</p>
                     )}
@@ -1094,7 +1238,12 @@ export function CharacterCreator({
                 {connectionsTab === "people" && (
                   <div className={wb.embeddedPanel}>
                     {data ? (
-                      <PeoplePicker board={board} data={data} commit={commit} />
+                      <PeoplePicker
+                        board={board}
+                        data={data}
+                        commit={commit}
+                        replacesNpcId={replacedNpcIdOf(card)}
+                      />
                     ) : (
                       <p className={wb.note}>正在加载夜之城人物目录…</p>
                     )}
@@ -1225,19 +1374,81 @@ export function CharacterCreator({
               onLookChange={(look) => change({ look })}
             />
 
-            {/* 核心遥测快览（2x2 紧凑数字/地标矩阵） */}
-            <div className={wb.dossierTelemetry}>
-              <div className={wb.teleCell}>
-                <span className={wb.teleKey}>启动资金</span>
-                <strong className={wb.teleValAccent}>
-                  {loadoutSummary.finalEddies.toLocaleString("en-US")} €
-                </strong>
-                <span className={wb.teleSub}>
-                  {board.kit.customEddies !== null
-                    ? "自定义金额"
-                    : CASH_TIER_INFO[board.kit.cashTier].label}
-                </span>
+            {/* 启动资金（右侧栏常驻直调）+ 核心遥测快览 */}
+            <section className={wb.asideCashCard} aria-label="启动资金调节">
+              <div className={wb.asideCashHead}>
+                <div className={wb.asideCashValWrap}>
+                  <span className={wb.teleKey}>启动资金</span>
+                  <strong className={wb.teleValAccent}>
+                    {loadoutSummary.finalEddies.toLocaleString("en-US")} €
+                  </strong>
+                </div>
+                <div className={wb.asideCashInputWrap}>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={CUSTOM_EDDIES_MAX}
+                    step={1000}
+                    className={wb.asideCashInput}
+                    value={board.kit.customEddies ?? ""}
+                    placeholder="自填金额"
+                    aria-label="自定义开局启动资金（欧元）"
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      if (raw === "") {
+                        commit({ ...board, kit: { ...board.kit, customEddies: null } });
+                        return;
+                      }
+                      const parsed = Math.floor(Number(raw));
+                      if (!Number.isFinite(parsed)) return;
+                      commit({
+                        ...board,
+                        kit: {
+                          ...board.kit,
+                          customEddies: Math.max(0, Math.min(CUSTOM_EDDIES_MAX, parsed)),
+                        },
+                      });
+                    }}
+                  />
+                  {board.kit.customEddies !== null && (
+                    <button
+                      type="button"
+                      className={wb.asideCashReset}
+                      onClick={() =>
+                        commit({ ...board, kit: { ...board.kit, customEddies: null } })
+                      }
+                    >
+                      档位
+                    </button>
+                  )}
+                </div>
               </div>
+              <fieldset className={wb.asideCashTiers} aria-label="启动资金档位">
+                {CASH_TIERS.map((tier) => {
+                  const active = board.kit.customEddies === null && board.kit.cashTier === tier;
+                  return (
+                    <button
+                      key={tier}
+                      type="button"
+                      className={wb.asideCashTierBtn}
+                      aria-pressed={active}
+                      title={`${CASH_TIER_INFO[tier].label}：${CASH_TIER_INFO[tier].desc}`}
+                      onClick={() =>
+                        commit({
+                          ...board,
+                          kit: { ...board.kit, cashTier: tier, customEddies: null },
+                        })
+                      }
+                    >
+                      {CASH_TIER_INFO[tier].label}
+                    </button>
+                  );
+                })}
+              </fieldset>
+            </section>
+
+            <div className={wb.dossierTelemetry}>
               <div className={wb.teleCell}>
                 <span className={wb.teleKey}>装配义体</span>
                 <strong className={wb.teleVal}>{mountedChromeNames.length} 件</strong>
@@ -1290,10 +1501,13 @@ export function CharacterCreator({
                 <dd>
                   {[
                     weaponNames.length > 0 ? `武器：${weaponNames.join(" / ")}` : "出身标配武器",
+                    itemSummary.length > 0 ? `物品：${itemSummary.join(" / ")}` : "",
                     effectiveVehicles.length > 0
                       ? `座驾：${effectiveVehicles.join(" / ")}`
                       : "步行",
-                  ].join(" · ")}
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </dd>
               </div>
               {board.acquaintances.length > 0 && (

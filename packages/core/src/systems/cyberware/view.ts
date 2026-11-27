@@ -35,6 +35,8 @@ export function cyberwarePartsView({ world, data }: ViewContext) {
       location: part.location,
       rarity: catalog.get(part.model)?.rarity ?? null,
       ability: catalog.get(part.model)?.ability ?? null,
+      art: catalog.get(part.model)?.art ?? null,
+      customImage: catalog.get(part.model)?.customImage ?? null,
     }));
 }
 
@@ -130,6 +132,8 @@ export function cyberwareView({ world, data }: ViewContext) {
           : null,
       /** 被打坏了：修好前失去能力 */
       broken: health.brokenChrome.includes(c.id),
+      art: def?.art ?? null,
+      customImage: def?.customImage ?? null,
     };
   });
 }

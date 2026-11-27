@@ -3,9 +3,11 @@ import type { LogRecord } from "../../kernel/turnlog";
 import type { WorldState } from "../../kernel/world";
 import { CARRY_AND_WEAPON_RULES } from "../../systems/inventory/prompt";
 import { memoryRecords } from "../../systems/memory";
+import { registry } from "../../systems/registry";
 import { schemaDoc } from "../doc";
 import { JudgeDocSchema, type Memory } from "../stages";
 import {
+  ALWAYS_ON_MODULE_IDS,
   activeOpening,
   boostNote,
   formatInput,
@@ -19,8 +21,8 @@ import {
 } from "./context";
 import { BASE_RULES, modulesBlock, systemMessage, userMessage } from "./layers";
 
-/** ① 判断：辅助模型，低温，只输出 JSON（记忆调度 + 定性物理与社会因果裁决） */
-export const JUDGE_TEMPERATURE = 0.3;
+/** ① 判断：辅助模型，低温稳定裁决，只输出 JSON（记忆调度 + 定性物理与社会因果裁决） */
+export const JUDGE_TEMPERATURE = 0.15;
 
 /** L1 */
 export const JUDGE_STAGE = `【这一步：判断】
@@ -43,8 +45,10 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 加成的条件（武器、义体、物品、人脉）必须在【当前状态】或【装备/义体】里真实存在；没有就是没有。
 - limb：仅在刀刃、霰弹枪、爆炸、重型机械等真可能当场打断手臂或腿的致命场面写 true；平常不写。
 
-【对手行动】
+【对手行动与人物潜台词】
 - foes：场上有敌对人物、安保、黑客或防备你的人时，用一句话点出他这一轮的真实反应、防守站位或反制算盘（他不是木桩）；没有对手写 null。
+- npcPulse：有卡人物在场时，用一两句话点出玩家这轮话/动作戳中了对方哪条诉求、忌讳、人情债、旧记忆或隐藏秘密，以及对方的潜台词与顾忌（给正文主笔作幕后导演参考，不直接说破秘密）；无在场人物或普通赶路写 null。
+- newNpcLikely：本轮是否可能出场尚未建卡的新人物（搭讪陌生人、找新店员/守卫/线人、闯入陌生据点）或首次定型「还没定」旧识；只和熟人对话、独处、常规交易或与既有敌人交火写 false。
 
 【加速义体（sandevistan）】
 - 只有设备可用且玩家明确要求当前开启或使用加速神经时写 true。简称、错字可按语义理解，但询问能力、回忆、假设、否定和单纯处于危险都不代表同意开启。
@@ -62,12 +66,33 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 仅玩家明确要先到店再交易时，destination 写对应目标地点 id；只是提到异地商店或询价不等于授权出行。已有路线面板出行按当前出行信息理解，不另猜目的地。
 
 【旧记忆】
-- recall：只能从【可调的旧记忆】里原样抄标题，最多 3 条；没有列出或用不上写 []。`;
+- recall：从【可调的旧记忆】里挑出本轮用得上的条目标题（只抄竖线“｜”前面的完整标题），最多 3 条；没有列出或用不上写 []。`;
 
 /** ① 判断的例子 */
-export const JUDGE_EXAMPLE = `{"read": "你想翻上铁皮棚顶借着夜色偷听中间人接头", "ooc": false, "ruling": {"kind": "costly", "outcome": "铁皮能踩上去看清下面的接头人，但年久失修的波纹板会嘎吱作响、震落铁锈惊动放风的人", "harm": "graze", "reason": "棚顶铁皮松动且下面有人把风，你穿的普通皮夹克能兜住刮擦但掩护不了声音"}, "counterHack": null, "buy": null, "recall": [], "foes": "中间人旁边那个嚼口香糖的保镖一直盯着二楼窗台和棚顶，听到响动会第一时间拔枪照手电", "sandevistan": false}`;
+export const JUDGE_EXAMPLE = `{"read": "你想翻上铁皮棚顶借着夜色偷听中间人接头", "ooc": false, "ruling": {"kind": "costly", "outcome": "铁皮能踩上去看清下面的接头人，但年久失修的波纹板会嘎吱作响、震落铁锈惊动放风的人", "harm": "graze", "reason": "棚顶铁皮松动且下面有人把风，你穿的普通皮夹克能兜住刮擦但掩护不了声音"}, "counterHack": null, "buy": null, "recall": [], "foes": "中间人旁边那个嚼口香糖的保镖一直盯着二楼窗台和棚顶，听到响动会第一时间拔枪照手电", "npcPulse": null, "newNpcLikely": true, "sandevistan": false}`;
+
+const JUDGE_RECALL_CANDIDATES = 24;
+const JUDGE_RECALL_SNIPPET = 28;
+
+function briefRecallLine(m: Memory): string {
+  const flat = m.text.replace(/\s+/g, " ").trim();
+  const snippet =
+    [...flat].length > JUDGE_RECALL_SNIPPET
+      ? `${[...flat].slice(0, JUDGE_RECALL_SNIPPET).join("")}…`
+      : flat;
+  return snippet ? `- ${m.title}｜${snippet}` : `- ${m.title}`;
+}
 
 let output: string | undefined;
+let judgeStaticModulesText: string | undefined;
+
+function staticJudgeModules(): string | undefined {
+  if (judgeStaticModulesText === undefined) {
+    const fixed = registry.rules.filter((m) => ALWAYS_ON_MODULE_IDS.has(m.id));
+    judgeStaticModulesText = modulesBlock("judge", fixed) ?? "";
+  }
+  return judgeStaticModulesText === "" ? undefined : judgeStaticModulesText;
+}
 
 /** L3：JSON 结构（配合原生 responseFormat 约束） */
 function judgeOutput(): string {
@@ -87,27 +112,36 @@ export function buildJudgePrompt(
   records = memoryRecords(world, records);
   const view = projectState(world, records, extras.data);
   const modules = stageModules(world, plan.input, extras);
+  const isOoc = plan.input.mode === "ooc";
+  const staticModules = isOoc ? undefined : staticJudgeModules();
+  const dynamicModules = isOoc ? modules : modules.filter((m) => !ALWAYS_ON_MODULE_IDS.has(m.id));
   const recent = view.turns
     .slice(-JUDGE_TURNS)
     .map((t) => `${formatInput(t.input)}\n${t.text}`)
     .join("\n\n");
-  const activeModulesText = modulesBlock("judge", modules);
+  const activeModulesText = modulesBlock("judge", dynamicModules);
   const content = userMessage({
     recap: recapFor(world, records, JUDGE_TURNS),
     recent: recent === "" ? undefined : `【最近几轮】\n${recent}`,
     modules: activeModulesText,
     scene: situation(world, records, view, plan, { ...extras, opening }, "judge"),
-    recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.map((m) => `- ${m.title}`).join("\n") : "（没有）"}`,
+    recall: `【可调的旧记忆】\n${memories.length > 0 ? memories.slice(0, JUDGE_RECALL_CANDIDATES).map(briefRecallLine).join("\n") : "（没有）"}`,
     input: formatInput(plan.input),
-    after: [boostNote(view, plan, "judge")],
+    after: [
+      boostNote(view, plan, "judge"),
+      plan.kind === "action" && plan.input.travel !== undefined
+        ? "（说明：本次为玩家在地图路线面板确认的常规出行，路线与路费已由系统校验可通行；除非当前正被现场人物物理拦阻或交火，否则不要对路途通行本身判 blocked，ruling 写 null 即可。）"
+        : undefined,
+    ],
     reminder: "（只输出判断的 JSON 对象。）",
   });
-  // 系统层保持 100% 静态可缓存前缀；随状态变化的场景规则模块放进用户消息
+  // 系统层保持 100% 静态可缓存前缀（核心守则 + 常驻模块）；仅动态场景规则模块放进用户消息
   const system = systemMessage("judge", [
     BASE_RULES,
     JUDGE_STAGE,
     CARRY_AND_WEAPON_RULES,
     judgeOutput(),
+    ...(staticModules ? [staticModules] : []),
   ]);
   return {
     rules: system.length + (activeModulesText?.length ?? 0),

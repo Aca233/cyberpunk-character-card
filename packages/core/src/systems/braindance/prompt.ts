@@ -26,7 +26,7 @@ export const braindanceRules: RuleModule<BraindanceState> = {
       Object.values(state.works).some((w) => input.text.includes(w.title))),
   judge: `- 超梦分级：commercial（商业娱乐）、sensory（感官调谐）、raw（调查原片）、xbd（地下黑超梦）。无需骰点或数值属性检定，全按硬件条件与情境定性裁决。
 - 模式硬限制：普通便携播放器（bd-portable-player）仅能沉浸回放（immerse）；进入编辑分析（edit）扫描视觉/音频/热成像三层线索必须持有专业编辑头环（bd-editor-wreath）或在具备调谐工作站的场馆（如丽姿酒吧地下室）操作。
-- 地下黑超梦（xbd）缺少安全滤波，沉浸观看时可能引发剧烈感官过载、短暂解离或闪回等具体精神症状，不做数值扣除。
+- 地下黑超梦（xbd）缺少安全滤波，沉浸（immerse）观看时代码会自动按当前神经阶段与压制剂状态结算真实的神经冲击症状，无需重复手写同一次 humanity affect；切编辑分析（edit）模式或提前服用神经压制剂可规避/缓冲直接感官过载。
 - 现场录制原片必须已安装且完好的「超梦录制器（braindance-recorder）」义体。`,
   narrate: `- 超梦既是夜之城的日常消遣（如丽姿酒吧包厢），也是调查取证工具；不因看片强加任务、奖励或危险。
 - 已有作品的片段、定稿原文与三层细节是固定记录，不随玩家猜测改写原片。片中人物只按原记录行动；录制者的感官与情绪是传入神经的刺激，不替玩家决定好恶或立场。

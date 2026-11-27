@@ -29,13 +29,58 @@ export function keeperOf(
 
 export const MONEY_CAP = 100_000;
 
+/** 重度义体神经校准周期（14 个游戏日）与触发门槛 */
+export const CHROME_CARE_PERIOD_DAYS = 14;
+export const CHROME_CARE_REMIND_BEFORE_DAYS = 3;
+export const CHROME_CARE_LOAD_MIN = 18;
+export const CHROME_CARE_HEAVY_COST = 1_500;
+export const CHROME_CARE_EXTREME_COST = 3_500;
+
+/** 夜之城身家与体面阶层（供叙事第一印象、高档门禁、开价与谈判筹码参考） */
+export const WealthTierSchema = z.enum(["broke", "scraping", "comfortable", "affluent", "mogul"]);
+export type WealthTier = z.infer<typeof WealthTierSchema>;
+
+export const WEALTH_TIER_META: Readonly<
+  Record<WealthTier, { readonly label: string; readonly summary: string }>
+> = {
+  broke: {
+    label: "囊中羞涩",
+    summary: "手头紧，赊账容易吃闭门羹，高端门禁与掮客多半冷眼相待",
+  },
+  scraping: {
+    label: "街头勉强",
+    summary: "普通夜之城佣兵手头，够付日常开销但谈大单拿不出多少垫资",
+  },
+  comfortable: {
+    label: "手头宽裕",
+    summary: "吃穿不愁、买装备和打点线人底气充足，街头中间人愿给实话",
+  },
+  affluent: {
+    label: "阔绰体面",
+    summary: "现金充裕或有体面家当，高档酒吧与门卫另眼相看，谈条件自带财力分量",
+  },
+  mogul: {
+    label: "出手豪阔",
+    summary: "财力与排面直抵上流，花钱办事极有分量，但也容易引来黑帮与掮客眼红设局",
+  },
+};
+
 export const EconomyStateSchema = z.object({
   /** 身上的欧元 */
   eddies: z.number().int().min(0),
   /** 已经结算过的事件 id；同一事件只结算一次 */
   settled: z.array(z.string()),
+  /** 重度义体神经校准维护已缴清至该游戏时刻（分钟）；null 表示按日历周期首期计 */
+  chromeCarePaidUntil: z.number().int().nullable().optional(),
 });
 export type EconomyState = z.infer<typeof EconomyStateSchema>;
+
+/** 仅代码发出：记录重度义体神经维护已续期到的时刻 */
+export const ChromeCareCommandSchema = z.object({
+  type: z.literal("economy.payChromeCare"),
+  paidUntil: z.number().int(),
+});
+export type ChromeCareCommand = z.infer<typeof ChromeCareCommandSchema>;
 
 /** 模型使用：{"type": "money", "delta": -40, "reason": "..."} */
 export const MoneyCommandSchema = z

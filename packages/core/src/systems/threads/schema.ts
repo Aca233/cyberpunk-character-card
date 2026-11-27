@@ -110,7 +110,7 @@ export type ThreadsState = z.infer<typeof ThreadsStateSchema>;
 export const ThreadCommandSchema = z
   .object({
     type: z.literal("thread"),
-    id: z.string().trim().min(1),
+    id: z.string().trim().min(1).describe("【局势】里已有的局势 id"),
     move: ThreadMoveSchema,
     reason: z.string().trim().min(1).max(THREAD_NEWS_MAX),
   })
@@ -123,7 +123,7 @@ export type ThreadCommand = z.infer<typeof ThreadCommandSchema>;
 export const ThreadToldSchema = z
   .object({
     type: z.literal("threadTold"),
-    id: z.string().trim().min(1),
+    id: z.string().trim().min(1).describe("【局势】里已有的局势 id"),
   })
   .describe(
     "某件城中局势的新进展传到玩家耳朵里了：这一轮正文里用新闻、传闻、消息或有人亲口说，让玩家知道了它最近发生的事才写，id 写那件事的 id",

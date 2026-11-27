@@ -14,7 +14,8 @@ import {
   ExclusiveGroupSchema,
 } from "../systems/cyberware/schema";
 import { type Rarity, RaritySchema } from "../systems/economy/schema";
-import type { LedgerKind } from "../systems/npc/schema";
+import { type ItemDef, ItemDefSchema } from "../systems/inventory/schema";
+import { type LedgerKind, NpcCardSchema } from "../systems/npc/schema";
 
 /**
  * 角色主板：出身、过往、本事三类插槽各插几块模块，再加负面经历、开局义体与开局行装。
@@ -28,6 +29,8 @@ export const SKILL_MAX = 10;
 export const FLAW_MAX = 6;
 /** 防极端畸形 JSON 的安全上限，不再以死板格数限制正常自由搭配 */
 export const START_CYBERWARE_MAX = 64;
+export const START_WEAPONS_MAX = 64;
+export const START_ITEMS_MAX = 64;
 
 export const BOARD_SLOTS = ["origin", "past", "skill", "flaw"] as const;
 export const BoardSlotSchema = z.enum(BOARD_SLOTS);
@@ -312,6 +315,15 @@ export const StartCyberwareSchema = z.object({
   smartLink: z.boolean().optional(),
   carryBonus: z.number().int().min(1).max(3).optional(),
   defenses: z.array(CyberwareDefenseSchema).optional(),
+  /** 指定内置官方图标 ID（如 cyberArt.mantisBlades） */
+  art: z.string().trim().min(1).max(80).optional(),
+  /** 本地上传的轻量图标缩略图（data:image/...） */
+  customImage: z
+    .string()
+    .trim()
+    .max(180_000)
+    .regex(/^data:image\/(?:png|jpeg|webp|gif);base64,/i, "仅支持 PNG/JPEG/WebP/GIF 图片")
+    .optional(),
   custom: z.boolean().optional(),
   packId: z.string().trim().max(60).optional(),
 });
@@ -362,12 +374,21 @@ export const CASH_TIER_INFO: Readonly<
   },
 };
 
-/** 开局行装定制：资金档位、自定义启动资金、额外选购的随身武器（最多 2 把）与专属载具 */
+export const StartKitItemSchema = z.object({
+  id: z.string().trim().min(1).max(60),
+  count: z.number().int().min(1).max(20).default(1),
+});
+export type StartKitItem = z.infer<typeof StartKitItemSchema>;
+
+/** 开局行装定制：资金档位、自定义启动资金、随身武器（无数量限制）、随身物品、自建武器/物品快照与专属载具 */
 export const StartKitSchema = z.object({
   cashTier: CashTierSchema.default("standard"),
   /** 自定义启动资金（非空时直接覆盖档位与出身基准） */
   customEddies: z.number().int().min(0).max(CUSTOM_EDDIES_MAX).nullable().default(null),
-  weapons: z.array(z.string().trim().min(1).max(60)).max(2).default([]),
+  weapons: z.array(z.string().trim().min(1).max(60)).max(START_WEAPONS_MAX).default([]),
+  items: z.array(StartKitItemSchema).max(START_ITEMS_MAX).default([]),
+  /** 自建武器与物品的自包含定义快照：不依赖官方物品目录也能正常进局、重放与分享 */
+  customItems: z.array(ItemDefSchema).max(START_ITEMS_MAX).default([]),
   vehicle: z.string().trim().min(1).max(60).nullable().default(null),
 });
 export type StartKit = z.infer<typeof StartKitSchema>;
@@ -406,6 +427,8 @@ export const RELATION_INFO: Readonly<Record<RelationKind, RelationInfo>> = {
 
 export const ACQUAINTANCE_MAX = 100;
 export const ACQUAINTANCE_NOTE_CHARS = 60;
+export const CUSTOM_NPCS_MAX = 60;
+export const NPC_OVERRIDES_MAX = 80;
 
 /** 一个旧识：id 是原作人物的 id、模块带出的人（board- 开头）或玩家自定义/工坊人物（custom- 开头） */
 export const AcquaintanceSchema = z.object({
@@ -433,11 +456,17 @@ export const BoardSchema = z.object({
   flaws: z.array(BoardModuleSchema).max(FLAW_MAX).default([]),
   cyberware: z.array(StartCyberwareSchema).max(START_CYBERWARE_MAX).default([]),
   acquaintances: z.array(AcquaintanceSchema).max(ACQUAINTANCE_MAX).default([]),
-  /** 开局行装定制：资金档位、自定义启动资金、额外随身武器与专属载具 */
+  /** 自建完整 NPC 人物卡快照（自包含，不依赖本地缓存即可进局、重放与分享） */
+  customNpcs: z.array(NpcCardSchema).max(CUSTOM_NPCS_MAX).default([]),
+  /** 对原作/工坊已有 NPC 的角色级覆写卡面（按 id 匹配，支持一键恢复默认） */
+  npcOverrides: z.array(NpcCardSchema).max(NPC_OVERRIDES_MAX).default([]),
+  /** 开局行装定制：资金档位、自定义启动资金、随身武器/物品、自建快照与专属载具 */
   kit: StartKitSchema.default({
     cashTier: "standard",
     customEddies: null,
     weapons: [],
+    items: [],
+    customItems: [],
     vehicle: null,
   }),
   /** 开局地图锚点 */
@@ -579,6 +608,10 @@ export function normalizeBoard(
       ...(def.smartLink ? { smartLink: true } : {}),
       ...(def.carryBonus !== undefined ? { carryBonus: def.carryBonus } : {}),
       ...(def.defenses ? { defenses: def.defenses } : {}),
+      ...(item.art || def.art ? { art: item.art ?? def.art } : {}),
+      ...(item.customImage || def.customImage
+        ? { customImage: item.customImage ?? def.customImage }
+        : {}),
       ...(item.armSide && group === "armMount" ? { armSide: item.armSide } : {}),
       ...(item.custom ? { custom: true, ...(item.packId ? { packId: item.packId } : {}) } : {}),
     });
@@ -620,7 +653,26 @@ export function customCyberwareDefs(
       ...(item.smartLink ? { smartLink: true } : {}),
       ...(item.carryBonus !== undefined ? { carryBonus: item.carryBonus } : {}),
       ...(item.defenses ? { defenses: item.defenses } : {}),
+      ...(item.art ? { art: item.art } : {}),
+      ...(item.customImage ? { customImage: item.customImage } : {}),
     });
+  }
+  return out;
+}
+
+/** 将主板行装中的自包含自建武器/物品快照转成运行时 ItemDef（已存在于目录的按目录为准） */
+export function customItemDefs(
+  snapshots: readonly ItemDef[] | undefined,
+  existingIds?: ReadonlySet<string>,
+): ItemDef[] {
+  if (!snapshots || snapshots.length === 0) return [];
+  const seen = new Set(existingIds);
+  const out: ItemDef[] = [];
+  for (const item of snapshots) {
+    if (seen.has(item.id)) continue;
+    if (!/^[a-z0-9-]+$/.test(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
   }
   return out;
 }

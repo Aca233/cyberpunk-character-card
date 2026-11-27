@@ -170,6 +170,48 @@ export const chipContents = [
     ],
     related: ["jig-jig-street", "bd-scav-xbd-moth"],
   },
+  {
+    id: "chip-bd-maelstrom-chrome-fever",
+    title: "黑超梦（XBD）：红眼过载",
+    category: "braindance",
+    kind: "recording",
+    from: "漩涡帮地下义体工坊（流出版）",
+    summary:
+      "沃森黑市流传的无滤波漩涡帮神经超频 XBD，直看神经过载风险极高，藏有军用稳压件走私线索。",
+    braindance: "bd-maelstrom-chrome-fever",
+    encryption: "none",
+    hazard: "none",
+    eddies: 0,
+    parts: [
+      {
+        id: "warning",
+        label: "黑市警告贴纸",
+        text: "焊锡封口的改装卷轴，外壳划着漩涡帮涂鸦。切勿裸脑沉浸直看——先备压制剂或走编辑模式排查。",
+      },
+    ],
+    related: ["kabuki-market", "bd-maelstrom-chrome-fever"],
+  },
+  {
+    id: "chip-bd-dogtown-blackwall-leak",
+    title: "黑超梦（XBD）：裂隙回声",
+    category: "braindance",
+    kind: "recording",
+    from: "狗镇体育场黑市流出",
+    summary:
+      "记录狗镇黑客打捞旧网军用碎片遭猩红脉冲反噬的无滤波 XBD，藏有狗镇地下链路与网监信标线索。",
+    braindance: "bd-dogtown-blackwall-leak",
+    encryption: "none",
+    hazard: "none",
+    eddies: 0,
+    parts: [
+      {
+        id: "warning",
+        label: "焦痕封套说明",
+        text: "金属外壳带静电灼痕的非法黑超梦。未经安全滤波，强烈建议通过编辑头环脱离感官轨道逐层扫描。",
+      },
+    ],
+    related: ["dogtown", "bd-dogtown-blackwall-leak"],
+  },
 
   // ======================== 2. intel 情报与夜之城读物 ========================
   {
@@ -524,6 +566,22 @@ export const everydayChipItems = inventoryRules.ItemCatalogSchema.parse([
     price: 750,
     rarity: "uncommon",
     chipContentId: "chip-bd-scav-xbd-moth",
+  },
+  {
+    id: "shard-bd-maelstrom-chrome-fever",
+    name: "黑超梦（XBD）·红眼过载",
+    kind: "misc",
+    price: 880,
+    rarity: "rare",
+    chipContentId: "chip-bd-maelstrom-chrome-fever",
+  },
+  {
+    id: "shard-bd-dogtown-blackwall-leak",
+    name: "黑超梦（XBD）·裂隙回声",
+    kind: "misc",
+    price: 1150,
+    rarity: "epic",
+    chipContentId: "chip-bd-dogtown-blackwall-leak",
   },
 
   // 情报芯片

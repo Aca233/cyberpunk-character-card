@@ -56,6 +56,8 @@ export const CharacterCardSchema = z
     board: BoardSchema.optional(),
     /** 本地生成的角色立绘 ID（存在浏览器 ImageStore） */
     portrait: z.string().trim().min(1).max(120).optional(),
+    /** 若直接扮演某位原作预制人物（如 "v"），开新档与人脉选择器自动跳过同 id NPC 避免重复 */
+    replacesNpcId: z.string().trim().min(1).max(40).optional(),
   })
   .superRefine((card, ctx) => {
     for (const message of card.board ? boardIssues(card.board) : []) {
@@ -168,30 +170,61 @@ export function boardPeople(board: Board): BoardStart["people"] {
     const a = board.acquaintances.find((x) => x.id === p.id);
     return a ? { ...p, ...acquaintanceSeed(a) } : p;
   });
-  // 创意工坊/自定义旧识兜底：规范化 id 后凭自包含快照生成局内人物卡
+  // 创意工坊/自定义旧识兜底：优先采用 board.customNpcs 里的完整卡面，否则凭自包含快照生成人物卡
+  const customNpcMap = new Map((board.customNpcs ?? []).map((n) => [n.id, n] as const));
+  const usedCustomIds = new Set<string>();
   for (const a of board.acquaintances) {
     if (isCustomAcquaintance(a) && !seeded.some((p) => p.id === a.id || p.name === a.name)) {
+      const fullCard = customNpcMap.get(a.id);
       const id = safeNpcId(a.id, usedIds);
       usedIds.add(id);
+      usedCustomIds.add(a.id);
       const seed = acquaintanceSeed(a);
-      const role = (a.role || "夜之城旧识").slice(0, 40);
-      seeded.push({
-        ...seed,
-        id,
-        name: a.name,
-        pronoun: "TA",
-        role,
-        faction: NO_FACTION,
-        look: UNDECIDED,
-        voice: UNDECIDED,
-        samples: [],
-        want: (a.note ? `和玩家角色的旧事：${a.note}` : "在夜之城按自己的信条活下去").slice(0, 160),
-        limit: "有自己的生活和打算，不会为了玩家角色无条件冒险",
-        body: { gear: [], cyberware: [] },
-        canon: false,
-        met: true,
-      });
+      if (fullCard) {
+        seeded.push({
+          ...fullCard,
+          ...seed,
+          id,
+          canon: false,
+          met: true,
+        });
+      } else {
+        const role = (a.role || "夜之城旧识").slice(0, 40);
+        seeded.push({
+          ...seed,
+          id,
+          name: a.name,
+          pronoun: "TA",
+          role,
+          faction: NO_FACTION,
+          look: UNDECIDED,
+          voice: UNDECIDED,
+          samples: [],
+          want: (a.note ? `和玩家角色的旧事：${a.note}` : "在夜之城按自己的信条活下去").slice(
+            0,
+            160,
+          ),
+          limit: "有自己的生活和打算，不会为了玩家角色无条件冒险",
+          body: { gear: [], cyberware: [] },
+          canon: false,
+          met: true,
+        });
+      }
     }
+  }
+  // 挂在主板但未设为旧识的自建完整 NPC：同样写入夜之城世界（met: false），供自由探索偶遇
+  for (const card of board.customNpcs ?? []) {
+    if (usedCustomIds.has(card.id)) continue;
+    if (seeded.some((p) => p.id === card.id || p.name === card.name)) continue;
+    const id = safeNpcId(card.id, usedIds);
+    usedIds.add(id);
+    seeded.push({
+      ...card,
+      id,
+      canon: false,
+      met: false,
+      ledger: [],
+    });
   }
   return seeded;
 }
@@ -239,11 +272,12 @@ export function boardStart(card: CharacterCard): BoardStart | undefined {
     acquaintances: card.board.acquaintances
       .filter((a) => !isCustomAcquaintance(a) && !people.some((p) => p.id === a.id))
       .map(acquaintanceSeed),
+    npcOverrides: card.board.npcOverrides ?? [],
   };
 }
 
 /**
- * 旧识里对不上人的去掉（原作人物表里没有、带出这个人的模块已经拔掉），名字按原表重写；
+ * 旧识里对不上人的去掉（原作人物表里没有、带出这个人的模块已经拔掉），名字按原表或角色级覆写重写；
  * 自定义/创意工坊旧识（custom 为 true）原样保留。
  */
 export function pruneAcquaintances(
@@ -252,6 +286,8 @@ export function pruneAcquaintances(
 ): Board {
   const names = new Map<string, string>([
     ...canon.map((n) => [n.id, n.name] as const),
+    ...(board.npcOverrides ?? []).map((n) => [n.id, n.name] as const),
+    ...(board.customNpcs ?? []).map((n) => [n.id, n.name] as const),
     ...boardPeople(board).map((p) => [p.id, p.name] as const),
   ]);
   const acquaintances = board.acquaintances.flatMap((a) => {
@@ -267,13 +303,36 @@ export function boardTraits(board: Board): Trait[] {
   return boardModules(board).map((m) => ({ slot: m.slot, label: m.label, ability: m.ability }));
 }
 
+const V_PLAYABLE_NAMES = new Set(["v", "瓦莱丽", "文森特", "valerie", "vincent"]);
+
+/** 判断玩家角色是否直接扮演某位原作预制人物（目前为 "v"），用于开新档去重与人脉防自选 */
+export function replacedNpcIdOf(
+  character?:
+    | {
+        readonly name?: string | null | undefined;
+        readonly alias?: string | undefined;
+        readonly visual?: { readonly alias?: string | undefined } | undefined;
+        readonly replacesNpcId?: string | undefined;
+      }
+    | undefined,
+): string | undefined {
+  if (!character) return undefined;
+  if (character.replacesNpcId) return character.replacesNpcId;
+  const rawName = (character.name ?? "").trim().toLowerCase();
+  const rawAlias = (character.alias ?? character.visual?.alias ?? "").trim().toLowerCase();
+  if (V_PLAYABLE_NAMES.has(rawName) || rawAlias === "v") return "v";
+  return undefined;
+}
+
 /** 开档时写进存档的角色快照 */
 export function saveCharacter(card: CharacterCard): SaveCharacter {
+  const replacesNpcId = replacedNpcIdOf(card);
   return {
     name: card.name,
     brief: characterBrief(card),
     visual: { alias: card.alias, pronoun: card.pronoun, look: card.look },
     ...(card.board ? { traits: boardTraits(card.board) } : {}),
     ...(card.portrait ? { portrait: card.portrait } : {}),
+    ...(replacesNpcId ? { replacesNpcId } : {}),
   };
 }

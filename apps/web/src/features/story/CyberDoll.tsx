@@ -290,7 +290,6 @@ export function CyberBodySilhouette({
           {activeDetail && (
             <span
               className={neural.silhouetteDetailWrap}
-              data-clip={layer.clip}
               style={{
                 left: `${(activeDetail.left / CYBER_BODY_FRAME.width) * 100}%`,
                 top: `${(activeDetail.top / CYBER_BODY_FRAME.height) * 100}%`,
@@ -298,7 +297,9 @@ export function CyberBodySilhouette({
                 height: `${(activeDetail.height / CYBER_BODY_FRAME.height) * 100}%`,
               }}
             >
-              <Asset id={activeDetail.id} alt="" className={neural.silhouetteDetail} />
+              <span className={neural.silhouetteDetailClip} data-clip={layer.clip}>
+                <Asset id={activeDetail.id} alt="" className={neural.silhouetteDetail} />
+              </span>
             </span>
           )}
         </div>

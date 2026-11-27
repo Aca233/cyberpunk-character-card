@@ -20,7 +20,7 @@ export const sidegigsStatus: readonly SystemStatus[] = [
       const gigsHere = gigs.list.filter((g) => g.here && gigs.active?.id !== g.id);
       if (gigsHere.length > 0)
         lines.push(
-          `这里的拳赛和赛车：${gigsHere.map((g) => `${g.id} ${g.kindLabel}「${g.name}」对手${g.opponent}（${g.tierLabel}，押金 ${g.stake}、奖金 ${g.purse}${g.beaten ? "；已经赢过，不再比" : g.rematch ? `；刚输过，${g.rematch} 以后才肯再比` : ""}）：${g.note}`).join("；")}`,
+          `这里的拳赛和赛车：${gigsHere.map((g) => `${g.id} ${g.kindLabel}「${g.name}」对手${g.opponent}（${g.tierLabel}${g.factionName ? `，${g.factionName}看场/${g.isMember ? "本帮" : (g.factionAttitudeLabel ?? "中立")}` : ""}，实付押金 ${g.effectiveStake}${g.effectiveStake < g.stake ? `，原价 ${g.stake}` : ""}、奖金 ${g.purse}${g.beaten ? "；已经赢过，不再比" : g.blockedReason ? `；当前禁赛：${g.blockedReason}` : g.rematch ? `；刚输过，${g.rematch} 以后才肯再比` : ""}）：${g.note}`).join("；")}`,
         );
       return lines;
     },

@@ -13,7 +13,7 @@ import { braindanceView } from "./view";
 /** 超梦系统：四级分类、沉浸/编辑双模式、三层扫描与现场录制 */
 export const braindance = defineSystem<BraindanceState, BraindanceCommand>({
   id: "braindance",
-  dependsOn: ["commerce", "inventory", "world", "shards", "cyberware", "health"],
+  dependsOn: ["commerce", "inventory", "world", "shards", "cyberware", "health", "humanity"],
   state: BraindanceStateSchema,
   initial: () => BraindanceStateSchema.parse({}),
   commands: { braindance: BraindanceCommandSchema },

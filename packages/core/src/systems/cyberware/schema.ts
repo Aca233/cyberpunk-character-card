@@ -999,6 +999,15 @@ export const CyberwareDefSchema = z.object({
   /** 专项防护能力（surge 抗电磁短路 / thermal 抗高温燃烧 / ice 自我防黑冰） */
   defenses: z.array(CyberwareDefenseSchema).optional(),
   behaviorChip: BehaviorChipProfileSchema.optional(),
+  /** 自建或扩展义体指定的内置官方图标 ID（如 cyberArt.mantisBlades），可随存档与工坊共享 */
+  art: z.string().trim().min(1).max(80).optional(),
+  /** 本地上传的轻量图标缩略图（data:image/...，前端压缩至长边 ≤ 256px） */
+  customImage: z
+    .string()
+    .trim()
+    .max(180_000)
+    .regex(/^data:image\/(?:png|jpeg|webp|gif);base64,/i, "仅支持 PNG/JPEG/WebP/GIF 图片")
+    .optional(),
 });
 export type CyberwareDef = z.infer<typeof CyberwareDefSchema>;
 
@@ -1010,6 +1019,8 @@ export const RipperdocSchema = z.object({
   name: z.string().min(1).max(20),
   /** 医生本人的人物卡 id；已确认死亡或在别处时不能亲自服务 */
   keeperNpc: z.string().min(1).optional(),
+  /** 诊所明确归属的势力 id（医生未单独标势力时生效，用于势力调价与拒诊） */
+  faction: z.string().min(1).optional(),
   /** 已登记、可在这间诊所提供同类服务的其他医生 */
   serviceNpcs: z.array(z.string().min(1)).default([]),
   /** 地点表里的 id：玩家在这里时才能找他 */

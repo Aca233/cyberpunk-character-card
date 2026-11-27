@@ -1,13 +1,13 @@
 # Cloudflare Pages 项目配置
-# 社区创意工坊需在 Cloudflare 控制台（Workers & Pages -> cyberpunk -> Settings -> Bindings）
-# 或取消下方 [[d1_databases]] 注释并填入真实 database_id 后绑定名为 WORKSHOP_DB 的 D1 数据库。
+# 本文件是 Pages 项目配置的唯一事实来源（source of truth）：
+# 一旦用本文件部署，控制台 Settings -> Bindings 会变为只读，绑定只能在此声明后重新部署生效。
+# 社区创意工坊的 D1 数据库绑定名为 WORKSHOP_DB，建表：migrations/0001_workshop_hub.sql。
 
 name = "cyberpunk"
 compatibility_date = "2026-11-01"
 pages_build_output_dir = "apps/web/dist"
 
-# [[d1_databases]]
-# binding = "WORKSHOP_DB"
-# database_name = "cyberpunk-workshop"
-# database_id = "<替换为 wrangler d1 create 返回的 database_id>"
-# migrations_dir = "migrations"
+[[d1_databases]]
+binding = "WORKSHOP_DB"
+database_name = "cyberpunk-workshop"
+database_id = "24127403-6395-45c5-b457-f2cf811172f4"

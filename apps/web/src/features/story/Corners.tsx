@@ -1535,9 +1535,14 @@ export function Present({
       tone: profileTone(e.npc, e.foe),
     }));
 
+  const injuredAllies = (view.combat.active?.allies ?? []).filter(
+    (ally) => ally.condition !== "up",
+  ).length;
   const summaryBits = [
     hostileEntries.length > 0 ? `交战 ${hostileEntries.length}` : null,
-    companionEntries.length > 0 ? `同行 ${companionEntries.length}` : null,
+    companionEntries.length > 0
+      ? `同行 ${companionEntries.length}${injuredAllies > 0 ? ` · ${injuredAllies} 负伤` : ""}`
+      : null,
   ].filter(Boolean);
 
   return (
@@ -1935,7 +1940,7 @@ export function Zone({
             tint="transparent"
             height={96}
             style={{ ["--border-delay" as string]: "-1.8s" } as CSSProperties}
-            className={`${styles.zoneFrame} ${styles.cardBorderFx} ${styles.borderFxYellow}${heat.stars >= 3 ? ` ${styles.borderFxUrgent}` : ""}`}
+            className={`${styles.zoneFrame} ${styles.cardBorderFx} ${styles.borderFxYellow}${heat.stars >= 3 || stealth.level >= 2 ? ` ${styles.borderFxUrgent}` : ""}`}
           />
           <div className={styles.zoneText}>
             <div className={styles.zoneTitleRow}>
@@ -1954,7 +1959,12 @@ export function Zone({
               <span className={styles.starsEmpty}>{"★".repeat(5 - heat.stars)}</span>
               {bounty > 0 && <small>{` 悬赏 ${bounty.toLocaleString("en-US")} €$`}</small>}
               {stealth.level > 0 && (
-                <small data-alert={stealth.level}>{` ◆ ${stealth.label}`}</small>
+                <small
+                  data-alert={stealth.level}
+                  title={`当前地点警戒：${stealth.label}（${stealth.level}/3）｜入侵安保链路或记忆擦除可降档`}
+                >
+                  {` ◆ ${stealth.label}`}
+                </small>
               )}
             </span>
           </div>
@@ -2014,8 +2024,14 @@ export function Zone({
             <ZoneServiceBar
               icon="map.poi.ripperdoc"
               name={view.ripperdoc.name}
-              tag={view.ripperdoc.blackMarket ? "黑市" : "义体诊所"}
-              blackMarket={view.ripperdoc.blackMarket}
+              tag={
+                view.ripperdoc.mood?.lock
+                  ? "拒诊"
+                  : view.ripperdoc.blackMarket
+                    ? "黑市"
+                    : "义体诊所"
+              }
+              blackMarket={Boolean(view.ripperdoc.blackMarket || view.ripperdoc.mood?.lock)}
               onClick={onRipperdoc}
             />
           )}
@@ -2336,6 +2352,7 @@ export function Weapon({
   const soleWeapon = weapons.length === 1 ? weapons[0] : undefined;
   const { shown: shownWeapons, extra: extraWeapons } = weaponPreview(inventory, MAX_HUD_WEAPONS);
   const load = inventory.loadout;
+  const lootCount = view.combat.loot.reduce((sum, group) => sum + group.items.length, 0);
   const weaponMeta = (w: (typeof weapons)[number]) => {
     const detail = inventory.details?.[w.id];
     const baseId = w.baseId ?? detail?.baseId ?? w.id;
@@ -2536,6 +2553,14 @@ export function Weapon({
                 )}
                 {inventory.loadout.carryLevel !== "light" && (
                   <span className={styles.slotOverload}>{inventory.loadout.carryLabel}</span>
+                )}
+                {lootCount > 0 && (
+                  <span
+                    className={styles.slotLoot}
+                    title={`当前战场遗留 ${lootCount} 件战利品，按 O 展开拾取`}
+                  >
+                    战利品 {lootCount}
+                  </span>
                 )}
               </span>
               <span className={styles.slotFootMeta}>

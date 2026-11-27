@@ -3,6 +3,7 @@ import type { WorldState } from "../../kernel/world";
 import { agreedQuote } from "../commerce";
 import { EconomyStateSchema, MONEY_CAP } from "../economy";
 import { HealthStateSchema } from "../health";
+import { type ShopMood, shopMood } from "../inventory";
 import { merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, repairCost, ripperdocList, tradeInValue } from "./apply";
 import {
@@ -86,6 +87,22 @@ export type CyberwareQuoteResult =
   | { readonly ok: true; readonly quote: CyberwareQuote }
   | { readonly ok: false; readonly reason: string };
 
+/** 见面就打的势力所属义体诊所拒诊 */
+export function clinicMoodLock(mood: ShopMood | undefined): string | null {
+  if (!mood || mood.factor !== null) return null;
+  return `医生是${mood.name}的人，${mood.name}要你的命，拒绝接诊`;
+}
+
+/** 给诊所界面展示的势力/火拼调价说明 */
+export function clinicMoodLabel(mood: ShopMood): string {
+  if (mood.factor === null) return `${mood.name} · 见面就打（拒诊）`;
+  const pct = Math.round((mood.factor - 1) * 100);
+  const delta = pct === 0 ? "原价" : pct < 0 ? `${pct}%` : `+${pct}%`;
+  if (mood.faction === "contested") return `${mood.name} · 货源紧缺 ${delta}`;
+  const base = mood.member ? `${mood.name}本帮价` : `${mood.name}关系价`;
+  return mood.contested ? `${base}（火拼加价 ${delta}）` : `${base} ${delta}`;
+}
+
 /** 只读报价：面板、按钮、判断与实际成交共用，不扣款、不借款、不消费报价。 */
 export function quoteCyberware(
   world: WorldState,
@@ -136,9 +153,9 @@ export function quoteCyberware(
     debtDue: request.credit && doc.creditDays !== null ? startsAt + doc.creditDays * 1440 : null,
   } as const;
   const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
-  const debtAmount = state.debts
-    .filter((d) => d.doc === doc.id)
-    .reduce((sum, d) => sum + d.amount, 0);
+  const docDebts = state.debts.filter((d) => d.doc === doc.id);
+  const debtAmount = docDebts.reduce((sum, d) => sum + d.amount, 0);
+  const hasOverdueDebt = docDebts.some((d) => d.due !== null && d.due <= world.time);
   if (request.action === "repay") {
     if (
       request.offer ||
@@ -176,6 +193,10 @@ export function quoteCyberware(
       },
     };
   }
+  const mood = shopMood(world, data, doc);
+  const moodLockReason = clinicMoodLock(mood);
+  if (moodLockReason) return { ok: false, reason: moodLockReason };
+  const moodFactor = mood?.factor ?? 1;
   const catalog = cyberwareCatalog(data);
   const owned = request.part ? state.parts[request.part] : undefined;
   const def = catalog.get(request.id ?? owned?.model ?? "");
@@ -199,7 +220,7 @@ export function quoteCyberware(
   let tradeIn = 0;
   let receive = 0;
   let replaces: CyberwareQuote["replaces"] = null;
-  const fullPrice = Math.round((def.price * doc.priceFactor) / 100) * 100;
+  const fullPrice = Math.round((def.price * doc.priceFactor * moodFactor) / 100) * 100;
   const servicePrice = Math.round((fullPrice * doc.serviceRate) / 100) * 100;
   if (request.action === "install" || request.action === "buy") {
     if (request.action === "buy" && (request.part || request.replace || disposition))
@@ -270,7 +291,7 @@ export function quoteCyberware(
       ) {
         return { ok: false, reason: `${def.name}没坏` };
       }
-      price = repairCost(def);
+      price = Math.max(100, Math.round((repairCost(def) * moodFactor) / 100) * 100);
     }
   }
   const agreement = agreedQuote(world, {
@@ -301,6 +322,7 @@ export function quoteCyberware(
     if (!["install", "buy"].includes(request.action) || !request.credit)
       blocked = `欧元不够：${def.name}要 ${total}，身上只有 ${eddies}`;
     else if (doc.credit === 0) blocked = `${doc.name}不赊账`;
+    else if (hasOverdueDebt) blocked = `在${doc.name}有逾期未还欠款，须先还清才能继续赊账`;
     else if (total - eddies + debtAmount > doc.credit)
       blocked = `${doc.name}剩余可赊额度 ${Math.max(0, doc.credit - debtAmount)} 欧元，还差 ${total - eddies}`;
     else {

@@ -1,7 +1,8 @@
 import type { Draft } from "immer";
 import type { Rng } from "../../kernel/ports";
-import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
+import type { ApplyOutcome, Command, SystemContext, TimeSpan } from "../../kernel/system";
 import { SERVICES } from "../economy";
+import { currentAttitude, type FactionDef, type FactionsState, factionCatalog } from "../factions";
 import {
   canAttachMod,
   defaultInstanceStateFromDef,
@@ -11,6 +12,7 @@ import {
   type ModSlot,
 } from "../inventory";
 import { currentVitals, type NpcState } from "../npc";
+import { ALERT_MAX, currentAlert, type StealthState } from "../stealth";
 import { locationCatalog, type WorldClockState } from "../world";
 import { familyOf, pickName } from "./names";
 import {
@@ -66,6 +68,32 @@ function newId(draft: Combat, prefix: string): string {
 function districtHere(ctx: SystemContext): string | null {
   const here = ctx.read<WorldClockState>("world").location;
   return here === null ? null : (locationCatalog(ctx.data).get(here)?.district ?? null);
+}
+
+/** 结合人物卡与 gang 字段解析敌人所属的标准势力定义（兼容 id 与中文名） */
+function resolveFoeFaction(foe: ActiveFoe, ctx: SystemContext): FactionDef | undefined {
+  const catalog = factionCatalog(ctx.data);
+  if (catalog.size === 0) return undefined;
+  const cardFaction =
+    foe.npc !== null ? ctx.read<NpcState>("npc").npcs[foe.npc]?.faction : undefined;
+  const candidates = [cardFaction, foe.gang].filter(
+    (v): v is string => typeof v === "string" && v.trim().length > 0,
+  );
+  for (const raw of candidates) {
+    const direct = catalog.get(raw);
+    if (direct) return direct;
+    const byName = [...catalog.values()].find((f) => f.name === raw);
+    if (byName) return byName;
+  }
+  return undefined;
+}
+
+/** 与 stealth 系统保持一致的现场地点解析，保证读取警戒与发出 alert 落点一致 */
+function resolveAlertLocation(ctx: SystemContext): string | null {
+  const loc = ctx.read<WorldClockState>("world").location;
+  if (loc !== null) return loc;
+  const origin = ctx.facts.actionStartLocation;
+  return typeof origin === "string" ? origin : null;
 }
 
 const NETRUNNER_LOOT_IDS = new Set([
@@ -255,7 +283,26 @@ export function startCombat(
     foes,
   };
   const named = foes.map((f) => (f.gang ? `${f.gang}的${f.name}` : f.name));
-  return ok(`动手了：${named.join("、")}`);
+  const alertLoc = resolveAlertLocation(ctx);
+  const alertLevel = currentAlert(ctx.read<StealthState>("stealth"), alertLoc).level;
+  const emit: Command[] = [];
+  // 随行同伴若当场反水列入 foes，立刻自动解除随行
+  for (const foe of foes) {
+    if (foe.npc !== null && cards[foe.npc]?.following) {
+      emit.push({ type: "npcCompanion", id: foe.npc, following: false });
+    }
+  }
+  if (alertLevel < ALERT_MAX) {
+    emit.push({
+      type: "alert",
+      delta: ALERT_MAX - alertLevel,
+      ...(alertLoc ? { location: alertLoc } : {}),
+      reason: "现场爆发交火",
+    });
+  }
+  return emit.length > 0
+    ? { ok: true, notes: [`动手了：${named.join("、")}`], emit }
+    : ok(`动手了：${named.join("、")}`);
 }
 
 /** 死者进案底：没名没姓的由代码起名，再定一个等他回家的人；过几天掷有没有人找上门 */
@@ -304,13 +351,50 @@ export function setFoe(draft: Combat, command: CombatCommand, ctx: SystemContext
     };
   const d = recordDead(draft, foe, ctx);
   const who = d.gang ? `${d.gang}的${d.name}` : d.name;
+  const notes = [`${who}死了；家里有${MOURNER_LABELS[d.mourner]}${d.mournerName}在等他`];
+  const emit: Command[] = [];
+  if (foe.npc !== null && ctx.read<NpcState>("npc").npcs[foe.npc]?.alive) {
+    emit.push({ type: "npcDeath", id: foe.npc, reason: "在已记录的这次冲突中死亡" });
+  }
+  const faction = resolveFoeFaction(foe, ctx);
+  if (faction) {
+    const factions = ctx.read<FactionsState>("factions");
+    if (factions.membership?.faction === faction.id) {
+      emit.push({
+        type: "faction",
+        action: "strike",
+        id: faction.id,
+        reason: `在冲突中杀死了本帮人员${d.name}`,
+      });
+      notes.push(`杀死了本帮（${faction.name}）人员，自动记入帮规污点`);
+    } else {
+      const att = currentAttitude(factions, faction);
+      const nextAtt =
+        att === "family"
+          ? "friendly"
+          : att === "friendly"
+            ? "neutral"
+            : att === "neutral"
+              ? "hostile"
+              : att === "hostile" && (foe.archetype === "boss" || foe.tier === "legend")
+                ? "kos"
+                : null;
+      if (nextAtt) {
+        emit.push({
+          type: "faction",
+          action: "stance",
+          id: faction.id,
+          attitude: nextAtt,
+          reason: `在交火中杀死了${faction.name}的${d.name}`,
+        });
+        notes.push(`${faction.name}因成员阵亡对你的态度恶化`);
+      }
+    }
+  }
   return {
     ok: true,
-    notes: [`${who}死了；家里有${MOURNER_LABELS[d.mourner]}${d.mournerName}在等他`],
-    emit:
-      foe.npc !== null && ctx.read<NpcState>("npc").npcs[foe.npc]?.alive
-        ? [{ type: "npcDeath", id: foe.npc, reason: "在已记录的这次冲突中死亡" }]
-        : [],
+    notes,
+    emit,
   };
 }
 

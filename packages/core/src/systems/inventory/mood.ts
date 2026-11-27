@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { WorldState } from "../../kernel/world";
 import { locationCatalog } from "../world";
-import type { Shop } from "./schema";
 
 /**
  * 势力的入口经 phone → jobs → npc 又引回 inventory，这里不引用势力系统；
@@ -62,24 +61,34 @@ function keeperFaction(world: WorldState, id: string | undefined): string | unde
   const npcs = (world.slices.npc as { npcs?: Record<string, { faction?: unknown }> } | undefined)
     ?.npcs;
   const faction = npcs?.[id]?.faction;
-  return typeof faction === "string" ? faction : undefined;
+  return typeof faction === "string" && faction.length > 0 && faction !== "none"
+    ? faction
+    : undefined;
 }
 
 /**
- * 这家店受哪个势力的态度影响；中立、或者谁也不看的店是 undefined。
- * 只认店主明确登记的所属势力；不把城区地盘当作每家店的立场。
+ * 这家店/诊所受哪个势力的态度影响；中立、或者谁也不看的店是 undefined。
+ * 优先认店主人物卡登记的所属势力，其次认门店/诊所显式声明的势力归属；不把城区地盘一刀切当作每家店的立场。
  */
 export function shopMood(
   world: WorldState,
   data: Readonly<Record<string, unknown>>,
-  shop: Shop,
+  shop: {
+    readonly location: string;
+    readonly keeperNpc?: string | undefined;
+    readonly faction?: string | undefined;
+  },
 ): ShopMood | undefined {
   const state = StancesSchema.parse(world.slices.factions ?? {});
   const district = locationCatalog(data).get(shop.location)?.district;
   const contested = district !== undefined && state.contested[district] !== undefined;
 
   const rows = FactionRowsSchema.parse(data.factions);
-  const ownId = rows.length > 0 ? keeperFaction(world, shop.keeperNpc) : undefined;
+  const ownId =
+    rows.length > 0
+      ? (keeperFaction(world, shop.keeperNpc) ??
+        (shop.faction && shop.faction !== "none" ? shop.faction : undefined))
+      : undefined;
   const def = ownId === undefined ? undefined : rows.find((f) => f.id === ownId);
 
   let base: ShopMood | undefined;

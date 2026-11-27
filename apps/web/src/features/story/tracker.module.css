@@ -886,6 +886,110 @@
   margin-top: 4px;
 }
 
+/* ==================== 夜之城活源看板（NCPD 悬赏 / 拳赛赛车 / 中间人） ==================== */
+
+.standbyBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 9px 12px;
+  border: 1px solid rgb(94 246 255 / 26%);
+  border-left: 3px solid var(--cp-cyan);
+  background: rgb(9 24 31 / 78%);
+}
+
+.standbyBannerText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.standbyBannerText strong {
+  color: var(--cp-cyan);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.standbyBannerText span {
+  color: var(--cp-text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.leadsFoldBody {
+  display: grid;
+  gap: 12px;
+}
+
+.leadsGroup {
+  display: grid;
+  gap: 7px;
+}
+
+.leadsSubhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+  color: var(--cp-text-dim);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.leadsSubhead small {
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.fixerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(13.5rem, 100%), 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fixerCard {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid rgb(94 246 255 / 18%);
+  border-left: 2px solid var(--cp-cyan);
+  background: var(--cp-surface-raised);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+}
+
+.fixerCard[data-blocked] {
+  border-color: rgb(255 0 60 / 32%);
+  border-left-color: var(--cp-danger);
+  opacity: 0.72;
+}
+
+.fixerTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.fixerName {
+  color: var(--cp-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fixerMeta {
+  color: var(--cp-text-dim);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 @media (width < 520px) {
   .metaGrid {
     grid-template-columns: minmax(0, 1fr);

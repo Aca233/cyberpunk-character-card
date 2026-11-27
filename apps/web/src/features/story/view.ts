@@ -883,6 +883,25 @@ export function trackTelemetry(view: View): TrackTelemetry {
     });
   }
 
+  const chromeCare = view.money.chromeCare;
+  if (chromeCare && (chromeCare.overdue || chromeCare.dueSoon)) {
+    active.push({
+      id: "chrome-care",
+      kind: "bill",
+      source: "chromeCare",
+      sourceLabel: "义体维护",
+      title: chromeCare.overdue ? `${chromeCare.label}已逾期` : `${chromeCare.label}即将到期`,
+      locationId: null,
+      location: "义体神经校准",
+      dueLabel: chromeCare.overdue ? "已逾期" : `${chromeCare.daysLeft} 天内`,
+      dueIn: chromeCare.overdue ? -1 : chromeCare.daysLeft * 1440,
+      progress: `${chromeCare.cost.toLocaleString("en-US")} 欧元`,
+      status: chromeCare.overdue ? "overdue" : "active",
+      icon: chromeCare.overdue ? "notify.warning" : "map.poi.ripperdoc",
+      amount: chromeCare.cost,
+    });
+  }
+
   for (const debt of view.ripperdocDebts ?? []) {
     active.push({
       id: `debt:${debt.docId}`,

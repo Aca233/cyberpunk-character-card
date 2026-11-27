@@ -19,11 +19,13 @@ import {
   type ItemDef,
   isBulkyItem,
   itemCarryUnits,
+  itemEffectTags,
   loadoutSummary,
   MOD_SLOT_LABELS,
   type ModSlot,
   ModSlotSchema,
   projectWeaponState,
+  summarizeGearEffects,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
   weaponGrantsSmartLink,
@@ -142,6 +144,7 @@ export function inventoryView({ world, data }: ViewContext) {
     brokenChrome: health.brokenChrome,
     catalog: carryBonusCatalog(data),
   });
+  const gearEffects = summarizeGearEffects(inventory, items);
   const bdChipIds = buildChipBraindanceIds(world, data);
   let suppressantCount = 0;
   for (const [id, count] of counts) {
@@ -202,6 +205,8 @@ export function inventoryView({ world, data }: ViewContext) {
     },
     /** 随身大件与隐蔽度统计 */
     loadout,
+    /** 当前穿着服装与随身携行/功能装备的综合生效效果 */
+    gearEffects,
     /** 随身物品的分类和说明；只投影持有的物品，供物品栏筛选和详情使用。 */
     details: Object.fromEntries(
       [
@@ -229,6 +234,10 @@ export function inventoryView({ world, data }: ViewContext) {
             {
               baseId,
               kind: def.kind,
+              category: def.category ?? null,
+              modSlot: def.modSlot ?? null,
+              art: def.art ?? baseDef?.art ?? null,
+              customImage: def.customImage ?? baseDef?.customImage ?? null,
               suppressant: Boolean(def.suppressant),
               clothingSlot: def.kind === "clothing" ? (def.clothingSlot ?? null) : null,
               subLabel: itemSubLabel(def, neuralGroup),
@@ -251,6 +260,7 @@ export function inventoryView({ world, data }: ViewContext) {
                 def.kind === "weapon" ? defaultWeaponSlots(def) : ([] as readonly ModSlot[]),
               weaponState: projectWeaponState(ws),
               ability: def.ability ?? "",
+              effectTags: itemEffectTags(def),
               healPercent: def.healPercent ?? null,
               charges: def.charges ?? null,
               remaining: obj?.remaining ?? def.charges ?? null,
@@ -280,8 +290,43 @@ export function inventoryView({ world, data }: ViewContext) {
           style: def?.clothingStyle ?? null,
           styleLabel: def?.clothingStyle ? CLOTHING_STYLE_LABELS[def.clothingStyle] : null,
           concealsCoatWeapon: Boolean(def?.concealsCoatWeapon),
+          effectTags: def ? itemEffectTags(def) : ([] as readonly string[]),
+          ability: def?.ability ?? "",
         },
       ];
+    }),
+    /** 玩家保存的一键穿搭方案（附每件衣物当前是否在随身可用） */
+    outfits: inventory.outfits.map((preset) => {
+      const entries = CLOTHING_SLOTS.flatMap((slot) => {
+        const id = preset.slots[slot];
+        if (!id) return [];
+        const def = items.get(id);
+        const worn = inventory.clothing[slot] === id;
+        const available = worn || (counts.get(id) ?? 0) > 0;
+        return [
+          {
+            slot,
+            slotLabel: CLOTHING_SLOT_LABELS[slot],
+            id,
+            name: def?.name ?? id,
+            worn,
+            available,
+          },
+        ];
+      });
+      const active =
+        entries.length > 0 &&
+        CLOTHING_SLOTS.every(
+          (slot) => (inventory.clothing[slot] ?? null) === (preset.slots[slot] ?? null),
+        );
+      return {
+        id: preset.id,
+        name: preset.name,
+        slots: preset.slots,
+        entries,
+        active,
+        missingCount: entries.filter((e) => !e.available).length,
+      };
     }),
     /** 背包里每件东西能装到哪：quick 快捷栏、clothing 服装格；武器直接放背包使用不再单装 */
     equipTo: Object.fromEntries(

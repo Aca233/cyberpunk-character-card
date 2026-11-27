@@ -1,4 +1,15 @@
-import { boardModules, cyberware, items, loadouts, npcs, quickhacks, vehicles } from "@cp/content";
+import {
+  boardModules,
+  cyberware,
+  factions,
+  items,
+  loadouts,
+  locations,
+  npcs,
+  quickhacks,
+  vehicles,
+  vMaleNpcVariant,
+} from "@cp/content";
 import {
   BoardSchema,
   BoardSlotSchema,
@@ -7,6 +18,7 @@ import {
   cyberwareRules,
   DraftRequestSchema,
   interpretModule,
+  interpretNpc,
   type LlmClient,
   normalizeBoard,
   npcRules,
@@ -70,18 +82,54 @@ const InterpretSchema = z.object({
   board: BoardSchema.optional(),
 });
 
+const InterpretNpcRouteSchema = z.object({
+  text: z.string().trim().min(3, "多写几个字再交给 AI 生成").max(600, "描述最多 600 字"),
+  existing: npcRules.NpcCardSchema.partial().optional(),
+  preserveSpoilers: z.boolean().optional(),
+});
+
 /** 模块库里用过的标签：解读时让模型尽量沿用，方便分类筛选与检定判断 */
 const KNOWN_TAGS = [...new Set(boardModules.flatMap((m) => m.tags))];
 
-const START_WEAPON_RARITIES: ReadonlySet<string> = new Set([
-  "common",
-  "uncommon",
-  "rare",
-  "epic",
-  "legendary",
-]);
-
 /** /api/characters：角色卡的列表、新建、修改、删除；示例角色只读 */
+function mapCyberwareOffer(def: (typeof cyberware)[number], packId: string | undefined) {
+  const category = cyberwareRules.cyberwareCategoryOf(def);
+  const exclusiveGroup = cyberwareRules.cyberwareExclusiveGroup(def);
+  return {
+    id: def.id,
+    name: def.name,
+    slot: def.slot,
+    slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
+    category,
+    categoryLabel: cyberwareRules.CYBERWARE_CATEGORY_LABELS[category],
+    rarity: def.rarity,
+    ...(def.iconic ? { iconic: true } : {}),
+    humanityCost: def.humanityCost,
+    ...(def.deckProfile !== undefined ? { deckProfile: def.deckProfile } : {}),
+    ...(def.deckTraits !== undefined
+      ? {
+          deckTraits: def.deckTraits.map((t) => cyberwareRules.DECK_TRAIT_LABELS[t]),
+        }
+      : {}),
+    ...(def.armor ? { armor: true } : {}),
+    ...(def.accelerator ? { accelerator: true } : {}),
+    ...(def.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
+    ...(def.capacityBonus !== undefined ? { capacityBonus: def.capacityBonus } : {}),
+    ...(def.safeLineBonus !== undefined ? { safeLineBonus: def.safeLineBonus } : {}),
+    ...(def.chassisProfile ? { chassisProfile: def.chassisProfile } : {}),
+    ...(def.variantGroup ? { variantGroup: def.variantGroup } : {}),
+    ...(def.variantKey ? { variantKey: def.variantKey } : {}),
+    ...(def.smartLink ? { smartLink: true } : {}),
+    ...(def.carryBonus !== undefined ? { carryBonus: def.carryBonus } : {}),
+    ...(def.defenses ? { defenses: def.defenses } : {}),
+    ...(def.art ? { art: def.art } : {}),
+    ...(def.customImage ? { customImage: def.customImage } : {}),
+    ...(exclusiveGroup ? { exclusiveGroup } : {}),
+    ability: def.ability,
+    ...(packId ? { custom: true, packId } : {}),
+  };
+}
+
 export function characterRoutes(
   store: CharacterStore,
   clock: Clock,
@@ -104,7 +152,7 @@ export function characterRoutes(
     return c.json({
       modules: [...boardModules, ...runtime.modules],
       acquaintances: runtime.acquaintances,
-      // 捏人能选的 2077 预制人物：只给名片上公开的几项，秘密和身体不下发
+      // 捏人能选的 2077 预制人物：只给名片上公开的几项，秘密不下发；附带装备/义体件数供角色档案库展示
       npcs: allNpcs.map((n) => ({
         id: n.id,
         name: n.name,
@@ -113,63 +161,55 @@ export function characterRoutes(
         look: n.look,
         ...(n.faction && n.faction !== "none" ? { faction: n.faction } : {}),
         circle: npcRules.inferNpcCircle(n),
+        gearCount: n.body?.gear.length ?? 0,
+        cyberwareCount: n.body?.cyberware.length ?? 0,
         ...(customPackId(n.id) ? { packId: customPackId(n.id) } : {}),
       })),
       cyberware: allCyberware.flatMap((def) =>
         def.iconic || !START_CYBERWARE_RARITIES.has(def.rarity)
           ? []
-          : [
-              {
-                id: def.id,
-                name: def.name,
-                slot: def.slot,
-                slotLabel: cyberwareRules.SLOT_LABELS[def.slot],
-                category: cyberwareRules.cyberwareCategoryOf(def),
-                categoryLabel:
-                  cyberwareRules.CYBERWARE_CATEGORY_LABELS[cyberwareRules.cyberwareCategoryOf(def)],
-                rarity: def.rarity,
-                humanityCost: def.humanityCost,
-                ...(def.deckProfile !== undefined ? { deckProfile: def.deckProfile } : {}),
-                ...(def.deckTraits !== undefined
-                  ? {
-                      deckTraits: def.deckTraits.map((t) => cyberwareRules.DECK_TRAIT_LABELS[t]),
-                    }
-                  : {}),
-                ...(def.armor ? { armor: true } : {}),
-                ...(def.accelerator ? { accelerator: true } : {}),
-                ...(def.defaultArmSide ? { defaultArmSide: def.defaultArmSide } : {}),
-                ...(def.capacityBonus !== undefined ? { capacityBonus: def.capacityBonus } : {}),
-                ...(def.safeLineBonus !== undefined ? { safeLineBonus: def.safeLineBonus } : {}),
-                ...(def.chassisProfile ? { chassisProfile: def.chassisProfile } : {}),
-                ...(def.variantGroup ? { variantGroup: def.variantGroup } : {}),
-                ...(def.variantKey ? { variantKey: def.variantKey } : {}),
-                ...(def.smartLink ? { smartLink: true } : {}),
-                ...(def.carryBonus !== undefined ? { carryBonus: def.carryBonus } : {}),
-                ...(def.defenses ? { defenses: def.defenses } : {}),
-                ...(cyberwareRules.cyberwareExclusiveGroup(def)
-                  ? { exclusiveGroup: cyberwareRules.cyberwareExclusiveGroup(def) }
-                  : {}),
-                ability: def.ability,
-                ...(customPackId(def.id) ? { custom: true, packId: customPackId(def.id) } : {}),
-              },
-            ],
+          : [mapCyberwareOffer(def, customPackId(def.id))],
       ),
+      // 供自建/修改 NPC 挑选的全量义体目录（与角色创建同构，包含传说与不朽，不受玩家开局稀有度限制）
+      npcCyberware: allCyberware.map((def) => mapCyberwareOffer(def, customPackId(def.id))),
       weapons: allItems.flatMap((def) => {
-        if (
-          def.kind !== "weapon" ||
-          def.iconic ||
-          def.rarity === undefined ||
-          !START_WEAPON_RARITIES.has(def.rarity)
-        ) {
-          return [];
-        }
+        if (def.kind !== "weapon") return [];
         return [
           {
             id: def.id,
             name: def.name,
             ...(def.category ? { category: def.category } : {}),
-            rarity: def.rarity,
-            ability: def.ability,
+            ...(def.weaponType ? { weaponType: def.weaponType } : {}),
+            rarity: def.rarity ?? "common",
+            ...(def.iconic ? { iconic: true } : {}),
+            ...(def.price !== undefined ? { price: def.price } : {}),
+            ...(def.art ? { art: def.art } : {}),
+            ...(def.customImage ? { customImage: def.customImage } : {}),
+            ability: def.ability ?? "",
+            ...(customPackId(def.id) ? { custom: true, packId: customPackId(def.id) } : {}),
+          },
+        ];
+      }),
+      items: allItems.flatMap((def) => {
+        if (def.kind === "weapon") return [];
+        return [
+          {
+            id: def.id,
+            name: def.name,
+            kind: def.kind,
+            rarity: def.rarity ?? "common",
+            ...(def.iconic ? { iconic: true } : {}),
+            ...(def.price !== undefined ? { price: def.price } : {}),
+            ...(def.charges !== undefined ? { charges: def.charges } : {}),
+            ...(def.healPercent !== undefined ? { healPercent: def.healPercent } : {}),
+            ...(def.suppressant ? { suppressant: true } : {}),
+            ...(def.clothingSlot ? { clothingSlot: def.clothingSlot } : {}),
+            ...(def.clothingStyle ? { clothingStyle: def.clothingStyle } : {}),
+            ...(def.modSlot ? { modSlot: def.modSlot } : {}),
+            ...(def.modFits ? { modFits: def.modFits } : {}),
+            ...(def.art ? { art: def.art } : {}),
+            ...(def.customImage ? { customImage: def.customImage } : {}),
+            ability: def.ability ?? "",
             ...(customPackId(def.id) ? { custom: true, packId: customPackId(def.id) } : {}),
           },
         ];
@@ -182,6 +222,16 @@ export function characterRoutes(
         seats: v.seats,
         ...(v.note ? { note: v.note } : {}),
       })),
+      factions: factions.map((f) => ({
+        id: f.id,
+        name: f.name,
+        kind: f.kind,
+      })),
+      locations: locations.map((l) => ({
+        id: l.id,
+        name: l.name,
+        district: l.district,
+      })),
       // 出身自带的开局行装（和建档时 pickLoadouts 用的同一张表），建卡界面据此透明展示家底和自带义体
       loadouts,
       names: Object.fromEntries([
@@ -191,6 +241,21 @@ export function characterRoutes(
         ...allCyberware.map((c) => [c.id, c.name] as const),
       ]),
     });
+  });
+  // 按需拉取单个预制/工坊 NPC 完整卡面（仅玩家点开「编辑人物卡」或切换变体时请求，平时浏览保持防剧透）
+  app.get("/board/npcs/:npcId", async (c) => {
+    const npcId = c.req.param("npcId");
+    if (npcId === "v" && c.req.query("variant") === "male") {
+      return c.json({ npc: vMaleNpcVariant });
+    }
+    const packs = ((await workshop?.list()) ?? [])
+      .filter((entry) => entry.enabled)
+      .map((entry) => entry.pack);
+    const runtime = workshopRuntime(packs);
+    const allNpcs = runtime.content.npcs ?? npcs;
+    const found = allNpcs.find((n) => n.id === npcId);
+    if (!found) return c.json({ error: `找不到人物 ${npcId}` }, 404);
+    return c.json({ npc: found });
   });
   // 自写模块交给辅助模型解读；不进回合日志，结果由玩家确认后才插上
   app.post("/interpret", async (c) => {
@@ -213,6 +278,37 @@ export function characterRoutes(
       return result.ok ? c.json(result.reading) : c.json({ error: result.error }, 502);
     } catch (error) {
       if (error instanceof AbortedError) return c.json({ error: "已停止解读" }, 400);
+      if (error instanceof UpstreamError) return c.json({ error: error.message }, 502);
+      throw error;
+    }
+  });
+  // 一句话生成或局部润色 NPC 人物卡；走辅助模型，不进回合日志
+  app.post("/interpret-npc", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "请求体不是合法的 JSON" }, 400);
+    }
+    const input = InterpretNpcRouteSchema.safeParse(raw);
+    if (!input.success) return c.json({ error: issuesOf(input.error).error }, 400);
+    const id = input.data.existing?.id || `custom-npc-${randomHex(4)}`;
+    try {
+      const result = await interpretNpc(
+        llm,
+        {
+          text: input.data.text,
+          existing: input.data.existing,
+          preserveSpoilers: input.data.preserveSpoilers,
+          factions: factions.map((f) => ({ id: f.id, name: f.name })),
+          locations: locations.map((l) => ({ id: l.id, name: l.name, district: l.district })),
+        },
+        id,
+        c.req.raw.signal,
+      );
+      return result.ok ? c.json({ npc: result.npc }) : c.json({ error: result.error }, 502);
+    } catch (error) {
+      if (error instanceof AbortedError) return c.json({ error: "已停止生成" }, 400);
       if (error instanceof UpstreamError) return c.json({ error: error.message }, 502);
       throw error;
     }

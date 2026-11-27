@@ -8,10 +8,10 @@ export const TRAUMA_TIER_LABELS: Readonly<Record<TraumaTier, string>> = {
   silver: "银卡",
   platinum: "白金卡",
 };
-/** 每期的价钱（欧元） */
+/** 每期的价钱（欧元）：贴合夜之城高门槛私营医疗体系，银卡适合站稳脚跟的佣兵，白金卡为公司高管与顶级传奇档位 */
 export const TRAUMA_PRICES: Readonly<Record<Exclude<TraumaTier, "none">, number>> = {
-  silver: 1000,
-  platinum: 5000,
+  silver: 12_000,
+  platinum: 48_000,
 };
 /** 一期多长（游戏分钟）：30 天 */
 export const TRAUMA_PERIOD = 30 * 1440;

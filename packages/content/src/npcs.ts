@@ -1,9 +1,10 @@
 import { npcRules } from "@cp/core";
 import { everydayPeople } from "./everydayLife";
 import { extraNpcs } from "./npcsExtra";
+import { wave2Npcs } from "./npcsWave2";
 
 /**
- * 2077 夜之城原作预制人物总表（共 74 人，100% 为《赛博朋克 2077》原作人物，按 7 大圈层归类，基准时间 2077-04-12 21:00）：
+ * 2077 夜之城原作预制人物总表（共 103 人，100% 为《赛博朋克 2077》原作人物，按 7 大圈层归类，基准时间 2077-04-12 21:00）：
  * - everydayPeople（5 人）：歌舞伎（洋子·鹤）、云顶（切丽·诺林/丝凯/安吉尔）、扭扭街（兰尼·尼罗）
  * - 本文件核心原作人物（41 人）：全部补齐年龄、生平底色（bio）、幕后秘密（secret）、常出没地点（hangouts）、3 句差异化口吻样本与开局近况（initialDoing）
  * - extraNpcs（28 人）：原作店主/医者（威尔逊/查尔斯·巴克斯/指头哥/卡西乌斯·赖德）、帮派/云顶/荒坂/市政/执法/城市标志人物，以及 11 位 2077 经典世界角色（蓝眼先生、恶兆、弗雷德教练、蝎子、卡西迪、南希、埃默里克、韦兰、佩佩、柯克、红色威胁）
@@ -16,6 +17,52 @@ import { extraNpcs } from "./npcsExtra";
 export const npcs = npcRules.NpcCardSchema.array().parse([
   ...everydayPeople,
   ...extraNpcs,
+  ...wave2Npcs,
+  {
+    id: "v",
+    name: "瓦莱丽",
+    alias: "V",
+    age: 23,
+    adult: true,
+    entity: "human",
+    pronoun: "她",
+    role: "沃森区新锐独狼佣兵，杰克·威尔斯的固定搭档，刚搬进 H10 起步",
+    faction: "none",
+    circle: "merc",
+    look: "二十三岁左右、身形精干矫健，挑染红棕的不对称短发利落贴颈，眉眼锋利带股不服输的狠劲；眼角隐约可见细微赛博电路饰纹，指节留着常年握枪与拆件磨出的薄茧。",
+    outfit:
+      "高领发光翻领的街头改装夹克内搭修身黑背心，耐磨多袋战术长裤配军靴，腰间别着威尔逊刚调校好的定制手枪。",
+    voice:
+      "干脆利落、带点海伍德和沃森街头的毒舌幽默，面对公司官腔与大话毫不客气；嘴上总说只在乎报酬和活命，真遇到熟人有难时语气会瞬间收紧、二话不说顶上去。",
+    samples: [
+      "先把尾款和退路说清楚——大联盟的饼杰克爱听，我只信装进弹匣里的子弹。",
+      "老维，账先记着，等这票干完连本带利拍你桌上。别皱眉了，我命硬着呢。",
+      "德克斯这人派头太大、旧账太脏。活儿可以听听看，但后背绝不能全交给他。",
+    ],
+    bio: "刚在夜之城雇佣兵圈子里冒头不久的年轻独狼，靠着与杰克·威尔斯搭伙跑单、与黑客 T-Bug 配合，在沃森和海伍德攒下第一批口碑。几个月前在杰克与威尔斯太太照拂下站稳脚跟，刚搬进超级摩天楼 H10 的小公寓，也在楼下老维诊所赊账升了第一批实用义体。此刻她尚未踏进绀碧大厦、也没接触过 Relic 芯片，正站在决定命运的十字路口。",
+    want: "和杰克一起闯进来生大联盟、还清欠维克多的义体诊费，在夜之城彻底站稳脚跟活出名堂。",
+    limit: "绝不背叛过命搭档杰克、维克多或米丝蒂；极度反感被中间人当一次性炮灰摆布。",
+    secret:
+      "虽然表面附和杰克对大买卖的憧憬，但她私下查过德克斯特两年前在太平洲仓皇离城的传闻，心里对那位突然回城的大牌中间人始终压着一层隐忧。",
+    home: "megabuilding-h10",
+    hangouts: ["afterlife", "vik-clinic", "coyote-cojo", "lizzies-bar"],
+    initialDoing:
+      "刚在 H10 楼上威尔逊枪店取回修整好的定制手枪，正准备下楼找老维复查义眼接口，顺便和杰克碰头聊德克斯放出的风声。",
+    canon: true,
+    body: {
+      gear: [
+        "dying-night",
+        "street-jacket",
+        "turtleneck-knit",
+        "tactical-knee-pants",
+        "combat-boots",
+        "maxdoc",
+        "hemostatic-gel",
+        "holo-phone",
+      ],
+      cyberware: ["kiroshi-mk1", "ballistic-coprocessor", "subdermal-armor"],
+    },
+  },
   {
     id: "judy",
     name: "朱迪·阿尔瓦雷兹",
@@ -49,12 +96,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "chao",
         "frag-grenade",
+        "tech-goggles",
         "techie-coverall",
         "street-tee",
         "cargo-pants",
         "combat-boots",
         "tool-kit",
         "bd-editor-wreath",
+        "faraday-pouch",
       ],
       cyberware: [
         "kiroshi-mk1",
@@ -98,9 +147,10 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "street-jacket",
-        "turtleneck-knit",
+        "kevlar-undershirt",
         "tailored-slacks",
         "combat-boots",
+        "faraday-pouch",
         "holo-phone",
         "synth-cigs",
         "blank-shard",
@@ -144,6 +194,7 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
         "cargo-pants",
         "combat-boots",
         "med-kit",
+        "hemostatic-gel",
         "tool-kit",
         "maxdoc",
       ],
@@ -190,12 +241,13 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "la-chingona-dorada",
         "machete",
-        "street-jacket",
-        "street-tee",
-        "cargo-pants",
+        "valentino-gold-jacket",
+        "kevlar-undershirt",
+        "tactical-knee-pants",
         "combat-boots",
         "gold-chain",
         "maxdoc",
+        "hemostatic-gel",
         "real-liquor",
       ],
       cyberware: [
@@ -240,10 +292,11 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "pride",
         "nekomata",
-        "street-jacket",
-        "street-tee",
+        "samurai-jacket",
+        "solo-compression-top",
         "leather-pants",
-        "combat-boots",
+        "rocker-studded-boots",
+        "faraday-pouch",
         "holo-phone",
         "synth-cigs",
       ],
@@ -337,7 +390,7 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     initialDoing: "在通灵屋柜台前点燃新的一炷熏香，神情略显忧虑地重新洗着那副磨损严重的塔罗牌。",
     canon: true,
     body: {
-      gear: ["street-jacket", "street-tee", "leather-pants", "combat-boots", "tarot-deck"],
+      gear: ["street-jacket", "street-tee", "leather-pants", "rocker-studded-boots", "tarot-deck"],
       cyberware: [],
     },
   },
@@ -376,7 +429,7 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
         "plan-b",
         "mirror-shades",
         "corpo-suit",
-        "silk-shirt",
+        "kevlar-undershirt",
         "tailored-slacks",
         "dress-shoes",
         "cigar-case",
@@ -420,7 +473,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     initialDoing: "在海伍德街头小教堂旁的安静角落缓缓拨动念珠，审阅手下报来的六街帮边界挑衅清单。",
     canon: true,
     body: {
-      gear: ["silk-shirt", "tailored-slacks", "dress-shoes", "rosary-beads", "holo-phone"],
+      gear: [
+        "valentino-gold-jacket",
+        "silk-shirt",
+        "tailored-slacks",
+        "dress-shoes",
+        "rosary-beads",
+        "holo-phone",
+      ],
       cyberware: ["kiroshi-mk1", "biometric-polygraph-optics", "audio-suite", "self-ice"],
     },
   },
@@ -457,11 +517,13 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "overwatch",
         "nova",
-        "nomad-duster",
-        "street-tee",
-        "cargo-pants",
+        "aldecaldo-rally-jacket",
+        "solo-compression-top",
+        "nomad-reinforced-pants",
         "combat-boots",
+        "thermal-monocular",
         "tool-kit",
+        "hemostatic-gel",
         "maxdoc",
       ],
       cyberware: [
@@ -507,9 +569,9 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "crash",
         "flashbang",
-        "street-jacket",
-        "street-tee",
-        "cargo-pants",
+        "ncpd-patrol-vest",
+        "turtleneck-knit",
+        "tactical-knee-pants",
         "combat-boots",
         "ncpd-badge",
         "cigar-case",
@@ -557,11 +619,11 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "archangel",
         "omaha",
-        "mirror-shades",
-        "street-jacket",
-        "silk-shirt",
+        "johnny-aviators",
+        "samurai-jacket",
+        "samurai-tour-tee",
         "leather-pants",
-        "combat-boots",
+        "rocker-studded-boots",
         "real-liquor",
       ],
       cyberware: [
@@ -607,7 +669,7 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "unity",
         "mirror-shades",
-        "street-jacket",
+        "long-trenchcoat",
         "silk-shirt",
         "tailored-slacks",
         "dress-shoes",
@@ -646,7 +708,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       "倚在圣多明戈水坝高处远眺兰乔科罗纳多烟囱，同时在加密频道里盯紧一批刚进城的医疗滤芯货运车。",
     canon: true,
     body: {
-      gear: ["liberty", "corpo-suit", "silk-shirt", "tailored-slacks", "dress-shoes", "holo-phone"],
+      gear: [
+        "liberty",
+        "street-jacket",
+        "silk-shirt",
+        "tailored-slacks",
+        "dress-shoes",
+        "holo-phone",
+      ],
       cyberware: ["kiroshi-mk1", "audio-suite", "tool-hand-fingers", "self-ice"],
     },
   },
@@ -683,11 +752,13 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "satara",
         "nomad-headwrap",
+        "tech-goggles",
         "techie-coverall",
-        "cargo-pants",
+        "nomad-reinforced-pants",
         "combat-boots",
         "tool-kit",
         "med-kit",
+        "hemostatic-gel",
       ],
       cyberware: [
         "kiroshi-mk1",
@@ -730,11 +801,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "unity",
+        "kenshin-spec-ops",
+        "corpo-smart-specs",
         "corpo-suit",
-        "silk-shirt",
+        "kevlar-undershirt",
         "tailored-slacks",
         "dress-shoes",
+        "signal-jammer",
+        "faraday-pouch",
         "holo-phone",
         "blank-shard",
       ],
@@ -779,13 +853,13 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "kenshin",
-        "shingen",
+        "kenshin-spec-ops",
+        "shingen-tac",
         "flashbang",
-        "corpo-suit",
-        "turtleneck-knit",
-        "tailored-slacks",
-        "dress-shoes",
+        "arasaka-executive-coat",
+        "kevlar-undershirt",
+        "yorinobu-formal-slacks",
+        "silent-stalker-boots",
         "corpo-badge",
       ],
       cyberware: [
@@ -832,7 +906,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       "刚从绀碧大厦赖宣的套房脱身回到日本街，一边把玩着记录芯片一边暗中联络中间人，准备攒局做一票大买卖。",
     canon: true,
     body: {
-      gear: ["club-dress", "dress-shoes", "holo-phone", "synth-cigs", "blank-shard"],
+      gear: [
+        "club-dress",
+        "dress-shoes",
+        "faraday-pouch",
+        "holo-phone",
+        "synth-cigs",
+        "blank-shard",
+      ],
       cyberware: [
         "kiroshi-mk1",
         "chroma-iris-overlay",
@@ -876,7 +957,7 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "kimono-haori",
         "silk-shirt",
-        "tailored-slacks",
+        "yorinobu-formal-slacks",
         "dress-shoes",
         "corpo-badge",
         "holo-phone",
@@ -922,9 +1003,9 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "kongou",
-        "long-trenchcoat",
+        "arasaka-executive-coat",
         "silk-shirt",
-        "tailored-slacks",
+        "yorinobu-formal-slacks",
         "dress-shoes",
         "corpo-badge",
         "real-liquor",
@@ -969,7 +1050,7 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
         "satori",
         "kimono-haori",
         "silk-shirt",
-        "tailored-slacks",
+        "yorinobu-formal-slacks",
         "dress-shoes",
         "blank-shard",
       ],
@@ -1007,11 +1088,12 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "corpo-glasses",
+        "corpo-smart-specs",
         "corpo-suit",
         "turtleneck-knit",
         "tailored-slacks",
         "dress-shoes",
+        "faraday-pouch",
         "corpo-badge",
         "blank-shard",
       ],
@@ -1050,9 +1132,13 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "unity",
+        "netrunner-cooling-crown",
         "street-jacket",
-        "netrunner-suit",
-        "street-sneakers",
+        "mil-netrunner-suit",
+        "netrunner-weave-pants",
+        "netrunner-ground-boots",
+        "ice-breaker-spike",
+        "relay-beacon",
         "holo-phone",
         "blank-shard",
       ],
@@ -1097,7 +1183,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       "守在沃森北区旧食品厂交货大厅里擦拭他的专属左轮，一边抽着黑蕾丝一边调试刚到手的军用原型装备。",
     canon: true,
     body: {
-      gear: ["doom-doom", "black-lace", "street-jacket", "leather-pants", "combat-boots", "maxdoc"],
+      gear: [
+        "doom-doom",
+        "black-lace",
+        "maelstrom-spike-vest",
+        "leather-pants",
+        "rocker-studded-boots",
+        "maxdoc",
+      ],
       cyberware: [
         "kiroshi-mk2",
         "militech-paraline",
@@ -1138,7 +1231,16 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       "在沃森北区旧食品厂控制室里烦躁踱步，一边大口吸黑蕾丝一边盘算怎么把军用科技追查的车队引去踩雷。",
     canon: true,
     body: {
-      gear: ["chaos", "street-jacket", "leather-pants", "combat-boots", "black-lace"],
+      gear: [
+        "chaos",
+        "crusher",
+        "maelstrom-spike-vest",
+        "solo-compression-top",
+        "leather-pants",
+        "militech-exo-boots",
+        "black-lace",
+        "adrenaline-shot",
+      ],
       cyberware: [
         "militech-thermal-optics",
         "audio-suite",
@@ -1182,11 +1284,12 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "tactician",
+        "crusher",
         "machete",
         "emp-grenade",
         "long-trenchcoat",
-        "cargo-pants",
+        "kevlar-undershirt",
+        "tactical-knee-pants",
         "combat-boots",
         "rosary-beads",
       ],
@@ -1231,7 +1334,15 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       "半躺在太平洲地下教堂冷却池中准备深潜，通过手下催促艾芙琳尽快交付绀碧大厦的录制原片。",
     canon: true,
     body: {
-      gear: ["netrunner-suit", "combat-boots", "blank-shard", "chip-reader-writer"],
+      gear: [
+        "netrunner-cooling-crown",
+        "mil-netrunner-suit",
+        "netrunner-weave-pants",
+        "netrunner-ground-boots",
+        "ice-breaker-spike",
+        "chip-reader-writer",
+        "blank-shard",
+      ],
       cyberware: [
         "raven-microcyber",
         "kiroshi-mk2",
@@ -1309,11 +1420,13 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "ajax",
+        "ajax-mil-spec",
+        "corpo-smart-specs",
         "corpo-suit",
-        "turtleneck-knit",
+        "kevlar-undershirt",
         "tailored-slacks",
         "dress-shoes",
+        "signal-jammer",
         "corpo-badge",
         "holo-phone",
       ],
@@ -1360,10 +1473,10 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "lexington",
-        "copperhead",
-        "work-apron",
+        "sor-22",
+        "nomad-welding-cap",
         "techie-coverall",
-        "cargo-pants",
+        "nomad-reinforced-pants",
         "combat-boots",
         "tool-kit",
       ],
@@ -1400,11 +1513,12 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "tech-goggles",
-        "netrunner-suit",
-        "cargo-pants",
-        "street-sneakers",
+        "netrunner-infovisor",
+        "mil-netrunner-suit",
+        "netrunner-weave-pants",
+        "netrunner-ground-boots",
         "chip-reader-writer",
+        "relay-beacon",
         "synth-cigs",
         "blank-shard",
       ],
@@ -1494,7 +1608,7 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       "如同漆黑铁塔般守在绀碧大厦顶层套房的安保前厅，冷眼扫视着所有出入赖宣房间的访客与侍者。",
     canon: true,
     body: {
-      gear: ["ba-xing-chong", "defender"],
+      gear: ["ba-xing-chong", "mk31-hmg", "defender-mil-spec"],
       cyberware: [
         "militech-apogee",
         "dragoon-fbc-chassis",
@@ -1543,13 +1657,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "copperhead",
+        "sor-22",
         "tactician",
         "satara",
-        "nomad-duster",
+        "aldecaldo-rally-jacket",
         "street-tee",
-        "cargo-pants",
+        "nomad-reinforced-pants",
         "combat-boots",
+        "hemostatic-gel",
         "synth-cigs",
         "holo-phone",
       ],
@@ -1592,10 +1707,12 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "copperhead",
-        "nomad-duster",
+        "sor-22",
+        "nomad-welding-cap",
+        "tech-goggles",
+        "aldecaldo-rally-jacket",
         "street-tee",
-        "cargo-pants",
+        "nomad-reinforced-pants",
         "combat-boots",
         "tool-kit",
         "real-liquor",
@@ -1641,12 +1758,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "copperhead",
-        "tech-goggles",
-        "nomad-duster",
-        "cargo-pants",
-        "combat-boots",
+        "netrunner-infovisor",
+        "aldecaldo-rally-jacket",
+        "netrunner-suit",
+        "nomad-reinforced-pants",
+        "netrunner-ground-boots",
         "tool-kit",
         "chip-reader-writer",
+        "relay-beacon",
       ],
       cyberware: [
         "militech-paraline",
@@ -1688,10 +1807,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "yukimura",
-        "street-jacket",
-        "netrunner-suit",
-        "combat-boots",
+        "senkoh-spec",
+        "netrunner-cooling-crown",
+        "stealth-assassin-coat",
+        "mil-netrunner-suit",
+        "netrunner-weave-pants",
+        "netrunner-ground-boots",
+        "ice-breaker-spike",
+        "faraday-pouch",
         "holo-phone",
         "blank-shard",
       ],
@@ -1740,15 +1863,18 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "lexington",
+        "kenshin-spec-ops",
         "ashura",
         "flashbang",
-        "long-trenchcoat",
-        "turtleneck-knit",
-        "cargo-pants",
-        "combat-boots",
-        "holo-phone",
+        "optical-scrambler-mask",
+        "stealth-assassin-coat",
+        "thermal-stealth-liner",
+        "tactical-knee-pants",
+        "silent-stalker-boots",
+        "signal-jammer",
+        "glass-cutter",
         "lockpick-set",
+        "holo-phone",
       ],
       cyberware: [
         "subdermal-armor",
@@ -1795,7 +1921,16 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
       "在华盛顿白宫战情室里审阅西海岸与荒坂航母动向简报，筹划不久后乘“太空一号”专机赴西海岸巡访。",
     canon: true,
     body: {
-      gear: ["liberty", "corpo-suit", "silk-shirt", "tailored-slacks", "dress-shoes", "holo-phone"],
+      gear: [
+        "kyubi-mod-x",
+        "liberty",
+        "corpo-suit",
+        "kevlar-undershirt",
+        "tailored-slacks",
+        "dress-shoes",
+        "hemostatic-gel",
+        "holo-phone",
+      ],
       cyberware: ["kiroshi-mk1", "subdermal-armor", "self-ice"],
     },
   },
@@ -1830,12 +1965,16 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "liberty",
-        "knife",
+        "mk31-hmg",
+        "overture-heavy",
+        "thermal-katana-mil",
         "flashbang",
-        "security-uniform",
-        "cargo-pants",
-        "combat-boots",
+        "militech-heavy-rig",
+        "solo-compression-top",
+        "tactical-knee-pants",
+        "militech-exo-boots",
+        "tactical-chest-rig",
+        "adrenaline-shot",
         "cigar-case",
         "holo-phone",
       ],
@@ -1887,10 +2026,14 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "her-majesty",
+        "optical-scrambler-mask",
         "street-jacket",
-        "street-tee",
-        "cargo-pants",
-        "combat-boots",
+        "thermal-stealth-liner",
+        "tactical-knee-pants",
+        "silent-stalker-boots",
+        "optical-cloak",
+        "cloned-keycard",
+        "mag-grapple-kit",
         "holo-phone",
         "real-liquor",
       ],
@@ -1911,3 +2054,50 @@ export const npcs = npcRules.NpcCardSchema.array().parse([
     },
   },
 ]);
+
+/** 男 V（文森特）完整 NPC 变体卡面：与默认女 V 同 id="v"，供建档「人脉与旧识」一键切换并复用全套关系网与支线 */
+export const vMaleNpcVariant = npcRules.NpcCardSchema.parse({
+  id: "v",
+  name: "文森特",
+  alias: "V",
+  age: 23,
+  adult: true,
+  entity: "human",
+  pronoun: "他",
+  role: "沃森区新锐独狼佣兵，杰克·威尔斯的固定搭档，刚搬进 H10 起步",
+  faction: "none",
+  circle: "merc",
+  look: "二十三岁左右、身形匀称精壮，留着利落贴皮短发与浅淡胡茬，下颌线条硬朗；眼角嵌有细微赛博电路纹，目光沉稳警觉，指节带着常年握枪与拧扳手磨出的硬茧。",
+  outfit:
+    "高领发光翻领的街头改装皮夹克内搭暗色旧 T 恤，耐磨战术工装裤配重靴，腰间挂着威尔逊刚调校好的定制手枪。",
+  voice:
+    "嗓音微哑低沉、直来直去，带着街头摸爬滚打练出来的冷幽默与倔强劲；对公司客套话嗤之以鼻，真碰上杰克或熟人遇险时话不多、动作比谁都狠。",
+  samples: [
+    "先谈活儿和退路，别扯什么大联盟传奇——命都没了，酒单上挂名字给谁看？",
+    "老维，账先记我头上。等这票跑完，连本带利拍回你诊所工作台。",
+    "德克斯这人排场太大、旧账太浑。可以听他开价，但别把命押在他一张嘴上。",
+  ],
+  bio: "刚在夜之城佣兵圈冒头不久的年轻独狼，与杰克·威尔斯搭伙在沃森和海伍德跑单攒下第一批口碑，常与黑客 T-Bug 联手接活。前阵子靠杰克与威尔斯太太帮衬站稳脚跟，刚搬进超级摩天楼 H10 公寓，也在老维诊所赊账换装了基础实用义体。此刻他尚未踏进绀碧大厦、也未接触过 Relic 芯片，正站在决定命运的十字路口。",
+  want: "和杰克一起闯进来生大联盟、亲手还清维克多的诊费，在夜之城彻底站稳脚跟活出名堂。",
+  limit: "绝不背叛过命搭档杰克、维克多或米丝蒂；绝不甘心被中间人当一次性棋子甩锅灭口。",
+  secret:
+    "表面上陪着杰克畅想大买卖，私底下却反复翻过德克斯特两年前在太平洲栽跟头的旧风声，心里对那位突然回城的大牌中间人始终留着一手防备。",
+  home: "megabuilding-h10",
+  hangouts: ["afterlife", "vik-clinic", "coyote-cojo", "lizzies-bar"],
+  initialDoing:
+    "刚从 H10 楼上威尔逊枪店取回改好的定制手枪，正准备下楼找老维调校义眼接口，顺便跟杰克碰头聊德克斯放出的风声。",
+  canon: true,
+  body: {
+    gear: [
+      "dying-night",
+      "street-jacket",
+      "turtleneck-knit",
+      "tactical-knee-pants",
+      "combat-boots",
+      "maxdoc",
+      "hemostatic-gel",
+      "holo-phone",
+    ],
+    cyberware: ["kiroshi-mk1", "ballistic-coprocessor", "subdermal-armor"],
+  },
+});

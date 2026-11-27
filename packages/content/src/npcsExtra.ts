@@ -44,7 +44,7 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
         "dying-night",
         "copperhead",
         "work-apron",
-        "street-tee",
+        "kevlar-undershirt",
         "cargo-pants",
         "combat-boots",
         "tool-kit",
@@ -88,11 +88,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "omaha",
         "tech-goggles",
-        "work-apron",
         "techie-coverall",
+        "street-tee",
         "cargo-pants",
         "street-sneakers",
         "med-kit",
+        "hemostatic-gel",
         "maxdoc",
       ],
       cyberware: [
@@ -138,10 +139,10 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "lizzie",
-        "street-jacket",
-        "street-tee",
+        "mox-neon-bolero",
+        "kevlar-undershirt",
         "leather-pants",
-        "combat-boots",
+        "rocker-studded-boots",
         "holo-phone",
         "real-liquor",
       ],
@@ -187,10 +188,10 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "baseball-bat",
         "lexington",
-        "neon-pvc-jacket",
-        "street-tee",
+        "mox-neon-bolero",
+        "solo-compression-top",
         "leather-pants",
-        "combat-boots",
+        "rocker-studded-boots",
         "maxdoc",
       ],
       cyberware: [
@@ -235,10 +236,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "tamayura",
+        "corpo-smart-specs",
         "corpo-suit",
         "silk-shirt",
         "tailored-slacks",
         "dress-shoes",
+        "faraday-pouch",
         "holo-phone",
         "blank-shard",
       ],
@@ -286,10 +289,11 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "ajax",
         "baton",
-        "street-jacket",
-        "street-tee",
-        "cargo-pants",
+        "tyger-bomber-jacket",
+        "kevlar-undershirt",
+        "tactical-knee-pants",
         "combat-boots",
+        "cloned-keycard",
         "holo-phone",
         "synth-cigs",
       ],
@@ -327,6 +331,7 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
+        "respirator-mask",
         "silk-shirt",
         "tailored-slacks",
         "dress-shoes",
@@ -368,7 +373,7 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       "被反锁在沃森北区旧食品厂的暗室里，顶着门外感应地雷的红光暗自磨松手腕束带，听着外头漩涡帮小弟的动静。",
     canon: true,
     body: {
-      gear: ["street-jacket", "cargo-pants", "combat-boots"],
+      gear: ["maelstrom-spike-vest", "leather-pants", "combat-boots"],
       cyberware: [
         "kiroshi-mk2",
         "subdermal-armor",
@@ -409,11 +414,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "sledgehammer",
-        "defender",
-        "street-tee",
-        "cargo-pants",
-        "combat-boots",
+        "gorilla-maul",
+        "defender-mil-spec",
+        "solo-compression-top",
+        "tactical-knee-pants",
+        "militech-exo-boots",
+        "adrenaline-shot",
         "health-booster",
       ],
       cyberware: [
@@ -457,12 +463,15 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "ajax",
-        "liberty",
+        "ajax-mil-spec",
+        "overture-heavy",
         "frag-grenade",
+        "tactical-helmet",
         "security-uniform",
-        "cargo-pants",
-        "combat-boots",
+        "tactical-knee-pants",
+        "militech-exo-boots",
+        "tactical-chest-rig",
+        "hemostatic-gel",
         "holo-phone",
       ],
       cyberware: ["kiroshi-mk1", "subdermal-armor", "kerenzikov", "self-ice"],
@@ -498,11 +507,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "corpo-glasses",
+        "corpo-smart-specs",
         "techie-coverall",
         "tailored-slacks",
         "street-sneakers",
         "med-kit",
+        "hemostatic-gel",
         "tool-kit",
         "maxdoc",
       ],
@@ -548,11 +558,15 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "jinchu-maru",
-        "shingen",
+        "shingen-tac",
         "flashbang",
-        "corpo-suit",
-        "tailored-slacks",
-        "combat-boots",
+        "arasaka-kabuto-helm",
+        "thermal-tactical-visor",
+        "arasaka-plate-vest",
+        "thermal-stealth-liner",
+        "tactical-knee-pants",
+        "silent-stalker-boots",
+        "optical-cloak",
         "corpo-badge",
       ],
       cyberware: [
@@ -604,7 +618,7 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       gear: [
         "unity",
         "corpo-suit",
-        "silk-shirt",
+        "kevlar-undershirt",
         "tailored-slacks",
         "dress-shoes",
         "holo-phone",
@@ -645,10 +659,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
+        "corpo-smart-specs",
         "corpo-suit",
         "silk-shirt",
         "tailored-slacks",
         "dress-shoes",
+        "faraday-pouch",
         "holo-phone",
         "blank-shard",
       ],
@@ -686,11 +702,14 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "omaha",
-        "long-trenchcoat",
-        "corpo-suit",
-        "tailored-slacks",
-        "dress-shoes",
+        "senkoh-spec",
+        "netrunner-infovisor",
+        "netwatch-trenchcoat",
+        "mil-netrunner-suit",
+        "netrunner-weave-pants",
+        "netrunner-ground-boots",
+        "ice-breaker-spike",
+        "faraday-pouch",
         "corpo-badge",
         "holo-phone",
         "blank-shard",
@@ -768,14 +787,7 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       "刚结束威斯特布鲁克的一场全息广告拍摄，戴着墨镜在日本街后巷透风，顺手警惕地检查终端里有没有新的匿名怪信。",
     canon: true,
     body: {
-      gear: [
-        "mirror-shades",
-        "neon-pvc-jacket",
-        "club-dress",
-        "street-sneakers",
-        "holo-phone",
-        "nicola",
-      ],
+      gear: ["mirror-shades", "club-dress", "street-sneakers", "holo-phone", "nicola"],
       cyberware: [
         "kiroshi-mk2",
         "chroma-iris-overlay",
@@ -819,7 +831,16 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       "站在公司广场高处咖啡廊的阴影里，双瞳泛着持续传输的蓝光，静静注视着佩拉莱斯竞选车队驶过街口。",
     canon: true,
     body: {
-      gear: ["corpo-suit", "silk-shirt", "tailored-slacks", "dress-shoes", "holo-phone"],
+      gear: [
+        "corpo-smart-specs",
+        "arasaka-executive-coat",
+        "silk-shirt",
+        "yorinobu-formal-slacks",
+        "dress-shoes",
+        "signal-jammer",
+        "faraday-pouch",
+        "holo-phone",
+      ],
       cyberware: [
         "zetatech-net-optics",
         "biometric-polygraph-optics",
@@ -860,12 +881,13 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "carnage",
+        "crusher",
         "frag-grenade",
-        "street-jacket",
+        "edgerunner-jacket",
         "street-tee",
-        "cargo-pants",
-        "combat-boots",
+        "tactical-knee-pants",
+        "rocker-studded-boots",
+        "adrenaline-shot",
       ],
       cyberware: ["subdermal-armor", "gorilla-arms", "pain-editor"],
     },
@@ -901,7 +923,14 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
       "在 H10 公寓中庭拳馆旁盯着训练机器人校准出拳频率，顺手整理下一场城区黑拳赛的对手名单。",
     canon: true,
     body: {
-      gear: ["knuckles", "street-tee", "cargo-pants", "combat-boots", "holo-phone"],
+      gear: [
+        "knuckles",
+        "solo-compression-top",
+        "cargo-pants",
+        "combat-boots",
+        "hemostatic-gel",
+        "holo-phone",
+      ],
       cyberware: [
         "chrome-compressor",
         "gorilla-arms",
@@ -942,12 +971,13 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "copperhead",
+        "sor-22",
         "knife",
-        "nomad-duster",
+        "aldecaldo-rally-jacket",
         "street-tee",
-        "cargo-pants",
+        "nomad-reinforced-pants",
         "combat-boots",
+        "hemostatic-gel",
         "tool-kit",
       ],
       cyberware: [
@@ -990,12 +1020,14 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "overture",
+        "overture-heavy",
         "kolac",
-        "nomad-duster",
+        "fixer-fedora",
+        "aldecaldo-rally-jacket",
         "street-tee",
-        "cargo-pants",
+        "nomad-reinforced-pants",
         "combat-boots",
+        "thermal-monocular",
         "real-liquor",
       ],
       cyberware: ["kiroshi-mk2", "ballistic-coprocessor", "kerenzikov"],
@@ -1034,10 +1066,11 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     body: {
       gear: [
         "unity",
-        "street-jacket",
-        "turtleneck-knit",
+        "long-trenchcoat",
+        "samurai-tour-tee",
         "tailored-slacks",
         "dress-shoes",
+        "faraday-pouch",
         "holo-phone",
         "blank-shard",
       ],
@@ -1081,12 +1114,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "tactician",
-        "liberty",
+        "crusher",
+        "overture-heavy",
         "street-jacket",
-        "turtleneck-knit",
-        "cargo-pants",
-        "combat-boots",
+        "kevlar-undershirt",
+        "tactical-knee-pants",
+        "militech-exo-boots",
         "holo-phone",
       ],
       cyberware: [
@@ -1131,12 +1164,15 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "ajax",
-        "overture",
-        "street-jacket",
-        "turtleneck-knit",
-        "cargo-pants",
-        "combat-boots",
+        "kyubi-mod-x",
+        "overture-heavy",
+        "thermal-tactical-visor",
+        "stealth-assassin-coat",
+        "solo-compression-top",
+        "tactical-knee-pants",
+        "militech-exo-boots",
+        "tactical-chest-rig",
+        "adrenaline-shot",
         "holo-phone",
       ],
       cyberware: [
@@ -1257,11 +1293,12 @@ export const extraNpcs = npcRules.NpcCardSchema.array().parse([
     canon: true,
     body: {
       gear: [
-        "yukimura",
+        "shingen-tac",
         "mirror-shades",
-        "neon-pvc-jacket",
-        "club-dress",
-        "combat-boots",
+        "mox-neon-bolero",
+        "kevlar-undershirt",
+        "leather-pants",
+        "rocker-studded-boots",
         "holo-phone",
       ],
       cyberware: [

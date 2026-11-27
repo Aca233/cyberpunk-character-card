@@ -1,4 +1,5 @@
 import { defineSystem } from "../../kernel/system";
+import { combatActions } from "./actions";
 import { applyCombat, tickCombat } from "./apply";
 import { combatRules } from "./prompt";
 import {
@@ -16,7 +17,7 @@ import { combatView } from "./view";
  */
 export const combat = defineSystem<CombatState, CombatCommand, never>({
   id: "combat",
-  dependsOn: ["economy", "health", "inventory", "npc", "world"],
+  dependsOn: ["economy", "factions", "health", "inventory", "npc", "stealth", "world"],
   state: CombatStateSchema,
   initial: () => CombatStateSchema.parse({ active: null, last: null }),
   commands: { combat: CombatCommandSchema },
@@ -24,10 +25,12 @@ export const combat = defineSystem<CombatState, CombatCommand, never>({
   apply: (draft, command, ctx) => applyCombat(draft, command, ctx),
   tick: (draft, span, ctx) => tickCombat(draft, span, ctx),
   rules: [combatRules],
+  actions: combatActions,
   view: { key: "combat", project: combatView },
   status: combatStatus,
 });
 
+export * from "./actions";
 export * from "./apply";
 export * from "./names";
 export * from "./prompt";

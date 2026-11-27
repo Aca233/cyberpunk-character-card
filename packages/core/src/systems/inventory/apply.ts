@@ -6,6 +6,7 @@ import {
   availableQuickSupply,
   CLOTHING_SLOT_LABELS,
   type ClothingSlot,
+  ClothingSlotSchema,
   canAttachMod,
   carriedHeldWeaponIds,
   defaultWeaponSlots,
@@ -18,6 +19,7 @@ import {
   type ItemKind,
   MOD_SLOT_LABELS,
   type ModSlot,
+  OUTFIT_PRESET_MAX,
   type PartsCommand,
   type PlacedKind,
   type QuickSlotName,
@@ -807,6 +809,82 @@ function unequip(draft: Inventory, def: ItemDef): ApplyOutcome {
     return ok(`脱下 ${def.name}，放回背包`);
   }
   return fail(`没有装备 ${def.name}`);
+}
+
+/** 界面动作：保存、一键整套换装或删除穿搭方案 */
+export function applyOutfitPreset(
+  draft: Inventory,
+  command: Extract<InventoryInternal, { type: "inventory.outfit" }>,
+  catalog: ReadonlyMap<string, ItemDef>,
+): ApplyOutcome {
+  if (command.action === "save") {
+    const slots: Partial<Record<ClothingSlot, string>> = {};
+    for (const slot of ClothingSlotSchema.options) {
+      const id = draft.clothing[slot];
+      if (id) slots[slot] = id;
+    }
+    if (Object.keys(slots).length === 0) return fail("当前身上没穿任何服装，无法存为穿搭方案");
+    const name = command.name?.trim() || `穿搭 ${draft.outfits.length + 1}`;
+    const existingIdx = command.id
+      ? draft.outfits.findIndex((o) => o.id === command.id)
+      : draft.outfits.findIndex((o) => o.name === name);
+    if (existingIdx >= 0) {
+      const prev = draft.outfits[existingIdx];
+      if (prev) {
+        draft.outfits[existingIdx] = { id: prev.id, name, slots };
+      }
+      return ok(`已更新穿搭方案「${name}」`);
+    }
+    if (draft.outfits.length >= OUTFIT_PRESET_MAX) {
+      return fail(`最多保存 ${OUTFIT_PRESET_MAX} 套穿搭方案，请先删除或覆盖旧方案`);
+    }
+    const id = command.id ?? `outfit-${draft.outfits.length + 1}-${Object.keys(slots).length}`;
+    draft.outfits.push({ id, name, slots });
+    return ok(`已保存穿搭方案「${name}」`);
+  }
+
+  if (command.action === "delete") {
+    const idx = draft.outfits.findIndex((o) => o.id === command.id);
+    if (idx < 0) return fail("找不到这套穿搭方案");
+    const [removed] = draft.outfits.splice(idx, 1);
+    return ok(`已删除穿搭方案「${removed?.name ?? command.id}」`);
+  }
+
+  // apply：一键整套换装
+  const preset = draft.outfits.find((o) => o.id === command.id);
+  if (!preset) return fail("找不到这套穿搭方案");
+  const missing: string[] = [];
+  let changed = 0;
+
+  // 1. 先把与目标不一致的已穿服装脱回背包
+  for (const slot of ClothingSlotSchema.options) {
+    const cur = draft.clothing[slot];
+    const target = preset.slots[slot];
+    if (cur && cur !== target) {
+      Reflect.deleteProperty(draft.clothing, slot);
+      put(draft, cur);
+      changed += 1;
+    }
+  }
+  // 2. 逐格穿上目标方案里的随身衣物
+  for (const slot of ClothingSlotSchema.options) {
+    const target = preset.slots[slot];
+    if (!target || draft.clothing[slot] === target) continue;
+    const def = catalog.get(target);
+    if (!def || def.clothingSlot !== slot) {
+      missing.push(def?.name ?? target);
+      continue;
+    }
+    if (!take(draft, target)) {
+      missing.push(def.name);
+      continue;
+    }
+    draft.clothing[slot] = target;
+    changed += 1;
+  }
+  if (changed === 0 && missing.length === 0) return ok(`当前已穿着方案「${preset.name}」`);
+  const missNote = missing.length > 0 ? `（未在随身背包：${missing.join("、")}）` : "";
+  return ok(`已切换至穿搭方案「${preset.name}」${missNote}`);
 }
 
 function use(

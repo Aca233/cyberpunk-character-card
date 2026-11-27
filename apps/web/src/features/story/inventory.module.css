@@ -1200,6 +1200,461 @@
   font-weight: 700;
 }
 
+/* ———— 战场战利品与同行同伴交接 ———— */
+
+.lootStrip {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.65rem;
+  padding: 0.36rem 0.56rem;
+  border: 1px solid rgb(252 238 10 / 44%);
+  background: rgb(252 238 10 / 8%);
+}
+
+.lootStripText {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--cp-yellow);
+  letter-spacing: 0.04em;
+}
+
+.lootStripActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.36rem;
+}
+
+.exchangeScroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.58rem;
+  padding-right: 0.16rem;
+}
+
+.exchangeGroup {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.exchangeGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0.1rem;
+  border-bottom: 1px solid rgb(94 246 255 / 20%);
+}
+
+.exchangeGroupTitle {
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--cp-yellow);
+  letter-spacing: 0.06em;
+}
+
+.exchangeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.exchangeRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.52rem;
+  padding: 0.38rem 0.52rem;
+  border: 1px solid var(--cp-line-subtle);
+  background: var(--cp-surface-inset);
+}
+
+.exchangeRow[data-rarity="uncommon"] {
+  border-left: 3px solid #3ff2a0;
+}
+
+.exchangeRow[data-rarity="rare"] {
+  border-left: 3px solid #38bdf8;
+}
+
+.exchangeRow[data-rarity="epic"] {
+  border-left: 3px solid #c084fc;
+}
+
+.exchangeRow[data-rarity="legendary"],
+.exchangeRow[data-iconic] {
+  border-left: 3px solid #f59e0b;
+}
+
+.exchangeRowThumb {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 1.85rem;
+  background: var(--cp-surface-deep);
+  border: 1px solid var(--cp-line-faint);
+}
+
+.exchangeRowArt {
+  max-width: 2.3rem;
+  max-height: 1.55rem;
+  object-fit: contain;
+}
+
+.exchangeRowInfo {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.exchangeRowTitle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--cp-text);
+  line-height: 1.25;
+}
+
+.exchangeRowMeta {
+  font-size: 0.66rem;
+  color: var(--cp-cyan);
+  line-height: 1.3;
+}
+
+.exchangeRowAbility {
+  font-size: 0.67rem;
+  color: var(--cp-text-dim);
+  line-height: 1.35;
+}
+
+.giveLabel {
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+}
+
+.gearEffectsBar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem 0.45rem;
+  padding: 0.3rem 0.52rem;
+  border: 1px solid rgb(63 242 160 / 30%);
+  background: rgb(63 242 160 / 6%);
+}
+
+.gearEffectsLabel {
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-success);
+  white-space: nowrap;
+}
+
+.gearEffectsList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.24rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gearEffectChip {
+  padding: 0.08rem 0.38rem;
+  border: 1px solid rgb(63 242 160 / 40%);
+  background: rgb(63 242 160 / 12%);
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--cp-text);
+  line-height: 1.3;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+}
+
+/* ———— 全身六格穿搭栏与穿搭方案 ———— */
+
+.wardrobePanel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  padding: 0.44rem 0.52rem;
+  border: 1px solid rgb(94 246 255 / 26%);
+  background: linear-gradient(180deg, rgb(94 246 255 / 6%), rgb(10 15 24 / 72%));
+}
+
+.wardrobeGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.34rem;
+}
+
+.wardrobeSlot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(94 246 255 / 22%);
+  background: rgb(14 20 32 / 78%);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
+.wardrobeSlot[data-empty=""] {
+  border-style: dashed;
+  border-color: rgb(148 163 184 / 28%);
+  background: rgb(10 14 22 / 55%);
+}
+
+.wardrobeSlot[data-active=""] {
+  border-style: solid;
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 10%);
+}
+
+.wardrobeSlotBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  width: 100%;
+  min-height: 4.55rem;
+  padding: 0.28rem 0.24rem 0.32rem;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  text-align: center;
+  cursor: var(--cp-cursor-hand);
+}
+
+.wardrobeSlotBtn:hover,
+.wardrobeSlotBtn:focus-visible {
+  outline: none;
+  background: rgb(94 246 255 / 8%);
+}
+
+.wardrobeSlotHead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.15rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+}
+
+.wardrobeSlot[data-active=""] .wardrobeSlotHead {
+  color: var(--cp-yellow);
+}
+
+.wardrobeSlotArt {
+  width: 2.15rem;
+  height: 2.15rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0 4px rgb(94 246 255 / 24%));
+}
+
+.wardrobeSlotName {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--cp-text);
+  line-height: 1.2;
+}
+
+.wardrobeSlotEmpty {
+  margin-top: auto;
+  margin-bottom: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  font-size: 0.62rem;
+  color: var(--cp-text-dim);
+  line-height: 1.25;
+}
+
+.wardrobeSlotHint {
+  font-size: 0.58rem;
+  color: var(--cp-cyan);
+  opacity: 0.85;
+}
+
+.wardrobeUnequipBtn {
+  position: absolute;
+  top: 0.16rem;
+  right: 0.16rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 97 88 / 45%);
+  background: rgb(16 10 14 / 88%);
+  color: var(--cp-red);
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0;
+  cursor: var(--cp-cursor-hand);
+}
+
+.wardrobeUnequipBtn:hover,
+.wardrobeUnequipBtn:focus-visible {
+  outline: none;
+  background: var(--cp-red);
+  color: #080a0f;
+}
+
+.outfitRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.42rem;
+  padding-top: 0.34rem;
+  border-top: 1px solid rgb(94 246 255 / 16%);
+}
+
+.outfitLabel {
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cp-cyan);
+  white-space: nowrap;
+}
+
+.outfitChips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.outfitChipGroup {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid rgb(94 246 255 / 32%);
+  background: rgb(12 19 30 / 82%);
+}
+
+.outfitChipGroup[data-active=""] {
+  border-color: var(--cp-yellow);
+  background: rgb(252 238 10 / 12%);
+}
+
+.outfitChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.26rem;
+  padding: 0.14rem 0.44rem;
+  border: 0;
+  background: transparent;
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 600;
+  cursor: var(--cp-cursor-hand);
+}
+
+.outfitChip:hover:not(:disabled),
+.outfitChip:focus-visible {
+  outline: none;
+  background: rgb(94 246 255 / 12%);
+}
+
+.outfitChip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.outfitMissing {
+  font-size: 0.6rem;
+  color: var(--cp-yellow);
+}
+
+.outfitDelBtn {
+  padding: 0 0.32rem;
+  border: 0;
+  border-inline-start: 1px solid rgb(94 246 255 / 20%);
+  background: transparent;
+  color: var(--cp-text-dim);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: var(--cp-cursor-hand);
+}
+
+.outfitDelBtn:hover:not(:disabled),
+.outfitDelBtn:focus-visible {
+  outline: none;
+  background: rgb(255 97 88 / 22%);
+  color: var(--cp-red);
+}
+
+.outfitForm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.outfitInput {
+  width: 9.5rem;
+  padding: 0.16rem 0.42rem;
+  border: 1px solid rgb(94 246 255 / 45%);
+  background: rgb(8 12 20 / 92%);
+  color: var(--cp-text);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+}
+
+.outfitInput:focus {
+  outline: none;
+  border-color: var(--cp-yellow);
+}
+
+.outfitSlotReset {
+  margin-left: auto;
+  padding: 0.12rem 0.44rem;
+  border: 1px solid rgb(252 238 10 / 45%);
+  background: rgb(252 238 10 / 12%);
+  color: var(--cp-yellow);
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 600;
+  cursor: var(--cp-cursor-hand);
+}
+
+.outfitSlotReset:hover,
+.outfitSlotReset:focus-visible {
+  outline: none;
+  background: rgb(252 238 10 / 24%);
+}
+
 /* ———— 当前地点购房条 ———— */
 
 .placesBar {
@@ -1250,5 +1705,9 @@
   .browser {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(140px, 0.9fr) minmax(0, 1.3fr);
+  }
+
+  .wardrobeGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

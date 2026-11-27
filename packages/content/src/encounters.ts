@@ -523,6 +523,22 @@ export const encounters = travelRules.EncounterCatalogSchema.parse([
     weight: 1,
   },
   {
+    id: "v-jackie-vik-banter",
+    label: "熟面孔搭档",
+    note: "（仅当世界里存在 NPC 版 V 且主角并非 V 时使用）小中国区或 H10 楼下撞见年轻独狼 V 和魁梧大汉杰克刚跑完小活回来，一个在数弹匣、一个正兴冲冲吹嘘来生大联盟；搭话或擦肩皆可",
+    districts: ["沃森"],
+    periods: ["day", "dusk", "night"],
+    weight: 1,
+  },
+  {
+    id: "v-afterlife-corner",
+    label: "来生卡座风声",
+    note: "（仅当世界里存在 NPC 版 V 且主角并非 V 时使用）来生酒吧外街口或吧台边，V 正压低声音跟搭档复盘一单沃森北区的活计，神色警觉地打量过路人",
+    districts: ["沃森"],
+    periods: ["dusk", "night"],
+    weight: 1,
+  },
+  {
     id: "hitchhiker",
     label: "搭车的人",
     note: "荒路边有人举着牌子要搭车去城里，背着一个用布裹着的长包；带上他路上有人说话，也可能带上了麻烦",

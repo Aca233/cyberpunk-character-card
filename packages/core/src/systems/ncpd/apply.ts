@@ -1,15 +1,26 @@
 import type { Draft } from "immer";
-import type { ApplyOutcome, SystemContext, TimeSpan } from "../../kernel/system";
+import type { ApplyOutcome, Command, SystemContext, TimeSpan } from "../../kernel/system";
 import type { CityState } from "../city";
 import { rulingFact } from "../dice";
+import {
+  type Attitude,
+  attitudeLabel,
+  currentAttitude,
+  currentTurf,
+  FactionsStateSchema,
+  factionCatalog,
+} from "../factions";
+import type { HeatState } from "../heat";
 import { locationCatalog, type WorldClockState } from "../world";
 import {
   ALERT_EXCLUDED_DISTRICTS,
   ALERT_INTERVAL,
   ALERT_TTL,
   ALERTS_MAX,
+  type Alert,
   AlertCatalogSchema,
   type AlertTemplate,
+  NCPD_BOUNTY_BLOCK_STARS,
   type NcpdCommand,
   type NcpdState,
 } from "./schema";
@@ -77,12 +88,62 @@ function post(draft: Draft<NcpdState>, at: number, ctx: SystemContext): void {
     note: template.note,
     district: place.district,
     location: place.id,
+    ...(template.faction ? { faction: template.faction } : {}),
+    gangRelated: template.gangRelated,
     reward: template.reward,
     risk: template.risk,
     postedAt: at,
     expiresAt: at + ALERT_TTL,
   });
   draft.nextId += 1;
+}
+
+export interface AlertFactionContext {
+  readonly targetFactionId: string | null;
+  readonly targetFactionName: string | null;
+  readonly targetAttitude: Attitude | null;
+  readonly targetAttitudeLabel: string | null;
+  readonly isOwnFaction: boolean;
+  readonly contested: boolean;
+}
+
+/** 动态解析警情牵扯的帮派势力与城区争夺态（随地盘易主实时变化） */
+export function resolveAlertFaction(
+  alert: Pick<Alert, "template" | "district" | "faction" | "gangRelated">,
+  data: Readonly<Record<string, unknown>>,
+  factionsSlice: unknown,
+): AlertFactionContext {
+  const factions = FactionsStateSchema.parse(factionsSlice ?? {});
+  const catalog = factionCatalog(data);
+  const contested = Boolean(factions.contested[alert.district]);
+  const tpl = alertCatalog(data).find((t) => t.id === alert.template);
+  const explicitId = alert.faction ?? tpl?.faction;
+  const gangRelated = Boolean(alert.gangRelated || tpl?.gangRelated || explicitId);
+
+  let target = explicitId ? catalog.get(explicitId) : undefined;
+  if (!target && gangRelated) {
+    const turf = currentTurf(factions, data, false);
+    for (const def of catalog.values()) {
+      if (def.kind !== "gang") continue;
+      if ((turf.get(def.id) ?? def.turf).includes(alert.district)) {
+        target = def;
+        break;
+      }
+    }
+  }
+
+  const attitude = target ? currentAttitude(factions, target) : null;
+  const attLabel = target && attitude ? attitudeLabel(target.kind, attitude) : null;
+  const isOwnFaction = target !== undefined && factions.membership?.faction === target.id;
+
+  return {
+    targetFactionId: target?.id ?? null,
+    targetFactionName: target?.name ?? null,
+    targetAttitude: attitude,
+    targetAttitudeLabel: attLabel,
+    isOwnFaction,
+    contested,
+  };
 }
 
 /** 时间推进：撤掉过期的；每隔一段挂一条新的，最多同时挂几条 */
@@ -123,12 +184,56 @@ export function applyNcpd(
   }
   draft.alerts.splice(index, 1);
   draft.cleared += 1;
-  return {
-    ok: true,
-    notes: [`处理完警情：${alert.label}（${command.reason}）`],
-    emit: [
-      { type: "money", delta: alert.reward, reason: `NCPD 赏金：${alert.label}` },
-      { type: "heat.relief", reason: `帮 NCPD 处理了${alert.label}` },
-    ],
-  };
+  const heat = ctx.read<HeatState>("heat");
+  const bountyFrozen = (heat?.stars ?? 0) >= NCPD_BOUNTY_BLOCK_STARS;
+  const factionsSlice = ctx.read("factions");
+  const fctx = resolveAlertFaction(alert, ctx.data, factionsSlice);
+
+  const emit: Command[] = [{ type: "heat.relief", reason: `帮 NCPD 处理了${alert.label}` }];
+  const notes = [`处理完警情：${alert.label}（${command.reason}）`];
+  if (bountyFrozen) {
+    notes.push(`当前背负高星通缉（${heat.stars} 星），NCPD 冻结了外包赏金结算`);
+  } else if (alert.reward > 0) {
+    emit.push({ type: "money", delta: alert.reward, reason: `NCPD 赏金：${alert.label}` });
+  }
+
+  // 涉帮警情反向联动势力：端自家帮派场子直接记帮规污点；端别家帮派触发态度恶化
+  if (fctx.targetFactionId && fctx.targetFactionName) {
+    if (fctx.isOwnFaction) {
+      emit.push({
+        type: "faction",
+        action: "strike",
+        id: fctx.targetFactionId,
+        reason: `替 NCPD 端了本帮在${alert.district}的${alert.label}`,
+      });
+      notes.push(`动了自家帮派${fctx.targetFactionName}的场子，已触发帮规污点`);
+    } else if (fctx.targetAttitude === "friendly" || fctx.targetAttitude === "neutral") {
+      emit.push({
+        type: "faction",
+        action: "stance",
+        id: fctx.targetFactionId,
+        attitude: fctx.targetAttitude === "friendly" ? "neutral" : "hostile",
+        reason: `替 NCPD 清理了${fctx.targetFactionName}在${alert.district}的${alert.label}`,
+      });
+      notes.push(`${fctx.targetFactionName}记恨你替条子砸了场子`);
+    }
+  }
+
+  // 累计协助 NCPD 满 3 起且当前中立，自动赢得 NCPD 友好外包口碑
+  const ncpdDef = factionCatalog(ctx.data).get("ncpd");
+  if (ncpdDef && draft.cleared >= 3) {
+    const factions = FactionsStateSchema.parse(factionsSlice ?? {});
+    if (currentAttitude(factions, ncpdDef) === "neutral") {
+      emit.push({
+        type: "faction",
+        action: "stance",
+        id: "ncpd",
+        attitude: "friendly",
+        reason: `累计协助 NCPD 摆平 ${draft.cleared} 起街头悬赏警情`,
+      });
+      notes.push("NCPD 对你建立了外包信任");
+    }
+  }
+
+  return { ok: true, notes, emit };
 }

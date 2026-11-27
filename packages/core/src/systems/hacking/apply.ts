@@ -9,8 +9,14 @@ import {
 } from "../cyberware";
 import { npcHackRulingFact, rulingFact } from "../dice";
 import type { HealthState } from "../health";
-import type { InventoryState } from "../inventory";
+import {
+  type InventoryState,
+  itemCatalog,
+  summarizeGearEffects,
+  withWorldObjects,
+} from "../inventory";
 import { currentVitals, filledBody, type NpcState } from "../npc";
+import { ALERT_MAX, currentAlert, type StealthState } from "../stealth";
 import type { TensionState } from "../tension";
 import type { WorldClockState } from "../world";
 import {
@@ -39,6 +45,13 @@ import {
 type Hacking = Draft<HackingState>;
 
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
+
+function resolveAlertLocation(ctx: SystemContext): string | null {
+  const loc = ctx.read<WorldClockState>("world").location;
+  if (loc !== null) return loc;
+  const origin = ctx.facts.actionStartLocation;
+  return typeof origin === "string" ? origin : null;
+}
 const catalogs = new WeakMap<object, ReadonlyMap<string, QuickhackDef>>();
 
 export function quickhackCatalog(
@@ -134,16 +147,29 @@ export function thermalLevelOf(heat: number): ThermalLevel {
 export function effectiveHeatAt(
   thermal: HackingState["thermal"],
   now: number,
-  opts?: { readonly hasRecovery?: boolean; readonly inDiveChair?: boolean },
+  opts?: {
+    readonly hasRecovery?: boolean;
+    readonly inDiveChair?: boolean;
+    readonly thermalRelief?: number;
+  },
 ): number {
   const raw = Math.max(0, Math.min(THERMAL_MAX_HEAT, thermal.heat));
   if (raw === 0) return 0;
   const elapsed = Math.max(0, now - thermal.updatedAt);
   if (elapsed === 0) return raw;
-  // 普通街头自然降温：约每 5 分钟散掉 1 档积热；配散热缓冲义体或躺潜网冷却椅时降温更快
-  const stepMinutes = opts?.inDiveChair ? 2 : opts?.hasRecovery ? 3 : 5;
+  // 普通街头自然降温：约每 5 分钟散掉 1 档积热；配散热缓冲义体、潜网服/冷却头环或潜网椅时降温更快
+  const baseStep = opts?.inDiveChair ? 2 : opts?.hasRecovery ? 3 : 5;
+  const stepMinutes = Math.max(2, baseStep - (opts?.thermalRelief ?? 0));
   const cooled = Math.floor(elapsed / stepMinutes);
   return Math.max(0, raw - cooled);
+}
+
+/** 读取当前穿着的潜网服/冷却头环提供的黑客散热档位 */
+function wornThermalRelief(ctx: SystemContext): number {
+  if (ctx.data.items === undefined) return 0;
+  const inv = ctx.read<InventoryState>("inventory");
+  const catalog = itemCatalog(withWorldObjects(ctx.data, inv.objects));
+  return summarizeGearEffects(inv, catalog).netThermalRelief;
 }
 
 /** 确保接入仓在首次安装或旧存档升级时有合理的已插装程序芯片与芯片库 */
@@ -227,6 +253,7 @@ export function coolThermalOverTime(draft: Hacking, span: TimeSpan, ctx: SystemC
   const nextHeat = effectiveHeatAt(draft.thermal, span.to, {
     hasRecovery: found?.traits.includes("recovery") ?? false,
     inDiveChair: draft.dive !== null,
+    thermalRelief: wornThermalRelief(ctx),
   });
   if (nextHeat !== draft.thermal.heat) {
     draft.thermal.heat = nextHeat;
@@ -241,12 +268,20 @@ function findProgram(
   return catalog.get(key) ?? [...catalog.values()].find((q) => q.name === key);
 }
 
-/** 不同算力档位单次上传带来的基础积热 */
-function heatDeltaFor(load: HackLoad, hasRecovery: boolean, inDiveChair: boolean): number {
+/** 不同算力档位单次上传带来的基础积热（潜网椅、散热义体与潜网服/冷却装备共同缓解） */
+function heatDeltaFor(
+  load: HackLoad,
+  hasRecovery: boolean,
+  inDiveChair: boolean,
+  thermalRelief = 0,
+): number {
   const base = load === "light" ? 1 : load === "medium" ? 2 : load === "heavy" ? 3 : 4;
-  if (inDiveChair && base > 1) return Math.max(1, base - 1);
-  if (hasRecovery && base >= 3) return base - 1;
-  return base;
+  let relief = 0;
+  if (inDiveChair && base > 1) relief += 1;
+  if (hasRecovery && base >= 3) relief += 1;
+  if (thermalRelief >= 1 && base >= 2) relief += 1;
+  if (thermalRelief >= 2 && base >= 4) relief += 1;
+  return Math.max(1, base - relief);
 }
 
 /** 目标是否已在本现场捅穿个人黑冰（建立立足点） */
@@ -463,10 +498,15 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
   // 先结算截至当前时间的自然散热，再累加本次程序的算力热负荷
   const hasRecovery = found?.traits.includes("recovery") ?? false;
   const inDiveChair = draft.dive !== null;
-  const heatBefore = effectiveHeatAt(draft.thermal, ctx.now, { hasRecovery, inDiveChair });
+  const thermalRelief = wornThermalRelief(ctx);
+  const heatBefore = effectiveHeatAt(draft.thermal, ctx.now, {
+    hasRecovery,
+    inDiveChair,
+    thermalRelief,
+  });
   const levelBefore = thermalLevelOf(heatBefore);
   const load: HackLoad = def?.load ?? "medium";
-  const delta = heatDeltaFor(load, hasRecovery, inDiveChair);
+  const delta = heatDeltaFor(load, hasRecovery, inDiveChair, thermalRelief);
   const heatAfter = Math.min(THERMAL_MAX_HEAT, heatBefore + delta);
   const levelAfter = thermalLevelOf(heatAfter);
 
@@ -541,9 +581,24 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
   if (def && (def.category === "damage" || def.category === "ultimate")) {
     draft.traceAlert = { at: ctx.now, location, target: command.target };
     notes.push(`对方链路出现反向追踪信号（${command.target}）`);
-  } else if (def?.id === "memory-wipe" && draft.traceAlert) {
-    draft.traceAlert = null;
-    notes.push("记忆擦除覆写了回传日志，中断了当前的反向追踪信号");
+  } else if (def?.id === "memory-wipe") {
+    if (draft.traceAlert) {
+      draft.traceAlert = null;
+      notes.push("记忆擦除覆写了回传日志，中断了当前的反向追踪信号");
+    }
+    if (!ctx.read<CombatState>("combat").active) {
+      const alertLoc = resolveAlertLocation(ctx);
+      const alertLevel = currentAlert(ctx.read<StealthState>("stealth"), alertLoc).level;
+      if (alertLevel === 1) {
+        emit.push({
+          type: "alert",
+          delta: -1,
+          ...(alertLoc ? { location: alertLoc } : {}),
+          reason: "记忆擦除中断了目标的起疑与警报回传",
+        });
+        notes.push("目标起疑已被抹除，现场警戒回落");
+      }
+    }
   }
 
   return emit.length > 0 ? { ok: true, notes, emit } : { ok: true, notes };
@@ -597,12 +652,27 @@ export function applyBreach(
   draft.thermal.updatedAt = ctx.now;
 
   const gains = command.gains.map((g) => BREACH_GAIN_LABELS[g]).join("、");
-  return {
-    ok: true,
-    notes: [
-      `入侵协议：${command.network}${command.via ? `（从${command.via}接入）` : ""}，拿下${gains}`,
-    ],
-  };
+  const notes = [
+    `入侵协议：${command.network}${command.via ? `（从${command.via}接入）` : ""}，拿下${gains}`,
+  ];
+  const emit: Command[] = [];
+  if (
+    (command.gains.includes("alarms") || command.gains.includes("cameras")) &&
+    !ctx.read<CombatState>("combat").active
+  ) {
+    const alertLoc = resolveAlertLocation(ctx);
+    const alertLevel = currentAlert(ctx.read<StealthState>("stealth"), alertLoc).level;
+    if (alertLevel > 0 && alertLevel < ALERT_MAX) {
+      emit.push({
+        type: "alert",
+        delta: -1,
+        ...(alertLoc ? { location: alertLoc } : {}),
+        reason: `入侵「${command.network}」压制了现场安保系统`,
+      });
+      notes.push("已接管安保链路，现场警戒度下降");
+    }
+  }
+  return emit.length > 0 ? { ok: true, notes, emit } : { ok: true, notes };
 }
 
 /** 潜网：开始、记录本次目标内部的进一步接入、退出；档位不生成网络防线或权限。 */

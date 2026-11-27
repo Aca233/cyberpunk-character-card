@@ -53,7 +53,14 @@ export interface Looks {
 export function perceivedLine(
   looks: Looks,
   parts: ReadonlyMap<string, { readonly name: string }>,
-  items: ReadonlyMap<string, { readonly name: string }>,
+  items: ReadonlyMap<
+    string,
+    {
+      readonly name: string;
+      readonly stealthTags?: readonly string[] | undefined;
+      readonly factionDisguise?: string | undefined;
+    }
+  >,
 ): string {
   const bits: string[] = [];
   const origin = looks.traits.find((t) => t.slot === "origin")?.label;
@@ -61,11 +68,18 @@ export function perceivedLine(
     const accent = ORIGIN_ACCENTS[origin];
     bits.push(accent ? `${origin}出身，${accent}` : `${origin}出身`);
   }
-  const worn = CLOTHING_SLOTS.flatMap((slot) => {
+  const wornDefs = CLOTHING_SLOTS.flatMap((slot) => {
     const id = looks.clothing[slot];
-    return id === undefined ? [] : [items.get(id)?.name ?? id];
+    return id === undefined ? [] : [{ id, def: items.get(id) }];
   });
+  const worn = wornDefs.map((w) => w.def?.name ?? w.id);
+  const faceConcealed = wornDefs.some((w) => w.def?.stealthTags?.includes("face-conceal"));
+  const disguises = [
+    ...new Set(wornDefs.flatMap((w) => (w.def?.factionDisguise ? [w.def.factionDisguise] : []))),
+  ];
   bits.push(worn.length > 0 ? `穿着${worn.join("、")}` : "衣着不起眼");
+  if (faceConcealed) bits.push("面部有遮蔽（路人与常规监控不易直接认脸）");
+  if (disguises.length > 0) bits.push(`外观看似${disguises.join("/")}人员`);
   const slotLabels = SLOT_LABELS as Readonly<Record<string, string>>;
   const shown = looks.installed
     .filter((c) => VISIBLE_CHROME.has(c.slot))

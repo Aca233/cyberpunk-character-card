@@ -3,7 +3,12 @@ import { issueText } from "./block";
 import { schemaDoc } from "./doc";
 import { estimateTokens } from "./prompts/layers";
 
-export type RepairStage = "judge" | "extract" | "offscreen-macro" | "offscreen-social";
+export type RepairStage =
+  | "judge"
+  | "extract"
+  | "extract-rules"
+  | "offscreen-macro"
+  | "offscreen-social";
 export const REPAIR_INPUT_TOKENS = 8_000;
 export const REPAIR_OUTPUT_TOKENS = 2_048;
 

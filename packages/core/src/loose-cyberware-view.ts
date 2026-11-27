@@ -17,8 +17,12 @@ export function looseCyberwareView(
     backpack[part.id] = 1;
     itemNames[part.id] = `${part.name}（未安装${part.condition === "damaged" ? "·损坏" : ""}）`;
     details[part.id] = {
-      baseId: part.id,
+      baseId: part.model,
       kind: "misc",
+      category: null,
+      modSlot: null,
+      art: part.art,
+      customImage: part.customImage,
       suppressant: false,
       clothingSlot: null,
       carryUnits: 0,
@@ -40,6 +44,7 @@ export function looseCyberwareView(
       ability: [part.ability, `来源：${part.source}`, "可携带、存放或交给医生检查安装。"]
         .filter(Boolean)
         .join("\n"),
+      effectTags: [],
       healPercent: null,
       charges: null,
       remaining: null,

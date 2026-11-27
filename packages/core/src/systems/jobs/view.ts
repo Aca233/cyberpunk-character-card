@@ -1,7 +1,7 @@
 import type { ViewContext } from "../../kernel/system";
 import { NpcStateSchema } from "../npc";
-import { formatGameTime } from "../world";
-import { fixerBlocked, isOpen, JOB_STATUS_LABELS } from "./apply";
+import { formatGameTime, locationCatalog } from "../world";
+import { fixerBlocked, isOpen, JOB_CREW_STATUS_LABELS, JOB_STATUS_LABELS } from "./apply";
 import { JOB_KIND_LABELS, JobsStateSchema } from "./schema";
 import { factionSide } from "./side";
 
@@ -12,15 +12,26 @@ export const JOBS_CLOSED_SHOWN = 5;
 export function jobsView({ world, data }: ViewContext) {
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   const npcs = NpcStateSchema.parse(world.slices.npc);
+  const places = locationCatalog(data);
   return {
     fixers: Object.values(jobs.fixers).map((f) => {
       const card = npcs.npcs[f.id];
       const side = factionSide(card?.faction, data, world.slices.factions);
       const blocked = side !== undefined && fixerBlocked(side.attitude);
+      const locId = card?.location ?? null;
+      const place = locId === null ? undefined : places.get(locId);
       return {
         id: f.id,
         name: f.name,
         relation: card?.relation?.text ?? null,
+        factionName: side?.name ?? null,
+        factionAttitude: side?.attitude ?? null,
+        factionMember: Boolean(side?.member),
+        met: Boolean(card?.met),
+        alive: card?.alive !== false,
+        location: locId,
+        locationName: place?.name ?? locId,
+        district: place?.district ?? null,
         blocked,
         blockReason: blocked && side ? `${side.name}和你结了仇，当前暂停派单` : null,
       };
@@ -48,12 +59,22 @@ export function jobsView({ world, data }: ViewContext) {
       notes: j.notes,
       paid: j.paid,
       summary: j.summary,
-      /** 结算卡：接单以来的人性变化 */
+      crew: (j.crew ?? []).map((m) => ({
+        npc: m.npc,
+        name: m.name,
+        role: m.role,
+        cutPercent: m.cutPercent,
+        paid: m.paid,
+        status: m.status,
+        statusLabel: JOB_CREW_STATUS_LABELS[m.status],
+      })),
+      /** 结算卡：接单以来的人性变化与扣除搭档分成后的玩家净到手 */
       settlement:
         j.settlement === null
           ? null
           : {
               humanity: j.settlement.humanity,
+              playerNet: j.settlement.playerNet ?? j.paid,
             },
     })),
   };

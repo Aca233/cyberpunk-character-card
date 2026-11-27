@@ -8,6 +8,8 @@ export const ALERT_INTERVAL = 360;
 export const ALERT_TTL = 1440;
 /** NCPD 管不到的城区：狗镇归幽冥犬，恶土在城外 */
 export const ALERT_EXCLUDED_DISTRICTS: readonly string[] = ["狗镇", "恶土"];
+/** 玩家通缉达到此星级时，NCPD 冻结外包赏金结算（仍可现场摆平缓和压力） */
+export const NCPD_BOUNTY_BLOCK_STARS = 3;
 
 /** 警情模板：扫描器上能接的街头案子（原作依据 2.0 的 NCPD 扫描器委托；具体情形本作改编） */
 export const AlertTemplateSchema = z.object({
@@ -17,6 +19,10 @@ export const AlertTemplateSchema = z.object({
   note: z.string().min(1),
   /** 只在这些城区出现；不写是 NCPD 管得到的全城 */
   districts: z.array(z.string().min(1)).min(1).optional(),
+  /** 固定涉事势力 id（如清道夫窝点 -> scavengers） */
+  faction: z.string().min(1).optional(),
+  /** 是否属于当地掌权帮派的地盘涉案现场（动态随该城区当前地盘归属变化） */
+  gangRelated: z.boolean().default(false),
   /** 处理完 NCPD 给的赏金（欧元） */
   reward: z.number().int().min(0).max(5000),
   /** 危险程度 1–3 */
@@ -34,6 +40,8 @@ export const AlertSchema = z.object({
   district: z.string().min(1),
   /** 出事的地点 id */
   location: z.string().min(1),
+  faction: z.string().min(1).optional(),
+  gangRelated: z.boolean().default(false),
   reward: z.number().int(),
   risk: z.number().int(),
   postedAt: z.number().int(),
@@ -55,7 +63,7 @@ export const NcpdCommandSchema = z
   .object({
     type: z.literal("ncpd"),
     action: z.enum(["clear", "drop"]),
-    id: z.string().min(1),
+    id: z.string().min(1).describe("【警情】里已有的警情 id"),
     reason: z.string().trim().min(1).max(80),
   })
   .describe(

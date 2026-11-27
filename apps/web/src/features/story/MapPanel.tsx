@@ -166,12 +166,14 @@ const GANG_LOGOS: Readonly<Record<string, AssetId>> = {
 
 /** 委托地点用原作地图上的任务标记（mappin_icons 的 quest，同类图标已在图集里，用户同意的 2026-10-30） */
 const JOB_ICON: AssetId = "map.poi.quest";
+/** 拳赛与街头赛车场馆标记 */
+const SIDEGIG_ICON: AssetId = "notify.streetCred";
 /** 住处与停放载具复用原作图集图标 */
 const HOME_ICON: AssetId = "map.poi.apartment";
 const VEHICLE_ICON: AssetId = "map.poi.autofixer";
 
 /**
- * 图例每一项都能开关：当前位置、地点、数据终端（未去过的非地铁 ft:）、住处、载具、委托、人物、NCPD 警情和每类服务点。
+ * 图例每一项都能开关：当前位置、地点、数据终端（未去过的非地铁 ft:）、住处、载具、委托、拳赛与赛车、人物、NCPD 警情和每类服务点。
  * 见过的人按现在在的地点画，中间人也一样
  */
 type LegendKey =
@@ -181,6 +183,7 @@ type LegendKey =
   | "homes"
   | "vehicles"
   | "jobs"
+  | "sidegigs"
   | "npcs"
   | "police"
   | MapPoiKind;
@@ -191,6 +194,7 @@ const LEGEND_KEYS = new Set<string>([
   "homes",
   "vehicles",
   "jobs",
+  "sidegigs",
   "npcs",
   "police",
   ...MAP_POI_KINDS.map((k) => k.id),
@@ -199,13 +203,14 @@ const LEGEND_KEYS = new Set<string>([
 const HIDDEN_STORE = "cp.mapHidden";
 /** 图例展开状态记在浏览器里，默认收起以释放夜之城地图视野 */
 const LEGEND_OPEN_STORE = "cp.mapLegendOpen";
-/** 精简态势预设：仅保留当前位置、核心地点、住处、载具、委托、人物与 NCPD 警情 */
+/** 精简态势预设：仅保留当前位置、核心地点、住处、载具、委托、拳赛与赛车、人物与 NCPD 警情 */
 const CORE_LEGEND_KEYS: ReadonlySet<LegendKey> = new Set([
   "here",
   "dest",
   "homes",
   "vehicles",
   "jobs",
+  "sidegigs",
   "npcs",
   "police",
 ]);
@@ -390,6 +395,10 @@ export function MapBody({
   const destVehicles = dest ? (vehiclesAt.get(dest.id) ?? []) : [];
   const destAlerts = dest ? view.ncpd.alerts.filter((a) => a.location === dest.id) : [];
   const destGigs = dest ? view.sidegigs.list.filter((g) => g.location === dest.id) : [];
+  const openSidegigs = useMemo(
+    () => view.sidegigs.list.filter((g) => !g.beaten && g.x !== null && g.y !== null),
+    [view.sidegigs.list],
+  );
   const info = asset(MAP);
   // 城区势力：包含帮派以及明确占据城区的公司/势力（如市政中心的荒坂），不再只过滤 kind === "gang"
   const turfFactions = useMemo(
@@ -419,11 +428,19 @@ export function MapBody({
       const hasCar = (vehiclesAt.get(d.id) ?? []).some((v) =>
         v.name.toLowerCase().includes(trimmedQuery),
       );
+      const hasGig = view.sidegigs.list.some(
+        (g) =>
+          g.location === d.id &&
+          `${g.name} ${g.opponent} ${g.kindLabel}`.toLowerCase().includes(trimmedQuery),
+      );
+      const hasAlert = view.ncpd.alerts.some(
+        (a) => a.location === d.id && a.label.toLowerCase().includes(trimmedQuery),
+      );
       let score = 0;
       if (name === trimmedQuery) score = 100;
       else if (name.startsWith(trimmedQuery)) score = 80;
       else if (name.includes(trimmedQuery)) score = 60;
-      else if (hasNpc || hasJob || hasHome || hasCar) score = 55;
+      else if (hasNpc || hasJob || hasHome || hasCar || hasGig || hasAlert) score = 55;
       else if (sub.includes(trimmedQuery)) score = 40;
       else if (district.includes(trimmedQuery)) score = 30;
       else if (kind.includes(trimmedQuery)) score = 20;
@@ -434,7 +451,16 @@ export function MapBody({
     }
     scored.sort((a, b) => b.score - a.score || a.dest.name.localeCompare(b.dest.name, "zh-CN"));
     return scored.slice(0, 20).map((s) => s.dest);
-  }, [destinations, trimmedQuery, npcsAt, jobsAt, homesAt, vehiclesAt]);
+  }, [
+    destinations,
+    trimmedQuery,
+    npcsAt,
+    jobsAt,
+    homesAt,
+    vehiclesAt,
+    view.sidegigs.list,
+    view.ncpd.alerts,
+  ]);
 
   useEffect(() => {
     try {
@@ -468,10 +494,12 @@ export function MapBody({
       out.push({ dest: d, badge, tone });
     };
     for (const id of jobsAt.keys()) push(id, "委托", "job");
+    for (const a of view.ncpd.alerts) push(a.location, "警情", "job");
+    for (const g of openSidegigs.slice(0, 2)) push(g.location, g.kindLabel, "job");
     for (const id of homesAt.keys()) push(id, "住处", "home");
     for (const id of vehiclesAt.keys()) push(id, "载具", "vehicle");
     return out.slice(0, 6);
-  }, [destById, jobsAt, homesAt, vehiclesAt]);
+  }, [destById, jobsAt, homesAt, vehiclesAt, view.ncpd.alerts, openSidegigs]);
 
   const toggleLegend = (key: LegendKey) =>
     setHidden((prev) => {
@@ -721,6 +749,17 @@ export function MapBody({
       icon: <span className={styles.mapPoi} data-kind="quest" data-legend="" style={jobLegend} />,
       // 只数地图上标得出来的：地点对不上的委托不算
       count: [...jobsAt.values()].reduce((n, list) => n + list.length, 0),
+    });
+  }
+  const sidegigLegend = iconStyle(SIDEGIG_ICON);
+  if (sidegigLegend) {
+    legend.push({
+      key: "sidegigs",
+      name: "拳赛与赛车",
+      icon: (
+        <span className={styles.mapPoi} data-kind="sidegig" data-legend="" style={sidegigLegend} />
+      ),
+      count: openSidegigs.length,
     });
   }
   legend.push({
@@ -1354,6 +1393,33 @@ export function MapBody({
             );
           })}
 
+        {/* 拳赛与街头赛车场馆标记：点开直接拉出场馆路线卡与赛事详情 */}
+        {size.w > 0 &&
+          !hidden.has("sidegigs") &&
+          openSidegigs.map((g) => {
+            if (g.x === null || g.y === null) return null;
+            const at = toScreen(g.x, g.y);
+            if (!onScreen(at)) return null;
+            const style = iconStyle(SIDEGIG_ICON);
+            if (!style) return null;
+            const title = `${g.kindLabel}：${g.name}（${g.locationName}，对手 ${g.opponent}，押金 ${g.stake} € → 奖金 ${g.purse} €）`;
+            const hasDest = destinations.some((d) => d.id === g.location);
+            return hasDest ? (
+              <div key={g.id} className={styles.mapSidegig} style={at}>
+                <i className={styles.mapPoliceShadow} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={styles.mapSidegigPin}
+                  style={style}
+                  title={title}
+                  aria-label={title}
+                  aria-pressed={picked === g.location}
+                  onClick={() => setPicked(g.location)}
+                />
+              </div>
+            ) : null;
+          })}
+
         {/* NCPD 警情：放在地点图钉右下方，点开直接拉出该地点的路线卡 */}
         {size.w > 0 &&
           !hidden.has("police") &&
@@ -1553,22 +1619,32 @@ export function MapBody({
                     <li key={`alert-${a.id}`} className={styles.mapIntelItem} data-kind="police">
                       <span className={styles.mapIntelBadge}>警情</span>
                       <div className={styles.mapIntelText}>
-                        <strong>{a.label}</strong>
+                        <strong>
+                          {a.label}
+                          {a.targetFactionName
+                            ? ` · ${a.isOwnFaction ? `本帮(${a.targetFactionName})` : a.targetFactionName}`
+                            : ""}
+                        </strong>
                         <span>
-                          {`赏金 ${a.reward.toLocaleString("en-US")} 欧元 · ${a.until} 前 · ${a.note}`}
+                          {`${a.bountyFrozen ? "高星通缉赏金冻结" : `赏金 ${a.reward.toLocaleString("en-US")} 欧元`} · ${a.until} 前 · ${a.note}`}
                         </span>
                       </div>
                     </li>
                   ))}
                   {destGigs.map((g) => (
                     <li key={`gig-${g.id}`} className={styles.mapIntelItem} data-kind="gig">
-                      <span className={styles.mapIntelBadge}>风声</span>
+                      <span className={styles.mapIntelBadge}>{g.kindLabel}</span>
                       <div className={styles.mapIntelText}>
-                        <strong>{g.name}</strong>
+                        <strong>
+                          {g.name} · 对手 {g.opponent}（{g.tierLabel}
+                          {g.factionName ? ` / ${g.factionName}看场` : ""}）
+                        </strong>
                         <span>
                           {g.beaten
-                            ? `听说${g.opponent}被人放倒之后，这阵子台上冷清了不少`
-                            : `${g.note}${g.rematch ? `（听说${g.rematch}才重新凑局）` : ""}`}
+                            ? `已击败 ${g.opponent}`
+                            : g.blockedReason
+                              ? g.blockedReason
+                              : `${g.effectiveStake === 0 ? "免押金" : `押金 ${g.effectiveStake.toLocaleString("en-US")} €`} → 奖金 ${g.purse.toLocaleString("en-US")} € · ${g.note}${g.rematch ? `（${g.rematch} 后可再约）` : ""}`}
                         </span>
                       </div>
                     </li>

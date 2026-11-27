@@ -5,8 +5,10 @@ import type { ApplyContext, Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
 import { HabitActionSchema } from "./systems/character";
 import { EndStoryActionSchema } from "./systems/chronicle";
+import { LootCombatAllActionSchema, LootCombatItemActionSchema } from "./systems/combat";
 import {
   BuyCyberwareActionSchema,
+  PayChromeCareActionSchema,
   RemoveCyberwareActionSchema,
   RepairCyberwareActionSchema,
   RepayRipperdocActionSchema,
@@ -17,13 +19,19 @@ import {
   EquipItemActionSchema,
   GunsmithActionSchema,
   ModWeaponActionSchema,
+  OutfitPresetActionSchema,
   SellItemActionSchema,
   UnequipItemActionSchema,
+  UseFieldAidActionSchema,
   UseHealingActionSchema,
 } from "./systems/inventory";
 import { AcceptJobActionSchema } from "./systems/jobs";
 import { EditMemoryActionSchema } from "./systems/memory";
-import { CompanionActionSchema, ScanNpcActionSchema } from "./systems/npc";
+import {
+  CompanionActionSchema,
+  NpcExchangeGearActionSchema,
+  ScanNpcActionSchema,
+} from "./systems/npc";
 import { AnswerCallActionSchema, ReadMessagesActionSchema } from "./systems/phone";
 import { UseSuppressantActionSchema } from "./systems/psychosis";
 import { registry } from "./systems/registry";
@@ -52,6 +60,10 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   EquipItemActionSchema,
   /** 非战斗时使用当前治疗品，回复生命并扣除一次使用次数 */
   UseHealingActionSchema,
+  /** 非战斗时使用急救绷带包或战地止血凝露处理未愈浅/轻伤 */
+  UseFieldAidActionSchema,
+  /** 穿搭方案：保存、一键切换或删除 6 格服装预设 */
+  OutfitPresetActionSchema,
   /** 非战斗时在背包主动注射神经压制剂 */
   UseSuppressantActionSchema,
   /** 把装备栏里穿着的一件脱下放回背包 */
@@ -60,10 +72,18 @@ export const PlayerActionSchema = z.discriminatedUnion("type", [
   ModWeaponActionSchema,
   /** 人物同行切换：让在场熟人结伴同行，或让同行者暂别留守 */
   CompanionActionSchema,
+  /** 非战斗时与同行同伴原子交接装备或物品 */
+  NpcExchangeGearActionSchema,
+  /** 战后拾取单件战场战利品 */
+  LootCombatItemActionSchema,
+  /** 战后一键拾取当前地点战利品 */
+  LootCombatAllActionSchema,
   /** 在追踪板接下一单已递话的委托 */
   AcceptJobActionSchema,
-  /** 在商店买一件，放进背包 */
+  /** 在商店买一件，放进背包（传 forNpc 时直接为同行搭档配装） */
   BuyItemActionSchema,
+  /** 在义体医生诊所做一期重度义体神经校准维护 */
+  PayChromeCareActionSchema,
   /** 把背包里的一件卖给商店 */
   SellItemActionSchema,
   /** 枪匠工坊：商店直装改装件、拆改锁定槽位或智能/固锁改造 */

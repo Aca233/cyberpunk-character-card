@@ -1,6 +1,7 @@
 import { worldRules } from "@cp/core";
 import { type ReactNode, useState } from "react";
 import type { AssetId } from "../../assets";
+import type { GearArtId } from "../../assets/customArt";
 import { ActionButton } from "../../ui/ActionButton";
 import { Asset, cssUrl, NineSlice } from "../../ui/Asset";
 import { CellFrame } from "../../ui/FrameBox";
@@ -87,7 +88,7 @@ function SlotThumb({
   size = "md",
   tint = "var(--slot-accent, var(--cp-cyan))",
 }: {
-  readonly art: AssetId | null | undefined;
+  readonly art: GearArtId | null | undefined;
   readonly fallback: AssetId;
   readonly alt: string;
   readonly size?: "sm" | "md" | "wide";
@@ -970,7 +971,13 @@ function ScanTacticalView({
                 {clothes.map((item) => {
                   const baseId = item.baseId ?? item.id;
                   const art = itemArtOf(baseId);
-                  const tooltip = [item.subLabel, item.name, item.rarityLabel, item.ability]
+                  const tooltip = [
+                    item.subLabel,
+                    item.name,
+                    item.rarityLabel,
+                    item.effectTags.length > 0 ? `效果：${item.effectTags.join(" · ")}` : null,
+                    item.ability,
+                  ]
                     .filter(Boolean)
                     .join("\n");
                   return (
@@ -997,6 +1004,14 @@ function ScanTacticalView({
                   );
                 })}
               </div>
+            </div>
+          )}
+          {body.gearBadges.length > 0 && (
+            <div className={styles.subRow}>
+              <span className={styles.subKey}>护甲与效果</span>
+              <span className={styles.subVal} data-tone="good">
+                {body.gearBadges.join(" · ")}
+              </span>
             </div>
           )}
         </div>

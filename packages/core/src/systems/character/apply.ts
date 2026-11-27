@@ -102,6 +102,8 @@ export function setCharacter(draft: Draft<CharacterState>, command: SetCharacter
   draft.pastFacts = [];
   if (command.portrait) draft.portrait = command.portrait;
   else delete draft.portrait;
+  if (command.replacesNpcId) draft.replacesNpcId = command.replacesNpcId;
+  else delete draft.replacesNpcId;
   return { ok: true };
 }
 

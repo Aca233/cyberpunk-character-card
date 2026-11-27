@@ -5,6 +5,7 @@ export * from "./checkpoint";
 export * from "./doc";
 export * from "./examples";
 export * from "./imagePrompt";
+export * from "./interpretNpc";
 export * from "./lore";
 export * from "./modules";
 export * from "./offscreen";

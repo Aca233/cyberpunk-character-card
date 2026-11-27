@@ -1,4 +1,12 @@
+import { cyberware as CONTENT_CYBERWARE, items as CONTENT_ITEMS } from "@cp/content";
+import type { cyberwareRules, inventoryRules, PlayerView } from "@cp/core";
 import type { AssetId } from "../../assets";
+import {
+  deleteCustomImageDataUrl,
+  type GearArtId,
+  setCustomImageDataUrl,
+} from "../../assets/customArt";
+import { ASSET_IDS } from "../../assets/ids.gen";
 
 /**
  * 物品和人物的原作图（第八节第 1 条：优先用原作素材）：
@@ -65,6 +73,19 @@ const PORTRAITS: Readonly<Record<string, AssetId>> = {
   pepe: "portrait.pepe",
   kirk: "portrait.kirk",
   "red-menace": "portrait.redMenace",
+  "sandra-dorsett": "portrait.sandraDorsett",
+  "arthur-jenkins": "portrait.arthurJenkins",
+  "anthony-gilchrist": "portrait.anthonyGilchrist",
+  "chang-hoon-nam": "portrait.changHoonNam",
+  "lina-malina": "portrait.linaMalina",
+  "rachel-casich": "portrait.rachelCasich",
+  "joss-kutcher": "portrait.jossKutcher",
+  "zane-jagger": "portrait.zaneJagger",
+  "purple-force": "portrait.purpleForce",
+  "farida-nazeri": "portrait.faridaNazeri",
+  "anthony-anderson": "portrait.anthonyAnderson",
+  "nina-kraviz": "portrait.ninaKraviz",
+  "robert-rainwater": "portrait.robertRainwater",
 };
 
 /** 物品 id（武器、义体）→ 原作物品图 */
@@ -75,9 +96,12 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   "psycho-suppressant": "itemArt.psychoSuppressant",
   errata: "weaponArt.errata",
   maxdoc: "itemArt.maxdoc",
-  "maxdoc-mk2": "itemArt.maxdoc",
+  "maxdoc-mk2": "itemArt.maxdocMk2",
+  "maxdoc-mk3": "itemArt.maxdocMk3",
   "bounce-back": "itemArt.bounceBack",
+  "bounce-back-mk2": "itemArt.bounceBackMk2",
   "frag-grenade": "itemArt.frag",
+  "smoke-grenade": "itemArt.smokeGrenade",
   "emp-grenade": "itemArt.emp",
   "incendiary-grenade": "itemArt.incendiary",
   flashbang: "itemArt.flashbang",
@@ -85,14 +109,24 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   nicola: "itemArt.nicola",
   hawtdawg: "itemArt.hawtdawg",
   coffee: "itemArt.coffee",
-  // 新增日常消耗品复用相近原作示意图。
-  "synth-cigs": "itemArt.glitter",
-  "real-liquor": "itemArt.nicola",
+  "synth-cigs": "itemArt.synthCigs",
+  "real-liquor": "itemArt.realLiquor",
+  "hemostatic-gel": "itemArt.hemostaticGel",
+  "adrenaline-shot": "itemArt.adrenalineShot",
   "black-lace": "itemArt.blackLace",
   glitter: "itemArt.glitter",
   "strix-silencer": "itemArt.strixSilencer",
   "alecto-silencer": "itemArt.alectoSilencer",
+  "cetus-silencer": "itemArt.cetusSilencer",
+  "xc10-sniper-silencer": "itemArt.sniperSilencer",
+  "rc7-compensator": "itemArt.rc7Compensator",
+  "rc7-strigoi-brake": "itemArt.strigoiBrake",
+  "militech-heavy-brake": "itemArt.heavyBrake",
   "kanetsugu-scope": "itemArt.kanetsuguScope",
+  "add-vantage-scope": "itemArt.vantageScope",
+  "smart-assist-optic": "itemArt.smartOptic",
+  "handyman-thermal-scope": "itemArt.thermalScope",
+  "arasaka-weakpoint-scope": "itemArt.weakpointScope",
   "gaki-scope": "itemArt.gakiScope",
   "saika-scope": "itemArt.saikaScope",
   // 芯片、超梦卷轴与神经读写硬件
@@ -123,55 +157,126 @@ const ITEM_ART: Readonly<Record<string, AssetId>> = {
   "braindance-recorder": "cyberArt.visualCortexSupport",
   "nomad-duster": "itemArt.nomadDuster",
   shigure: "weaponArt.shigure",
-  // 通用服装使用同类原作服装示意图；插件共用原作改装件图标。
+  // 全 6 部位服装一对一官方专图（含防弹战术、潜网、帮派、公司高定与不朽装）
   "street-jacket": "itemArt.streetJacket",
   "corpo-suit": "itemArt.corpoSuit",
   "techie-coverall": "itemArt.techieCoverall",
   "netrunner-suit": "itemArt.netrunnerSuit",
-  // 扩充衣着按风格复用同类原作服装示意图。
-  "street-beanie": "itemArt.streetJacket",
-  "nomad-headwrap": "itemArt.nomadDuster",
-  "tactical-helmet": "itemArt.securityUniform",
-  "mirror-shades": "itemArt.streetJacket",
-  "corpo-glasses": "itemArt.corpoSuit",
-  "tech-goggles": "itemArt.techieCoverall",
-  "respirator-mask": "itemArt.securityUniform",
-  "kimono-haori": "itemArt.corpoSuit",
-  "neon-pvc-jacket": "itemArt.streetJacket",
-  "long-trenchcoat": "itemArt.nomadDuster",
-  "work-apron": "itemArt.techieCoverall",
-  "club-dress": "itemArt.corpoSuit",
-  "street-tee": "itemArt.streetJacket",
-  "silk-shirt": "itemArt.corpoSuit",
-  "turtleneck-knit": "itemArt.corpoSuit",
-  "cargo-pants": "itemArt.techieCoverall",
-  "tailored-slacks": "itemArt.corpoSuit",
-  "leather-pants": "itemArt.streetJacket",
-  "combat-boots": "itemArt.securityUniform",
-  "street-sneakers": "itemArt.streetJacket",
-  "dress-shoes": "itemArt.corpoSuit",
-  "big-mag": "itemArt.mod",
-  "kneel-mod": "itemArt.mod",
-  "bleedout-mod": "itemArt.mod",
-  "parallax-mod": "itemArt.mod",
-  "smart-target-mod": "itemArt.mod",
-  "smart-link-module": "itemArt.mod",
-  "kinetic-weight-mod": "itemArt.mod",
-  "arc-coil-mod": "itemArt.mod",
-  // 通用保安制服借用军用科技制服，工牌借用原作通行卡作为示意图。
+  "street-beanie": "itemArt.streetBeanie",
+  "nomad-headwrap": "itemArt.nomadHeadwrap",
+  "tactical-helmet": "itemArt.tacticalHelmet",
+  "nomad-welding-cap": "itemArt.nomadWeldingCap",
+  "fixer-fedora": "itemArt.fixerFedora",
+  "balaclava-hood": "itemArt.balaclavaHood",
+  "netrunner-cooling-crown": "itemArt.netrunnerCoolingCrown",
+  "ncpd-riot-helmet": "itemArt.ncpdRiotHelmet",
+  "arasaka-kabuto-helm": "itemArt.arasakaKabutoHelm",
+  "maxtac-visor-helmet": "itemArt.maxtacVisorHelmet",
+  "mirror-shades": "itemArt.mirrorShades",
+  "corpo-glasses": "itemArt.corpoGlasses",
+  "tech-goggles": "itemArt.techGoggles",
+  "respirator-mask": "itemArt.respiratorMask",
+  "corpo-smart-specs": "itemArt.corpoSmartSpecs",
+  "militech-gas-mask": "itemArt.militechGasMask",
+  "netrunner-infovisor": "itemArt.netrunnerInfovisor",
+  "thermal-tactical-visor": "itemArt.thermalTacticalVisor",
+  "optical-scrambler-mask": "itemArt.opticalScramblerMask",
+  "johnny-aviators": "itemArt.johnnyAviators",
+  "kimono-haori": "itemArt.kimonoHaori",
+  "neon-pvc-jacket": "itemArt.neonPvcJacket",
+  "long-trenchcoat": "itemArt.longTrenchcoat",
+  "work-apron": "itemArt.workApron",
+  "club-dress": "itemArt.clubDress",
+  "tyger-bomber-jacket": "itemArt.tygerBomberJacket",
+  "mox-neon-bolero": "itemArt.moxNeonBolero",
+  "valentino-gold-jacket": "itemArt.valentinoGoldJacket",
+  "maelstrom-spike-vest": "itemArt.maelstromSpikeVest",
+  "ncpd-patrol-vest": "itemArt.ncpdPatrolVest",
+  "hazmat-overcoat": "itemArt.hazmatOvercoat",
+  "arasaka-plate-vest": "itemArt.arasakaPlateVest",
+  "aldecaldo-rally-jacket": "itemArt.aldecaldoRallyJacket",
+  "arasaka-executive-coat": "itemArt.arasakaExecutiveCoat",
+  "netwatch-trenchcoat": "itemArt.netwatchTrenchcoat",
+  "militech-heavy-rig": "itemArt.militechHeavyRig",
+  "trauma-response-armor": "itemArt.traumaResponseArmor",
+  "stealth-assassin-coat": "itemArt.stealthAssassinCoat",
+  "edgerunner-jacket": "itemArt.edgerunnerJacket",
+  "samurai-jacket": "itemArt.samuraiJacket",
+  "street-tee": "itemArt.streetTee",
+  "silk-shirt": "itemArt.silkShirt",
+  "turtleneck-knit": "itemArt.turtleneckKnit",
+  "samurai-tour-tee": "itemArt.samuraiTourTee",
+  "kevlar-undershirt": "itemArt.kevlarUndershirt",
+  "solo-compression-top": "itemArt.soloCompressionTop",
+  "thermal-stealth-liner": "itemArt.thermalStealthLiner",
+  "mil-netrunner-suit": "itemArt.milNetrunnerSuit",
+  "cargo-pants": "itemArt.cargoPants",
+  "tailored-slacks": "itemArt.tailoredSlacks",
+  "leather-pants": "itemArt.leatherPants",
+  "nomad-reinforced-pants": "itemArt.nomadReinforcedPants",
+  "tactical-knee-pants": "itemArt.tacticalKneePants",
+  "netrunner-weave-pants": "itemArt.netrunnerWeavePants",
+  "yorinobu-formal-slacks": "itemArt.yorinobuFormalSlacks",
+  "combat-boots": "itemArt.combatBoots",
+  "street-sneakers": "itemArt.streetSneakers",
+  "dress-shoes": "itemArt.dressShoes",
+  "rocker-studded-boots": "itemArt.rockerStuddedBoots",
+  "netrunner-ground-boots": "itemArt.netrunnerGroundBoots",
+  "silent-stalker-boots": "itemArt.silentStalkerBoots",
+  "militech-exo-boots": "itemArt.militechExoBoots",
+  // 武器插件各自独立专图
+  "big-mag": "itemArt.modBigMag",
+  "kneel-mod": "itemArt.modKneel",
+  "bleedout-mod": "itemArt.modBleedout",
+  "parallax-mod": "itemArt.modParallax",
+  "smart-target-mod": "itemArt.modSmartTarget",
+  "smart-link-module": "itemArt.modSmartLink",
+  "kinetic-weight-mod": "itemArt.modKineticWeight",
+  "arc-coil-mod": "itemArt.modArcCoil",
+  "quick-reload-grip": "itemArt.modQuickReload",
+  "ap-core-mod": "itemArt.modApCore",
+  "pyro-rounds-mod": "itemArt.modPyroRounds",
+  "toxin-coat-mod": "itemArt.modToxinCoat",
+  "emp-rounds-mod": "itemArt.modEmpRounds",
+  "thermal-edge-mod": "itemArt.modThermalEdge",
+  "swiss-cheese-mod": "itemArt.modSwissCheese",
+  "zero-recoil-stabilizer": "itemArt.modZeroRecoil",
+  // 制服、证件与日常/战术渗透装备各自专图
   "security-uniform": "itemArt.securityUniform",
   "corpo-badge": "itemArt.corpoBadge",
-  // 新增日常与工具类杂物复用相近原作示意图。
-  "holo-phone": "itemArt.shard",
-  "tool-kit": "itemArt.mod",
-  "med-kit": "itemArt.maxdoc",
-  "lockpick-set": "itemArt.mod",
-  "ncpd-badge": "itemArt.corpoBadge",
-  "tarot-deck": "itemArt.shard",
-  "rosary-beads": "itemArt.shard",
-  "gold-chain": "itemArt.corpoBadge",
-  "cigar-case": "itemArt.hawtdawg",
+  "holo-phone": "itemArt.holoPhone",
+  "tool-kit": "itemArt.toolKit",
+  "med-kit": "itemArt.medKit",
+  "lockpick-set": "itemArt.lockpickSet",
+  "ncpd-badge": "itemArt.ncpdBadge",
+  "tarot-deck": "itemArt.tarotDeck",
+  "rosary-beads": "itemArt.rosaryBeads",
+  "gold-chain": "itemArt.goldChain",
+  "cigar-case": "itemArt.cigarCase",
+  "tactical-chest-rig": "itemArt.tacticalChestRig",
+  "heavy-duffel-pack": "itemArt.heavyDuffelPack",
+  "signal-jammer": "itemArt.signalJammer",
+  "thermal-monocular": "itemArt.thermalMonocular",
+  "optical-cloak": "itemArt.opticalCloak",
+  "glass-cutter": "itemArt.glassCutter",
+  "mag-grapple-kit": "itemArt.magGrappleKit",
+  "faraday-pouch": "itemArt.faradayPouch",
+  "ice-breaker-spike": "itemArt.iceBreakerSpike",
+  "cloned-keycard": "itemArt.clonedKeycard",
+  "relay-beacon": "itemArt.relayBeacon",
   // 武器
+  "sor-22": "weaponArt.sor22",
+  "kyubi-mod-x": "weaponArt.kyubiModX",
+  "mk31-hmg": "weaponArt.mk31Hmg",
+  "defender-mil-spec": "weaponArt.defenderMilSpec",
+  "kenshin-spec-ops": "weaponArt.kenshinSpecOps",
+  "overture-heavy": "weaponArt.overtureHeavy",
+  "shingen-tac": "weaponArt.shingenTac",
+  "senkoh-spec": "weaponArt.senkohSpec",
+  "ajax-mil-spec": "weaponArt.ajaxMilSpec",
+  crusher: "weaponArt.crusher",
+  "thermal-katana-mil": "weaponArt.thermalKatanaMil",
+  "gorilla-maul": "weaponArt.gorillaMaul",
   "pipe-wrench": "weaponArt.pipeWrench",
   // 解包素材中未找到胁差专图，使用同类刀剑图示。
   wakizashi: "weaponArt.katana",
@@ -513,9 +618,251 @@ export function baseWeaponIdOf(id: string): string {
   return match?.[1] ?? id;
 }
 
-export function itemArtOf(item: string | null | undefined): AssetId | undefined {
+const VALID_ASSET_ID_SET: ReadonlySet<string> = new Set(ASSET_IDS);
+
+function asValidAssetId(id: string | null | undefined): AssetId | undefined {
+  if (!id) return undefined;
+  return VALID_ASSET_ID_SET.has(id) ? (id as AssetId) : undefined;
+}
+
+interface CustomGearArtRecord {
+  readonly art?: AssetId | undefined;
+  readonly customImage?: string | undefined;
+  readonly fallback?: AssetId | undefined;
+}
+
+const customGearArt = new Map<string, CustomGearArtRecord>();
+
+/** 武器类别 → 同类默认官方图标（自建武器未选图时自动兜底） */
+const DEFAULT_WEAPON_ART: Readonly<Record<string, AssetId>> = {
+  pistol: "weaponArt.unity",
+  revolver: "weaponArt.overture",
+  smg: "weaponArt.shigure",
+  assaultRifle: "weaponArt.copperhead",
+  shotgun: "weaponArt.carnage",
+  precisionRifle: "weaponArt.achilles",
+  sniperRifle: "weaponArt.nekomata",
+  lmg: "weaponArt.defender",
+  blade: "weaponArt.katana",
+  blunt: "weaponArt.baseballBat",
+};
+
+/** 服装部位 → 同类默认官方图标 */
+const DEFAULT_CLOTHING_ART: Readonly<Record<string, AssetId>> = {
+  head: "itemArt.tacticalHelmet",
+  face: "itemArt.mirrorShades",
+  outer: "itemArt.streetJacket",
+  inner: "itemArt.streetTee",
+  legs: "itemArt.cargoPants",
+  feet: "itemArt.combatBoots",
+};
+
+/** 改装槽位 → 同类默认官方图标 */
+const DEFAULT_MOD_ART: Readonly<Record<string, AssetId>> = {
+  muzzle: "itemArt.strixSilencer",
+  scope: "itemArt.kanetsuguScope",
+  plugin: "itemArt.modBigMag",
+};
+
+/** 义体分类 / 槽位 → 同类默认官方图标 */
+const DEFAULT_CYBERWARE_ART: Readonly<Record<string, AssetId>> = {
+  chassis: "cyberArt.metalSkin",
+  cyberdeck: "cyberArt.militechParaline",
+  spineDrive: "cyberArt.dynalarSandevistan",
+  optics: "cyberArt.kiroshiMk1",
+  arms: "cyberArt.mantisBlades",
+  legDrive: "cyberArt.reinforcedTendons",
+  skinArmor: "cyberArt.subdermalArmor",
+  neural: "cyberArt.bioconductor",
+  sensory: "cyberArt.atomicSensors",
+  torso: "cyberArt.biomonitor",
+  extremities: "cyberArt.smartLink",
+  lifestyle: "cyberArt.tygerTattoo",
+  os: "cyberArt.militechParaline",
+  eyes: "cyberArt.kiroshiMk1",
+  legs: "cyberArt.reinforcedTendons",
+  integumentary: "cyberArt.subdermalArmor",
+  frontalCortex: "cyberArt.bioconductor",
+  nervous: "cyberArt.kerenzikov",
+  circulatory: "cyberArt.biomonitor",
+  skeleton: "cyberArt.titaniumBones",
+  hands: "cyberArt.smartLink",
+};
+
+export function fallbackItemArtFor(info: {
+  readonly kind?: string | null | undefined;
+  readonly category?: string | null | undefined;
+  readonly clothingSlot?: string | null | undefined;
+  readonly modSlot?: string | null | undefined;
+}): AssetId {
+  if (info.kind === "weapon") {
+    return (info.category ? DEFAULT_WEAPON_ART[info.category] : undefined) ?? "weaponArt.unity";
+  }
+  if (info.kind === "clothing") {
+    return (
+      (info.clothingSlot ? DEFAULT_CLOTHING_ART[info.clothingSlot] : undefined) ??
+      "itemArt.streetJacket"
+    );
+  }
+  if (info.kind === "healing") return "itemArt.maxdoc";
+  if (info.kind === "grenade") return "itemArt.frag";
+  if (info.kind === "mod") {
+    return (info.modSlot ? DEFAULT_MOD_ART[info.modSlot] : undefined) ?? "itemArt.modBigMag";
+  }
+  if (info.kind === "consumable") return "itemArt.nicola";
+  return "itemArt.toolKit";
+}
+
+export function fallbackCyberwareArtFor(info: {
+  readonly category?: string | null | undefined;
+  readonly slot?: string | null | undefined;
+}): AssetId {
+  return (
+    (info.category ? DEFAULT_CYBERWARE_ART[info.category] : undefined) ??
+    (info.slot ? DEFAULT_CYBERWARE_ART[info.slot] : undefined) ??
+    "cyberArt.biomonitor"
+  );
+}
+
+/** 登记单个自建武器/物品的图标信息（支持官方图、本地上传图与同类自动兜底） */
+export function registerCustomItemArt(item: {
+  readonly id: string;
+  readonly kind?: string | null | undefined;
+  readonly category?: string | null | undefined;
+  readonly clothingSlot?: string | null | undefined;
+  readonly modSlot?: string | null | undefined;
+  readonly art?: string | null | undefined;
+  readonly customImage?: string | null | undefined;
+}): void {
+  const validArt = asValidAssetId(item.art);
+  const customImage =
+    typeof item.customImage === "string" && item.customImage.startsWith("data:image/")
+      ? item.customImage
+      : undefined;
+  if (customImage) setCustomImageDataUrl(item.id, customImage);
+  else deleteCustomImageDataUrl(item.id);
+  const fallback =
+    ITEM_ART[item.id] === undefined &&
+    (item.kind || item.category || item.clothingSlot || item.modSlot)
+      ? fallbackItemArtFor(item)
+      : undefined;
+  if (validArt || customImage || fallback) {
+    customGearArt.set(item.id, { art: validArt, customImage, fallback });
+  } else {
+    customGearArt.delete(item.id);
+  }
+}
+
+/** 登记单个自建义体的图标信息（支持官方图、本地上传图与同类自动兜底） */
+export function registerCustomCyberwareArt(cw: {
+  readonly id: string;
+  readonly category?: string | null | undefined;
+  readonly slot?: string | null | undefined;
+  readonly art?: string | null | undefined;
+  readonly customImage?: string | null | undefined;
+}): void {
+  const validArt = asValidAssetId(cw.art);
+  const customImage =
+    typeof cw.customImage === "string" && cw.customImage.startsWith("data:image/")
+      ? cw.customImage
+      : undefined;
+  if (customImage) setCustomImageDataUrl(cw.id, customImage);
+  else deleteCustomImageDataUrl(cw.id);
+  const fallback =
+    ITEM_ART[cw.id] === undefined && (cw.category || cw.slot)
+      ? fallbackCyberwareArtFor(cw)
+      : undefined;
+  if (validArt || customImage || fallback) {
+    customGearArt.set(cw.id, { art: validArt, customImage, fallback });
+  } else {
+    customGearArt.delete(cw.id);
+  }
+}
+
+/** 从局内 PlayerView 同步所有自建装备与义体的自定义图标，保证读档/跨设备打开即刻显示 */
+export function syncCustomGearArtFromView(view: PlayerView | null | undefined): void {
+  if (!view) return;
+  for (const [id, detail] of Object.entries(view.inventory.details)) {
+    const targetId = detail.baseId || id;
+    if (ITEM_ART[targetId] && !detail.art && !detail.customImage) continue;
+    registerCustomItemArt({
+      id: targetId,
+      kind: detail.kind,
+      category: detail.category,
+      clothingSlot: detail.clothingSlot,
+      modSlot: detail.modSlot,
+      art: detail.art,
+      customImage: detail.customImage,
+    });
+  }
+  for (const cw of view.cyberware) {
+    if (ITEM_ART[cw.id] && !cw.art && !cw.customImage) continue;
+    registerCustomCyberwareArt({
+      id: cw.id,
+      category: cw.category,
+      slot: cw.slot,
+      art: cw.art,
+      customImage: cw.customImage,
+    });
+  }
+}
+
+export interface OfficialArtOption {
+  readonly artId: AssetId;
+  readonly label: string;
+  readonly group: "weapon" | "item" | "cyberware";
+  readonly subGroup: string;
+}
+
+let cachedOfficialArtOptions: readonly OfficialArtOption[] | undefined;
+
+/** 构建去重后的官方 2077 装备与义体图标目录，供自建表单可视化挑选 */
+export function officialGearArtOptions(): readonly OfficialArtOption[] {
+  if (cachedOfficialArtOptions) return cachedOfficialArtOptions;
+  const seen = new Set<AssetId>();
+  const out: OfficialArtOption[] = [];
+
+  for (const item of CONTENT_ITEMS as readonly inventoryRules.ItemDef[]) {
+    const artId = ITEM_ART[item.id];
+    if (!artId || seen.has(artId)) continue;
+    seen.add(artId);
+    const group: "weapon" | "item" = item.kind === "weapon" ? "weapon" : "item";
+    const subGroup =
+      item.kind === "weapon"
+        ? (item.category ?? "pistol")
+        : item.kind === "clothing"
+          ? `clothing:${item.clothingSlot ?? "outer"}`
+          : item.kind === "mod"
+            ? `mod:${item.modSlot ?? "plugin"}`
+            : item.kind;
+    out.push({ artId, label: item.name, group, subGroup });
+  }
+
+  for (const cw of CONTENT_CYBERWARE as readonly cyberwareRules.CyberwareDef[]) {
+    const artId = ITEM_ART[cw.id];
+    if (!artId || seen.has(artId)) continue;
+    seen.add(artId);
+    out.push({
+      artId,
+      label: cw.name,
+      group: "cyberware",
+      subGroup: cw.category ?? cw.slot,
+    });
+  }
+
+  cachedOfficialArtOptions = out;
+  return out;
+}
+
+export function itemArtOf(item: string | null | undefined): GearArtId | undefined {
   if (!item) return undefined;
   const base = baseWeaponIdOf(item);
+  const custom = customGearArt.get(item) ?? customGearArt.get(base);
+  if (custom?.customImage) {
+    const key = customGearArt.has(item) ? item : base;
+    return setCustomImageDataUrl(key, custom.customImage);
+  }
+  if (custom?.art) return custom.art;
   const exact = ITEM_ART[item] ?? ITEM_ART[base];
   if (exact) return exact;
   if (
@@ -526,7 +873,7 @@ export function itemArtOf(item: string | null | undefined): AssetId | undefined 
   ) {
     return "itemArt.shard";
   }
-  return undefined;
+  return custom?.fallback;
 }
 
 /** 武器 ID 与副标题 → 右下角 HUD 用的高对比 2077 单色武器轮廓剪影 */

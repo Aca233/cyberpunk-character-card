@@ -6,8 +6,11 @@ import { countdown } from "./Journal";
 import styles from "./tracker.module.css";
 import { type TrackItem, trackTelemetry, type View } from "./view";
 
-type TrackFilter = "all" | "bills" | "active" | "offered" | "closed";
+type TrackFilter = "all" | "bills" | "active" | "offered" | "leads" | "closed";
 type JobView = View["jobs"]["list"][number];
+type NcpdAlertView = View["ncpd"]["alerts"][number];
+type SidegigView = View["sidegigs"]["list"][number];
+type FixerView = View["jobs"]["fixers"][number];
 
 /** 4 小时（240 分钟）内到期视为临期预警 */
 const SOON_MINUTES = 240;
@@ -205,7 +208,7 @@ function BillCard({
         )}
         {atDocHere && onOpenRipperdoc && (
           <Button small primary onClick={onOpenRipperdoc}>
-            打开诊所还款
+            {item.source === "chromeCare" ? "打开诊所校准" : "打开诊所还款"}
           </Button>
         )}
         {!atDocHere && item.locationId && onLocatePlace && (
@@ -346,6 +349,22 @@ function JobCard({
                     <span className={styles.metaValueSub}> · {countdown(job.dueIn)}</span>
                   )}
                 </span>
+              </span>
+            </div>
+          )}
+
+          {(job.crew ?? []).some((m) => m.status !== "left") && (
+            <div className={`${styles.metaCell} ${styles.metaCellFull}`}>
+              <span className={styles.metaLabel}>入伙小队与分成</span>
+              <span className={styles.metaRow}>
+                {(job.crew ?? [])
+                  .filter((m) => m.status !== "left")
+                  .map((m) => (
+                    <span key={m.npc} className={styles.pill} data-tone="cyan">
+                      {m.name} · {m.role}
+                      {m.cutPercent > 0 ? `（${m.cutPercent}%）` : "（义气）"}
+                    </span>
+                  ))}
               </span>
             </div>
           )}
@@ -510,6 +529,8 @@ function ClosedJobCard({ job }: { readonly job: JobView }) {
   const tone = outcomeTone(job.status);
   const cardTone = tone === "good" ? "good" : tone === "bad" ? "overdue" : "muted";
   const settlement = job.settlement;
+  const crewPayouts = (job.crew ?? []).filter((m) => m.status !== "left");
+  const playerNet = settlement?.playerNet ?? job.paid;
 
   return (
     <li className={styles.card} data-tone={cardTone}>
@@ -519,7 +540,11 @@ function ClosedJobCard({ job }: { readonly job: JobView }) {
         </div>
         <div className={styles.cardHeadRight}>
           {job.paid !== null && job.paid > 0 && (
-            <span className={styles.rewardTag}>+{job.paid.toLocaleString("en-US")} €</span>
+            <span className={styles.rewardTag}>
+              {playerNet !== null && playerNet !== job.paid
+                ? `净 +${playerNet.toLocaleString("en-US")} €（总 ${job.paid.toLocaleString("en-US")} €）`
+                : `+${job.paid.toLocaleString("en-US")} €`}
+            </span>
           )}
           <span className={styles.pill} data-tone={tone === "warn" ? "yellow" : tone}>
             {job.statusLabel}
@@ -534,24 +559,364 @@ function ClosedJobCard({ job }: { readonly job: JobView }) {
 
       {job.summary && <p className={styles.progressText}>{job.summary}</p>}
 
-      {settlement && settlement.humanity !== null && settlement.humanity !== 0 && (
+      {(crewPayouts.length > 0 ||
+        (settlement && settlement.humanity !== null && settlement.humanity !== 0)) && (
         <div className={styles.settlementRow}>
-          <span className={styles.pill} data-tone={settlement.humanity > 0 ? "cyan" : "bad"}>
-            人性 {settlement.humanity > 0 ? `+${settlement.humanity}` : settlement.humanity}
-          </span>
+          {crewPayouts.map((m) => (
+            <span
+              key={m.npc}
+              className={styles.pill}
+              data-tone={m.status === "shorted" ? "bad" : "muted"}
+            >
+              {m.name} {m.status === "shorted" ? "⚠ 被克扣" : m.statusLabel}
+              {m.paid !== null && m.paid > 0 ? ` ${m.paid.toLocaleString("en-US")} €` : ""}
+            </span>
+          ))}
+          {settlement && settlement.humanity !== null && settlement.humanity !== 0 && (
+            <span className={styles.pill} data-tone={settlement.humanity > 0 ? "cyan" : "bad"}>
+              人性 {settlement.humanity > 0 ? `+${settlement.humanity}` : settlement.humanity}
+            </span>
+          )}
         </div>
       )}
     </li>
   );
 }
 
-/** 追踪面板（J）：统一展示账务欠款、在办委托、约定/赛事/心事、待决风声与近期结案 */
+function NcpdLeadCard({
+  alert,
+  canLocate,
+  onLocatePlace,
+  onDraftAction,
+}: {
+  readonly alert: NcpdAlertView;
+  readonly canLocate: boolean;
+  readonly onLocatePlace?: ((placeId: string) => void) | undefined;
+  readonly onDraftAction?: ((text: string) => void) | undefined;
+}) {
+  return (
+    <li className={styles.card} data-tone="ncpd">
+      <div className={styles.cardHead}>
+        <div className={styles.cardTitleGroup}>
+          <Asset id="map.poi.police" tint="#7ca8ff" height={16} className={styles.cardIcon} />
+          <strong className={styles.cardTitle}>{alert.label}</strong>
+        </div>
+        <div className={styles.cardHeadRight}>
+          <span className={styles.rewardTag}>{alert.reward.toLocaleString("en-US")} €</span>
+          <span className={styles.duePill} data-tone="offered">
+            {alert.until} 前
+          </span>
+        </div>
+      </div>
+
+      <div className={styles.metaRow}>
+        <span className={styles.pill} data-tone="cyan">
+          NCPD 悬赏
+        </span>
+        <RiskMeter risk={alert.risk} />
+        {alert.targetFactionName && (
+          <span
+            className={styles.pill}
+            data-tone={
+              alert.isOwnFaction
+                ? "bad"
+                : alert.targetAttitude === "kos" || alert.targetAttitude === "hostile"
+                  ? "yellow"
+                  : "muted"
+            }
+          >
+            {alert.isOwnFaction
+              ? `⚠ 本帮地盘·${alert.targetFactionName}（出手记污点）`
+              : `涉事·${alert.targetFactionName}${alert.targetAttitudeLabel ? `（${alert.targetAttitudeLabel}）` : ""}`}
+          </span>
+        )}
+        {alert.contested && (
+          <span className={styles.pill} data-tone="bad">
+            地盘火拼中
+          </span>
+        )}
+        {alert.bountyFrozen && (
+          <span className={styles.pill} data-tone="bad">
+            高星通缉·赏金冻结
+          </span>
+        )}
+        <span className={styles.metaLoc}>
+          <Asset id="map.pinDest" tint="var(--cp-cyan)" height={12} />
+          <span>
+            {alert.district} · {alert.locationName}
+          </span>
+        </span>
+        {alert.here && (
+          <span className={styles.pill} data-tone="good">
+            同区可即刻介入
+          </span>
+        )}
+      </div>
+
+      <p className={styles.progressText}>{alert.note}</p>
+
+      <div className={styles.actions}>
+        {alert.here && onDraftAction && (
+          <Button
+            small
+            primary
+            onClick={() =>
+              onDraftAction(
+                `根据 NCPD 扫描器通报赶往${alert.locationName}处理「${alert.label}」，先侦察现场人数与火力再伺机出手。`,
+              )
+            }
+          >
+            前往处理
+          </Button>
+        )}
+        {canLocate && onLocatePlace && (
+          <Button small primary={!alert.here} onClick={() => onLocatePlace(alert.location)}>
+            地图定位
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function SidegigLeadCard({
+  gig,
+  isActive,
+  canLocate,
+  eddies,
+  onLocatePlace,
+  onDraftAction,
+}: {
+  readonly gig: SidegigView;
+  readonly isActive: boolean;
+  readonly canLocate: boolean;
+  readonly eddies: number;
+  readonly onLocatePlace?: ((placeId: string) => void) | undefined;
+  readonly onDraftAction?: ((text: string) => void) | undefined;
+}) {
+  const shortStake = gig.effectiveStake > eddies;
+  const blocked = Boolean(gig.blockedReason);
+  const canEnter = gig.here && !gig.beaten && !gig.rematch && !isActive && !blocked && !shortStake;
+
+  return (
+    <li className={styles.card} data-tone={blocked ? "overdue" : isActive ? "soon" : undefined}>
+      <div className={styles.cardHead}>
+        <div className={styles.cardTitleGroup}>
+          <Asset
+            id="notify.streetCred"
+            tint={gig.beaten ? "var(--cp-text-dim)" : "var(--cp-yellow)"}
+            height={16}
+            className={styles.cardIcon}
+          />
+          <strong className={styles.cardTitle}>{gig.name}</strong>
+          <span className={styles.pill} data-tone={gig.kind === "race" ? "cyan" : "yellow"}>
+            {gig.kindLabel}
+          </span>
+        </div>
+        <div className={styles.cardHeadRight}>
+          <span className={styles.rewardTag}>奖 {gig.purse.toLocaleString("en-US")} €</span>
+          {gig.beaten ? (
+            <span className={styles.pill} data-tone="good">
+              已称霸
+            </span>
+          ) : blocked ? (
+            <span className={styles.duePill} data-tone="overdue">
+              暂不可报
+            </span>
+          ) : isActive ? (
+            <span className={styles.duePill} data-tone="soon">
+              比赛中
+            </span>
+          ) : gig.rematch ? (
+            <span className={styles.duePill} data-tone="offered">
+              {gig.rematch} 后再约
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className={styles.metaRow}>
+        <span>
+          对手：<b>{gig.opponent}</b>（{gig.tierLabel}）
+        </span>
+        {gig.factionName && (
+          <span
+            className={styles.pill}
+            data-tone={
+              gig.factionAttitude === "kos" || gig.factionAttitude === "hostile"
+                ? "bad"
+                : gig.isMember ||
+                    gig.factionAttitude === "family" ||
+                    gig.factionAttitude === "friendly"
+                  ? "good"
+                  : "muted"
+            }
+          >
+            {gig.factionName}看场
+            {gig.isMember
+              ? " · 本帮免押"
+              : gig.factionAttitude === "family"
+                ? " · 自己人免押"
+                : gig.factionAttitude === "friendly"
+                  ? " · 友好7折"
+                  : gig.factionAttitudeLabel
+                    ? ` · ${gig.factionAttitudeLabel}`
+                    : ""}
+          </span>
+        )}
+        {gig.contested && (
+          <span className={styles.pill} data-tone="bad">
+            地盘火拼暂闭
+          </span>
+        )}
+        {gig.stake > 0 && (
+          <span
+            className={styles.pill}
+            data-tone={shortStake ? "bad" : gig.effectiveStake < gig.stake ? "good" : "muted"}
+          >
+            {gig.effectiveStake === 0
+              ? `免押金（原 ${gig.stake.toLocaleString("en-US")} €）`
+              : gig.effectiveStake < gig.stake
+                ? `押金 ${gig.effectiveStake.toLocaleString("en-US")} €（原 ${gig.stake.toLocaleString("en-US")}）`
+                : `押金 ${gig.effectiveStake.toLocaleString("en-US")} €`}
+          </span>
+        )}
+        <span className={styles.metaLoc}>
+          <Asset id="map.pinDest" tint="var(--cp-cyan)" height={12} />
+          <span>
+            {gig.district ? `${gig.district} · ` : ""}
+            {gig.locationName}
+          </span>
+        </span>
+      </div>
+
+      <p className={styles.progressText}>{gig.blockedReason ?? gig.note}</p>
+
+      {!gig.beaten && (
+        <div className={styles.actions}>
+          {gig.here && onDraftAction && !isActive && (
+            <Button
+              small
+              primary
+              disabled={!canEnter}
+              reason={
+                gig.blockedReason ??
+                (gig.rematch
+                  ? `${gig.rematch} 以后才肯再比`
+                  : shortStake
+                    ? `报名押金需要 ${gig.effectiveStake.toLocaleString("en-US")} €`
+                    : undefined)
+              }
+              onClick={() =>
+                onDraftAction(
+                  gig.kind === "race"
+                    ? `我${gig.effectiveStake > 0 ? `交齐 ${gig.effectiveStake} 欧元押金，` : "免押"}报名参加${gig.name}街头赛车，准备和${gig.opponent}一决高下。`
+                    : `我${gig.effectiveStake > 0 ? `交齐 ${gig.effectiveStake} 欧元押金，` : "免押"}走上${gig.name}拳台，正式挑战${gig.opponent}。`,
+                )
+              }
+            >
+              报名开赛
+            </Button>
+          )}
+          {canLocate && onLocatePlace && (
+            <Button small primary={!gig.here} onClick={() => onLocatePlace(gig.location)}>
+              地图定位
+            </Button>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function FixerLeadCard({
+  fixer,
+  hasPhone,
+  canLocate,
+  onOpenChat,
+  onLocatePlace,
+  onDraftAction,
+}: {
+  readonly fixer: FixerView;
+  readonly hasPhone: boolean;
+  readonly canLocate: boolean;
+  readonly onOpenChat?: ((npcId: string) => void) | undefined;
+  readonly onLocatePlace?: ((placeId: string) => void) | undefined;
+  readonly onDraftAction?: ((text: string) => void) | undefined;
+}) {
+  return (
+    <li className={styles.fixerCard} data-blocked={fixer.blocked || undefined}>
+      <div className={styles.fixerTop}>
+        <strong className={styles.fixerName}>{fixer.name}</strong>
+        {fixer.blocked ? (
+          <span className={styles.pill} data-tone="bad">
+            已停单
+          </span>
+        ) : fixer.relation ? (
+          <span className={styles.pill} data-tone="cyan">
+            {fixer.relation}
+          </span>
+        ) : (
+          <span className={styles.pill} data-tone="muted">
+            {fixer.met ? "已相识" : "未照面"}
+          </span>
+        )}
+      </div>
+      <div className={styles.fixerMeta}>
+        {fixer.blockReason ? (
+          <span>{fixer.blockReason}</span>
+        ) : (
+          <span>
+            {fixer.factionName
+              ? `${fixer.factionName}${fixer.factionMember ? "（本帮）" : ""} · `
+              : ""}
+            {fixer.locationName
+              ? `${fixer.district ? `${fixer.district} · ` : ""}${fixer.locationName}`
+              : "通过暗网/中间人渠道联络"}
+          </span>
+        )}
+      </div>
+      {!fixer.blocked && (
+        <div className={styles.actions}>
+          {hasPhone && onOpenChat && (
+            <Button small primary onClick={() => onOpenChat(fixer.id)}>
+              发消息找活
+            </Button>
+          )}
+          {onDraftAction && (
+            <Button
+              small
+              primary={!hasPhone}
+              onClick={() =>
+                onDraftAction(
+                  hasPhone
+                    ? `我给${fixer.name}发去加密消息，问问手头最近有没有靠谱的新委托可以接。`
+                    : `我设法打听并联系中间人${fixer.name}，看看能不能接一票靠谱的街头委托。`,
+                )
+              }
+            >
+              打听活计
+            </Button>
+          )}
+          {canLocate && fixer.location && onLocatePlace && (
+            <Button small onClick={() => onLocatePlace(fixer.location as string)}>
+              定位据点
+            </Button>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** 追踪面板（J）：统一展示账务欠款、在办委托、约定/赛事/心事、待决风声、夜之城活源与近期结案 */
 export function TrackerPanel({
   view,
   onLocatePlace,
   onAcceptJob,
   onPayRent,
   onOpenRipperdoc,
+  onOpenChat,
   onOpenMap,
   onDraftAction,
 }: {
@@ -560,6 +925,7 @@ export function TrackerPanel({
   readonly onAcceptJob?: ((jobId: string) => void) | undefined;
   readonly onPayRent?: ((homeId: string) => void) | undefined;
   readonly onOpenRipperdoc?: (() => void) | undefined;
+  readonly onOpenChat?: ((npcId: string) => void) | undefined;
   readonly onOpenMap?: (() => void) | undefined;
   readonly onDraftAction?: ((text: string) => void) | undefined;
 }) {
@@ -590,6 +956,18 @@ export function TrackerPanel({
   const billItems = track.active.filter((item) => item.kind === "bill");
   const otherActive = track.active.filter((item) => item.source !== "jobs" && item.kind !== "bill");
   const otherOffered = track.offered.filter((item) => item.source !== "jobs");
+
+  const ncpdAlerts = view.ncpd.alerts;
+  const openSidegigs = view.sidegigs.list.filter((g) => !g.beaten);
+  const beatenSidegigs = view.sidegigs.list.filter((g) => g.beaten);
+  const phoneContactIds = new Set(
+    view.phone.contacts.flatMap((c) => (c.canChat ? [c.from, ...(c.npc ? [c.npc] : [])] : [])),
+  );
+  const aliveFixers = view.jobs.fixers.filter(
+    (f) => f.alive && (f.met || phoneContactIds.has(f.id)),
+  );
+  const leadsCount =
+    ncpdAlerts.length + openSidegigs.length + aliveFixers.filter((f) => !f.blocked).length;
 
   const activeBucketCount = activeJobs.length + otherActive.length;
   const offeredBucketCount = offeredJobs.length + otherOffered.length;
@@ -633,6 +1011,14 @@ export function TrackerPanel({
       tone: "cyan",
     });
   }
+  if (leadsCount > 0) {
+    availableBuckets.push({
+      key: "leads",
+      label: "活源",
+      count: leadsCount,
+      tone: "cyan",
+    });
+  }
   if (closedJobs.length > 0) {
     availableBuckets.push({
       key: "closed",
@@ -654,6 +1040,9 @@ export function TrackerPanel({
   const showOffered =
     (validFilter === "all" || validFilter === "offered") &&
     (offeredJobs.length > 0 || otherOffered.length > 0);
+  const showLeads =
+    (validFilter === "leads" || (validFilter === "all" && !hasAnythingOpen)) && leadsCount > 0;
+  const showLeadsFold = validFilter === "all" && hasAnythingOpen && leadsCount > 0;
   const showClosedFull = validFilter === "closed" && closedJobs.length > 0;
   const showClosedFold = validFilter === "all" && closedJobs.length > 0;
 
@@ -701,7 +1090,7 @@ export function TrackerPanel({
       )}
 
       <div className={styles.scroll}>
-        {!hasAnythingOpen && validFilter === "all" && (
+        {!hasAnythingOpen && validFilter === "all" && leadsCount === 0 && (
           <div className={styles.empty}>
             <span
               className={styles.emptyGrid}
@@ -729,6 +1118,20 @@ export function TrackerPanel({
           </div>
         )}
 
+        {!hasAnythingOpen && validFilter === "all" && leadsCount > 0 && (
+          <div className={styles.standbyBanner}>
+            <div className={styles.standbyBannerText}>
+              <strong>手头暂无在办单子</strong>
+              <span>可直接从下方夜之城活源挑一票悬赏、地下赛事，或联系中间人揽活。</span>
+            </div>
+            {onOpenMap && (
+              <Button small onClick={onOpenMap}>
+                打开地图
+              </Button>
+            )}
+          </div>
+        )}
+
         {showBills && (
           <section className={styles.section}>
             <SectionHead
@@ -739,10 +1142,11 @@ export function TrackerPanel({
             <ul className={styles.list}>
               {billItems.map((item) => {
                 const atDocHere =
-                  item.source === "debt" &&
                   view.ripperdoc !== null &&
-                  item.docId !== undefined &&
-                  view.ripperdoc.id === item.docId;
+                  (item.source === "chromeCare" ||
+                    (item.source === "debt" &&
+                      item.docId !== undefined &&
+                      view.ripperdoc.id === item.docId));
                 return (
                   <BillCard
                     key={item.id}
@@ -851,6 +1255,151 @@ export function TrackerPanel({
               )}
             </div>
           </section>
+        )}
+
+        {showLeads && (
+          <section className={styles.section} aria-label="夜之城活源">
+            <SectionHead title="夜之城活源 · 悬赏 / 赛事 / 中间人" count={leadsCount} tone="cyan" />
+            {ncpdAlerts.length > 0 && (
+              <div className={styles.leadsGroup}>
+                <div className={styles.leadsSubhead}>
+                  <span>NCPD 街头悬赏</span>
+                  <small>{ncpdAlerts.length} 条活跃</small>
+                </div>
+                <ul className={styles.list}>
+                  {ncpdAlerts.map((alert) => (
+                    <NcpdLeadCard
+                      key={alert.id}
+                      alert={alert}
+                      canLocate={placeIdOf(alert.location) !== null}
+                      onLocatePlace={onLocatePlace}
+                      onDraftAction={onDraftAction}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+            {openSidegigs.length > 0 && (
+              <div className={styles.leadsGroup}>
+                <div className={styles.leadsSubhead}>
+                  <span>地下拳赛与街头赛车</span>
+                  <small>
+                    {openSidegigs.length} 场可挑战
+                    {beatenSidegigs.length > 0 ? ` · 已称霸 ${beatenSidegigs.length} 场` : ""}
+                  </small>
+                </div>
+                <ul className={styles.list}>
+                  {openSidegigs.map((gig) => (
+                    <SidegigLeadCard
+                      key={gig.id}
+                      gig={gig}
+                      isActive={view.sidegigs.active?.id === gig.id}
+                      canLocate={placeIdOf(gig.location) !== null}
+                      eddies={eddies}
+                      onLocatePlace={onLocatePlace}
+                      onDraftAction={onDraftAction}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+            {aliveFixers.length > 0 && (
+              <div className={styles.leadsGroup}>
+                <div className={styles.leadsSubhead}>
+                  <span>中间人找活渠道</span>
+                  <small>{aliveFixers.filter((f) => !f.blocked).length} 位可联络</small>
+                </div>
+                <ul className={styles.fixerGrid}>
+                  {aliveFixers.map((fixer) => (
+                    <FixerLeadCard
+                      key={fixer.id}
+                      fixer={fixer}
+                      hasPhone={phoneContactIds.has(fixer.id)}
+                      canLocate={placeIdOf(fixer.location) !== null}
+                      onOpenChat={onOpenChat}
+                      onLocatePlace={onLocatePlace}
+                      onDraftAction={onDraftAction}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
+
+        {showLeadsFold && (
+          <details className={styles.historyWrap}>
+            <summary className={styles.historySummary}>
+              <span className={styles.historyChevron} aria-hidden>
+                ▸
+              </span>
+              <span>夜之城活源（悬赏 / 赛事 / 中间人）</span>
+              <span className={styles.sectionCount}>{String(leadsCount).padStart(2, "0")}</span>
+            </summary>
+            <div className={styles.leadsFoldBody}>
+              {ncpdAlerts.length > 0 && (
+                <div className={styles.leadsGroup}>
+                  <div className={styles.leadsSubhead}>
+                    <span>NCPD 街头悬赏</span>
+                    <small>{ncpdAlerts.length} 条活跃</small>
+                  </div>
+                  <ul className={styles.list}>
+                    {ncpdAlerts.map((alert) => (
+                      <NcpdLeadCard
+                        key={alert.id}
+                        alert={alert}
+                        canLocate={placeIdOf(alert.location) !== null}
+                        onLocatePlace={onLocatePlace}
+                        onDraftAction={onDraftAction}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {openSidegigs.length > 0 && (
+                <div className={styles.leadsGroup}>
+                  <div className={styles.leadsSubhead}>
+                    <span>地下拳赛与街头赛车</span>
+                    <small>{openSidegigs.length} 场可挑战</small>
+                  </div>
+                  <ul className={styles.list}>
+                    {openSidegigs.map((gig) => (
+                      <SidegigLeadCard
+                        key={gig.id}
+                        gig={gig}
+                        isActive={view.sidegigs.active?.id === gig.id}
+                        canLocate={placeIdOf(gig.location) !== null}
+                        eddies={eddies}
+                        onLocatePlace={onLocatePlace}
+                        onDraftAction={onDraftAction}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {aliveFixers.length > 0 && (
+                <div className={styles.leadsGroup}>
+                  <div className={styles.leadsSubhead}>
+                    <span>中间人找活渠道</span>
+                    <small>{aliveFixers.filter((f) => !f.blocked).length} 位可联络</small>
+                  </div>
+                  <ul className={styles.fixerGrid}>
+                    {aliveFixers.map((fixer) => (
+                      <FixerLeadCard
+                        key={fixer.id}
+                        fixer={fixer}
+                        hasPhone={phoneContactIds.has(fixer.id)}
+                        canLocate={placeIdOf(fixer.location) !== null}
+                        onOpenChat={onOpenChat}
+                        onLocatePlace={onLocatePlace}
+                        onDraftAction={onDraftAction}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </details>
         )}
 
         {showClosedFull && (

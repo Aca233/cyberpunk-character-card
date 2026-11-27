@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { type AssetId, asset } from "../assets";
+import { customImageDataUrlOf, type GearArtId, isCustomImageAssetId } from "../assets/customArt";
 import styles from "./asset.module.css";
 
 /** 缺图时的报错框：不画替代样式，只写清缺哪张、怎么补 */
@@ -12,7 +13,7 @@ export function MissingAsset({ id, style }: { id: string; style?: CSSProperties 
 }
 
 interface AssetProps {
-  readonly id: AssetId;
+  readonly id: GearArtId;
   /** 原作图集大多是白色蒙版，给颜色时按蒙版染色（例如 var(--cp-red)） */
   readonly tint?: string;
   /** 指定高度（CSS 像素），宽度按比例；不写时按 1080p 的原始尺寸 */
@@ -35,6 +36,22 @@ export function Asset({
   style,
   "data-active": active,
 }: AssetProps) {
+  if (isCustomImageAssetId(id)) {
+    const customUrl = customImageDataUrlOf(id);
+    if (!customUrl) return <MissingAsset id={id} />;
+    return (
+      <img
+        src={customUrl}
+        width={width}
+        height={height}
+        alt={alt ?? ""}
+        className={className}
+        style={{ objectFit: "contain", ...style }}
+        data-active={active || undefined}
+        draggable={false}
+      />
+    );
+  }
   const info = asset(id);
   if (!info) return <MissingAsset id={id} />;
   const ratio = info.width / info.height;

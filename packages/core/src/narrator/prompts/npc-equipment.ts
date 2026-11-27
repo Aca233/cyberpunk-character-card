@@ -6,6 +6,7 @@ import {
   InventoryStateSchema,
   ITEM_KIND_LABELS,
   itemCatalog,
+  summarizeAbility,
   WEAPON_CATEGORY_LABELS,
   WEAPON_TYPE_LABELS,
 } from "../../systems/inventory";
@@ -100,20 +101,23 @@ export function npcEquipmentReference(
       if (item.iconic || objects[item.id] || item.id.startsWith("wpn:")) continue;
       if (item.kind === "weapon") {
         const type = item.weaponType ? WEAPON_TYPE_LABELS[item.weaponType] : "近战";
+        const note = summarizeAbility(item.ability, 36) || "按实际武器结构使用";
         weapons.push({
           id: item.id,
           name: item.name,
           group: item.category ? WEAPON_CATEGORY_LABELS[item.category] : "其他武器",
           variant: `${type}:${budget(item.rarity)}`,
-          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（${type}，${budget(item.rarity)}，参考价 ${item.price ?? "未知"}）：${item.ability ?? "按实际武器结构使用"}`,
+          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（${type}，${budget(item.rarity)}，参考价 ${item.price ?? "未知"}）：${note}`,
         });
       } else if (item.kind === "clothing" && item.clothingSlot) {
+        const note = summarizeAbility(item.ability, 36) || "常规穿着";
+        const tierRole = item.protection ? "armored" : "casual";
         clothes.push({
           id: item.id,
           name: item.name,
           group: CLOTHING_SLOT_LABELS[item.clothingSlot],
-          variant: item.id,
-          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（${budget(item.rarity)}，参考价 ${item.price ?? "未知"}）：${item.ability ?? "常规穿着"}`,
+          variant: `${tierRole}:${budget(item.rarity)}`,
+          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（${budget(item.rarity)}，参考价 ${item.price ?? "未知"}）：${note}`,
         });
       } else if (
         (item.kind === "healing" ||
@@ -122,12 +126,23 @@ export function npcEquipmentReference(
           item.kind === "misc") &&
         !item.chipContentId
       ) {
+        const subRole =
+          item.kind !== "misc"
+            ? item.kind
+            : item.carryBonus
+              ? "carry"
+              : (item.hazards?.length ?? 0) > 0 || (item.stealthTags?.length ?? 0) > 0
+                ? "tactical"
+                : item.braindanceDevice || item.chipDevice
+                  ? "device"
+                  : "daily";
+        const note = summarizeAbility(item.ability, 36) || "常见随身物品";
         belongings.push({
           id: item.id,
           name: item.name,
           group: ITEM_KIND_LABELS[item.kind],
-          variant: item.id,
-          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（参考价 ${item.price ?? "未知"}）：${item.ability ?? "常见随身物品"}`,
+          variant: `${subRole}:${budget(item.rarity)}`,
+          line: `- ${includeIds ? `${item.id} ` : ""}${item.name}（参考价 ${item.price ?? "未知"}）：${note}`,
         });
       }
     }
@@ -143,12 +158,13 @@ export function npcEquipmentReference(
           : part.accelerator
             ? "斯安威斯坦"
             : "其他操作系统";
+    const note = summarizeAbility(part.ability, 36) || "常规义体";
     chrome.push({
       id: part.id,
       name: part.name,
       group: SLOT_LABELS[part.slot],
       variant: `${family}:${budget(part.rarity)}`,
-      line: `- ${includeIds ? `${part.id} ` : ""}${part.name}（${RARITY_LABELS[part.rarity]}，参考价 ${part.price}）：${part.ability}`,
+      line: `- ${includeIds ? `${part.id} ` : ""}${part.name}（${RARITY_LABELS[part.rarity]}，参考价 ${part.price}）：${note}`,
     });
   }
   if (
@@ -160,6 +176,8 @@ export function npcEquipmentReference(
     return undefined;
 
   const seed = `${world.time}:${npcs.length}`;
+  const clothingPicks = representatives(clothes, gearCounts, seed);
+  const belongingPicks = representatives(belongings, gearCounts, seed);
   const weaponPicks = representatives(weapons, gearCounts, seed);
   const chromePicks = representatives(chrome, chromeCounts, seed);
   // 夜之城最常见的基础民用/街头义体与智能联锁常驻参考，避免被轮换隐藏后模型只能留空或误选偏门战术件。
@@ -210,14 +228,14 @@ export function npcEquipmentReference(
           `近期已见自创人物中重复的型号：${repeats.join("、")}。用途与财力相当时可考虑其他型号；常见装备仍可合理重复。`,
         ]
       : []),
-    ...(clothes.length > 0
+    ...(clothingPicks.length > 0
       ? [
-          `${includeIds ? "服装候选（写入 body.gear，与 outfit 一致）" : "常见服装参考"}\n${groupedLines(clothes)}`,
+          `${includeIds ? "服装候选（写入 body.gear，与 outfit 一致）" : "常见服装参考"}\n${groupedLines(clothingPicks)}`,
         ]
       : []),
-    ...(belongings.length > 0
+    ...(belongingPicks.length > 0
       ? [
-          `${includeIds ? "随身物品候选（药剂、工具、日常物件，写入 body.gear）" : "随身物品参考（药剂、工具、日常物件）"}\n${groupedLines(belongings)}`,
+          `${includeIds ? "随身物品候选（药剂、工具、日常物件，写入 body.gear）" : "随身物品参考（药剂、工具、日常物件）"}\n${groupedLines(belongingPicks)}`,
         ]
       : []),
     ...(weaponPicks.length > 0 ? [`武器参考\n${groupedLines(weaponPicks)}`] : []),

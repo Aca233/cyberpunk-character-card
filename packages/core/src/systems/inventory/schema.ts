@@ -23,7 +23,7 @@ export const ITEM_KIND_LABELS: Readonly<Record<ItemKind, string>> = {
   misc: "杂物",
 };
 
-/** 服装的 6 格，照原作；服装只影响身份和伪装，不提供护甲 */
+/** 服装的 6 格，照原作；可提供防护、隐匿、散热、携带与身份伪装效果 */
 export const ClothingSlotSchema = z.enum(["head", "face", "outer", "inner", "legs", "feet"]);
 export type ClothingSlot = z.infer<typeof ClothingSlotSchema>;
 
@@ -34,6 +34,66 @@ export const CLOTHING_SLOT_LABELS: Readonly<Record<ClothingSlot, string>> = {
   inner: "内衣",
   legs: "腿部",
   feet: "鞋子",
+};
+
+/** 服装/防具防护档位（定性物理事实，非 RPG 护甲数值） */
+export const ProtectionLevelSchema = z.enum(["light", "ballistic", "heavy"]);
+export type ProtectionLevel = z.infer<typeof ProtectionLevelSchema>;
+
+export const PROTECTION_LEVEL_LABELS: Readonly<Record<ProtectionLevel, string>> = {
+  light: "轻型防护",
+  ballistic: "防弹护甲",
+  heavy: "重型装甲",
+};
+
+export const PROTECTION_LEVEL_DESC: Readonly<Record<ProtectionLevel, string>> = {
+  light: "防割划、钝击与流弹碎屑",
+  ballistic: "可挡手枪/冲锋枪口径与破片",
+  heavy: "可抗步枪直射、霰弹与强冲击",
+};
+
+/** 护甲防护覆盖部位 */
+export const ProtectionCoverageSchema = z.enum(["head", "torso", "limbs"]);
+export type ProtectionCoverage = z.infer<typeof ProtectionCoverageSchema>;
+
+export const PROTECTION_COVERAGE_LABELS: Readonly<Record<ProtectionCoverage, string>> = {
+  head: "头部",
+  torso: "躯干",
+  limbs: "四肢",
+};
+
+export const ItemProtectionSchema = z.object({
+  level: ProtectionLevelSchema,
+  coverage: z.array(ProtectionCoverageSchema).min(1),
+});
+export type ItemProtection = z.infer<typeof ItemProtectionSchema>;
+
+/** 装备环境防护词条 */
+export const HazardKindSchema = z.enum(["toxic", "emp", "fire", "thermal", "flash"]);
+export type HazardKind = z.infer<typeof HazardKindSchema>;
+
+export const HAZARD_KIND_LABELS: Readonly<Record<HazardKind, string>> = {
+  toxic: "滤毒防尘",
+  emp: "抗电弧/EMP",
+  fire: "阻燃防火",
+  thermal: "恒温隔热",
+  flash: "防闪光致盲",
+};
+
+/** 装备潜行与身份隐匿词条 */
+export const StealthTagSchema = z.enum([
+  "quiet-step",
+  "face-conceal",
+  "low-profile",
+  "thermal-dampen",
+]);
+export type StealthTag = z.infer<typeof StealthTagSchema>;
+
+export const STEALTH_TAG_LABELS: Readonly<Record<StealthTag, string>> = {
+  "quiet-step": "静音落脚",
+  "face-conceal": "遮蔽面部",
+  "low-profile": "街头隐匿",
+  "thermal-dampen": "抑制热信号",
 };
 
 /** 服装定性风格标签（无护甲数值，用于门禁体面、阶层第一印象与街区融入） */
@@ -146,6 +206,18 @@ export const ItemDefSchema = z
     clothingStyle: ClothingStyleSchema.optional(),
     /** 服装是否自带宽大衣摆或暗袋，便于遮掩风衣档短枪/小型武器 */
     concealsCoatWeapon: z.boolean().optional(),
+    /** 穿着服装或随身携行具提供的携带上限加成（单位） */
+    carryBonus: z.number().int().min(1).max(8).optional(),
+    /** 护甲/防护装备的覆盖部位与防护档位 */
+    protection: ItemProtectionSchema.optional(),
+    /** 潜网服或冷却头环提供的黑客热负荷缓解档位（1–3） */
+    netThermalRelief: z.number().int().min(1).max(3).optional(),
+    /** 环境防护能力（滤毒、抗电弧、阻燃、隔热、防闪光） */
+    hazards: z.array(HazardKindSchema).optional(),
+    /** 潜行与隐匿特性（静音落脚、遮蔽面部、街头隐匿、抑制热信号） */
+    stealthTags: z.array(StealthTagSchema).optional(),
+    /** 制服/势力的外在伪装标识（如 NCPD、荒坂、创伤小组、帮派） */
+    factionDisguise: z.string().min(1).optional(),
     /** 改装件装在武器的哪个位置；改装件必须写 */
     modSlot: ModSlotSchema.optional(),
     /** 改装件能装到哪些类别的武器上；改装件必须写 */
@@ -154,6 +226,8 @@ export const ItemDefSchema = z
     modTypes: z.array(WeaponTypeSchema).min(1).optional(),
     /** 改装件或特殊武器对隐蔽度档位的修正（如长消音器或大型狙击镜 +1） */
     concealmentShift: z.number().int().min(-3).max(3).optional(),
+    /** 枪口改装件是否具备消音降噪能力（制退器/补偿器为 false，消音器为 true） */
+    silencer: z.boolean().optional(),
     /** 是否内置或加装了自主智能靶向握把/校准模块（可替代手部智能连接义体） */
     grantsSmartLink: z.boolean().optional(),
     /** 拿着它角色真的能做到什么；写给模型 */
@@ -172,6 +246,15 @@ export const ItemDefSchema = z
         playback: z.boolean(),
         analysis: z.array(z.enum(["visual", "audio", "thermal"])),
       })
+      .optional(),
+    /** 自建或扩展条目指定的内置官方图标 ID（如 weaponArt.unity / itemArt.maxdoc），可随存档与工坊共享 */
+    art: z.string().trim().min(1).max(80).optional(),
+    /** 本地上传的轻量图标缩略图（data:image/...，前端压缩至长边 ≤ 256px） */
+    customImage: z
+      .string()
+      .trim()
+      .max(180_000)
+      .regex(/^data:image\/(?:png|jpeg|webp|gif);base64,/i, "仅支持 PNG/JPEG/WebP/GIF 图片")
       .optional(),
     /** 官方文本库里的出处，例如 text:Gameplay-Weapons-Melee-DisplayName-Preset_Katana */
     source: z
@@ -254,6 +337,8 @@ export const ShopSchema = z.object({
   keeper: z.string().min(1).max(20),
   /** 已登记店主的人物卡 id。 */
   keeperNpc: z.string().min(1).optional(),
+  /** 门店明确归属的势力 id（店主未单独标势力时生效，用于势力折扣/涨价/拒售） */
+  faction: z.string().min(1).optional(),
   /** 可以代班经营的明确店员；无位置记录不等于已确认离场。 */
   serviceNpcs: z.array(z.string().min(1)).max(12).default([]),
   /** 地点表里的 id：玩家在这里时才能进店 */
@@ -421,6 +506,16 @@ export const PlacedItemSchema = z.object({
 });
 export type PlacedItem = z.infer<typeof PlacedItemSchema>;
 
+export const OUTFIT_PRESET_MAX = 4;
+
+/** 玩家保存的一键穿搭方案（记录 6 个服装槽位的衣物 ID） */
+export const OutfitPresetSchema = z.object({
+  id: z.string().min(1).max(40),
+  name: z.string().min(1).max(20),
+  slots: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
+});
+export type OutfitPreset = z.infer<typeof OutfitPresetSchema>;
+
 export const InventoryStateSchema = z.object({
   objects: z.record(z.string(), WorldObjectSchema).default({}),
   /** 明确留在家中、车里、现场或交由他人保管的物品 */
@@ -440,6 +535,8 @@ export const InventoryStateSchema = z.object({
   heldWeapons: z.array(z.string().min(1)).max(2).nullable().default(null),
   /** 身上穿着的服装：格子 → 物品 id */
   clothing: z.partialRecord(ClothingSlotSchema, z.string().min(1)).default({}),
+  /** 玩家保存的一键穿搭方案（最多 4 套） */
+  outfits: z.array(OutfitPresetSchema).max(OUTFIT_PRESET_MAX).default([]),
   /** 拆解得来的零件（保留作可选扩展，默认 0） */
   parts: z.number().int().min(0).default(0),
   /** 已通过商铺交易购入的快速破解程序芯片 id（由 hacking 监听 inventory.quickhack 同步至芯片库，防止重复购买） */
@@ -628,6 +725,13 @@ export const InventoryInternalSchemas = {
     weapon: z.string().min(1),
     mod: z.string().min(1),
   }),
+  /** 界面动作：保存、切换或删除一键穿搭方案 */
+  "inventory.outfit": z.strictObject({
+    type: z.literal("inventory.outfit"),
+    action: z.enum(["save", "apply", "delete"]),
+    id: z.string().min(1).max(40).optional(),
+    name: z.string().min(1).max(20).optional(),
+  }),
 };
 export type InventoryInternal = z.infer<
   (typeof InventoryInternalSchemas)[keyof typeof InventoryInternalSchemas]
@@ -690,7 +794,7 @@ export function defaultWeaponSlots(
   if (def.kind !== "weapon" || def.category === undefined) return [];
   if (def.modSlots !== undefined) return [...def.modSlots];
   if (MELEE.has(def.category)) return ["plugin"];
-  if (def.weaponType === "smart") return ["plugin"];
+  if (def.weaponType === "smart") return ["scope", "plugin"];
   if (def.weaponType === "tech") return ["scope", "plugin"];
   switch (def.category) {
     case "pistol":
@@ -698,10 +802,10 @@ export function defaultWeaponSlots(
     case "smg":
     case "assaultRifle":
     case "precisionRifle":
+    case "sniperRifle":
       return ["muzzle", "scope", "plugin"];
     case "shotgun":
     case "lmg":
-    case "sniperRifle":
       return ["scope", "plugin"];
     case "blade":
     case "blunt":
@@ -917,16 +1021,21 @@ export function effectiveConcealment(
   return CONCEALMENT_ORDER[rank] ?? base;
 }
 
-/** 计算武器当前声学特征：近战与装配消音枪口改装件的兼容武器为 silent，其余枪械为 loud */
+/** 计算武器当前声学特征：近战与装配消音器的兼容武器为 silent，制退器/补偿器及未消音枪械为 loud */
 export function effectiveWeaponNoise(
   def: Pick<ItemDef, "kind" | "category">,
   weaponState: Pick<WeaponInstanceState, "mods"> | undefined,
-  catalog: ReadonlyMap<string, Pick<ItemDef, "modSlot">>,
+  catalog: ReadonlyMap<string, Pick<ItemDef, "modSlot" | "silencer" | "name">>,
 ): WeaponNoise {
   if (def.kind !== "weapon" || def.category === undefined) return "loud";
   if (MELEE.has(def.category)) return "silent";
   const muzzleId = weaponState?.mods.muzzle;
-  if (muzzleId !== undefined && catalog.get(muzzleId)?.modSlot === "muzzle") {
+  const muzzleDef = muzzleId !== undefined ? catalog.get(muzzleId) : undefined;
+  if (
+    muzzleDef?.modSlot === "muzzle" &&
+    (muzzleDef.silencer === true ||
+      (muzzleDef.silencer === undefined && /消音|silencer/i.test(muzzleDef.name)))
+  ) {
     return "silent";
   }
   return "loud";
@@ -946,9 +1055,129 @@ export function weaponGrantsSmartLink(
   return false;
 }
 
+const PROTECTION_RANK: Readonly<Record<ProtectionLevel, number>> = {
+  light: 1,
+  ballistic: 2,
+  heavy: 3,
+};
+
+/** 列出单件服装或功能装备的结构化效果标签（供物品栏详情卡与状态行共用） */
+export function itemEffectTags(def: ItemDef): string[] {
+  const tags: string[] = [];
+  if (def.protection) {
+    const cov = def.protection.coverage.map((c) => PROTECTION_COVERAGE_LABELS[c]).join("/");
+    tags.push(`${cov}${PROTECTION_LEVEL_LABELS[def.protection.level]}`);
+  }
+  if (def.carryBonus) tags.push(`携带上限 +${def.carryBonus}`);
+  if (def.netThermalRelief) tags.push(`潜网散热 +${def.netThermalRelief}`);
+  if (def.concealsCoatWeapon) tags.push("可掩短枪");
+  for (const h of def.hazards ?? []) tags.push(HAZARD_KIND_LABELS[h]);
+  for (const s of def.stealthTags ?? []) tags.push(STEALTH_TAG_LABELS[s]);
+  if (def.factionDisguise) tags.push(`${def.factionDisguise}伪装`);
+  return tags;
+}
+
+export interface GearEffectsSummary {
+  readonly carryBonus: number;
+  readonly protection: Readonly<Partial<Record<ProtectionCoverage, ProtectionLevel>>>;
+  readonly netThermalRelief: number;
+  readonly hazards: readonly HazardKind[];
+  readonly stealthTags: readonly StealthTag[];
+  readonly factionDisguises: readonly string[];
+  readonly concealsCoatWeapon: boolean;
+  readonly badges: readonly string[];
+}
+
+/** 汇总当前穿着服装与随身携行/功能装备实际生效的效果（同类携行包取最高加成，不靠囤积叠加） */
+export function summarizeGearEffects(
+  state: Pick<InventoryState, "backpack" | "objects"> & Partial<Pick<InventoryState, "clothing">>,
+  catalog: ReadonlyMap<string, ItemDef>,
+): GearEffectsSummary {
+  const wornDefs: ItemDef[] = [];
+  for (const id of Object.values(state.clothing ?? {})) {
+    if (!id) continue;
+    const def = state.objects[id]?.definition ?? catalog.get(id);
+    if (def) wornDefs.push(def);
+  }
+  const carriedNonClothing: ItemDef[] = [];
+  const seenCarried = new Set<string>();
+  for (const [id, count] of Object.entries(state.backpack)) {
+    if (count <= 0 || seenCarried.has(id)) continue;
+    seenCarried.add(id);
+    const def = state.objects[id]?.definition ?? catalog.get(id);
+    if (def && def.kind !== "clothing") carriedNonClothing.push(def);
+  }
+
+  let wornCarryBonus = 0;
+  let bestRigCarryBonus = 0;
+  let netThermalRelief = 0;
+  let concealsCoatWeapon = false;
+  const protection: Partial<Record<ProtectionCoverage, ProtectionLevel>> = {};
+  const hazards = new Set<HazardKind>();
+  const stealthTags = new Set<StealthTag>();
+  const disguises = new Set<string>();
+
+  const mergeProtection = (p: ItemProtection) => {
+    for (const part of p.coverage) {
+      const prev = protection[part];
+      if (!prev || PROTECTION_RANK[p.level] > PROTECTION_RANK[prev]) {
+        protection[part] = p.level;
+      }
+    }
+  };
+
+  for (const def of wornDefs) {
+    if (def.carryBonus) wornCarryBonus += def.carryBonus;
+    if (def.protection) mergeProtection(def.protection);
+    if (def.netThermalRelief) netThermalRelief += def.netThermalRelief;
+    if (def.concealsCoatWeapon) concealsCoatWeapon = true;
+    for (const h of def.hazards ?? []) hazards.add(h);
+    for (const s of def.stealthTags ?? []) stealthTags.add(s);
+    if (def.factionDisguise) disguises.add(def.factionDisguise);
+  }
+
+  for (const def of carriedNonClothing) {
+    if (def.carryBonus && def.carryBonus > bestRigCarryBonus) {
+      bestRigCarryBonus = def.carryBonus;
+    }
+    if (def.netThermalRelief) netThermalRelief += def.netThermalRelief;
+    for (const h of def.hazards ?? []) hazards.add(h);
+    for (const s of def.stealthTags ?? []) stealthTags.add(s);
+  }
+
+  const carryBonus = Math.min(8, wornCarryBonus + bestRigCarryBonus);
+  const clampedThermal = Math.min(3, netThermalRelief);
+  const hazardList = [...hazards];
+  const stealthList = [...stealthTags];
+  const disguiseList = [...disguises];
+
+  const badges: string[] = [];
+  for (const part of ["torso", "head", "limbs"] as const) {
+    const level = protection[part];
+    if (level) badges.push(`${PROTECTION_COVERAGE_LABELS[part]}${PROTECTION_LEVEL_LABELS[level]}`);
+  }
+  if (carryBonus > 0) badges.push(`携带 +${carryBonus}`);
+  if (clampedThermal > 0) badges.push(`潜网散热 +${clampedThermal}`);
+  if (concealsCoatWeapon) badges.push("可掩短枪");
+  for (const h of hazardList) badges.push(HAZARD_KIND_LABELS[h]);
+  for (const s of stealthList) badges.push(STEALTH_TAG_LABELS[s]);
+  for (const d of disguiseList) badges.push(`${d}伪装`);
+
+  return {
+    carryBonus,
+    protection,
+    netThermalRelief: clampedThermal,
+    hazards: hazardList,
+    stealthTags: stealthList,
+    factionDisguises: disguiseList,
+    concealsCoatWeapon,
+    badges,
+  };
+}
+
 /** 计算随身携带隐蔽度与大件软超重状态 */
 export function loadoutSummary(
-  state: Pick<InventoryState, "backpack" | "objects">,
+  state: Pick<InventoryState, "backpack" | "objects"> & Partial<Pick<InventoryState, "clothing">>,
   catalog: ReadonlyMap<string, ItemDef>,
   cyberware?: {
     readonly installed?: readonly {
@@ -988,8 +1217,9 @@ export function loadoutSummary(
       bulkyItems.push(count > 1 ? `${def.name}×${count}` : def.name);
     }
   }
+  const gearCarryBonus = summarizeGearEffects(state, catalog).carryBonus;
   const bulkyMax = bulkyLimit(cyberware);
-  const carryMax = bulkyMax * 4 + 2;
+  const carryMax = bulkyMax * 4 + 2 + gearCarryBonus;
   const carryLevel =
     carryUnits > carryMax + 4
       ? ("overloaded" as const)

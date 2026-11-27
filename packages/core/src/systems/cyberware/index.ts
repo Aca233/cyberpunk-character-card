@@ -57,6 +57,7 @@ export const cyberware = defineSystem<
     "inventory",
     "health",
     "npc",
+    "factions",
     "commerce",
     "logistics",
     "city",

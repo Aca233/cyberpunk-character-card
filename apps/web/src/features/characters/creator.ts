@@ -7,8 +7,10 @@ import {
   type CharacterCard,
   CharacterCardSchema,
   cyberwareRules,
+  inventoryRules,
   type Loadout,
   loadoutText,
+  npcRules,
   PAST_MAX,
   ProseBlockSchema,
   pickLoadouts,
@@ -21,6 +23,7 @@ import {
   WorkshopPackSchema,
 } from "@cp/core";
 import type { BoardData } from "../../api/client";
+import { registerCustomCyberwareArt, registerCustomItemArt } from "../story/art";
 
 /**
  * 2077 赛博档案工作台核心纯逻辑 + 创意工坊底座（Workshop-Ready Foundation）
@@ -407,12 +410,14 @@ export function boardLoadProfile(
   return cyberwareRules.cyberwareLoadProfile(probes);
 }
 
-// ———— 创意工坊底座：本地自定义模块池 & 本地自创义体池 & 目录合并管线 ————
+// ———— 创意工坊底座：本地自定义模块池 & 本地自创义体池 & 本地自创武器/物品池 & 目录合并管线 ————
 
 const LOCAL_CUSTOM_MODULES_KEY = "cp.workshop.localModules";
 export const LOCAL_MODULES_EVENT = "cp.workshop.localModules";
 const LOCAL_CUSTOM_CYBERWARE_KEY = "cp.workshop.localCyberware";
 export const LOCAL_CYBERWARE_EVENT = "cp.workshop.localCyberware";
+const LOCAL_CUSTOM_ITEMS_KEY = "cp.workshop.localItems";
+export const LOCAL_ITEMS_EVENT = "cp.workshop.localItems";
 
 function emitLocalModulesEvent(): void {
   if (typeof window !== "undefined") {
@@ -426,15 +431,70 @@ function emitLocalCyberwareEvent(): void {
   }
 }
 
+function emitLocalItemsEvent(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(LOCAL_ITEMS_EVENT));
+  }
+}
+
+export function loadLocalCustomItems(): inventoryRules.ItemDef[] {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(LOCAL_CUSTOM_ITEMS_KEY) ?? "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((item) => {
+      const parsed = inventoryRules.ItemDefSchema.safeParse(item);
+      if (!parsed.success) return [];
+      registerCustomItemArt(parsed.data);
+      return [parsed.data];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalCustomItem(item: inventoryRules.ItemDef): inventoryRules.ItemDef[] {
+  const existing = loadLocalCustomItems();
+  const parsed = inventoryRules.ItemDefSchema.parse(item);
+  registerCustomItemArt(parsed);
+  const index = existing.findIndex((entry) => entry.id === parsed.id);
+  const next =
+    index >= 0
+      ? existing.map((entry, i) => (i === index ? parsed : entry))
+      : [parsed, ...existing].slice(0, 120);
+  try {
+    localStorage.setItem(LOCAL_CUSTOM_ITEMS_KEY, JSON.stringify(next));
+    emitLocalItemsEvent();
+  } catch {
+    // 隐私模式或空间已满时忽略
+  }
+  return next;
+}
+
+export function removeLocalCustomItem(id: string): inventoryRules.ItemDef[] {
+  const next = loadLocalCustomItems().filter((entry) => entry.id !== id);
+  try {
+    localStorage.setItem(LOCAL_CUSTOM_ITEMS_KEY, JSON.stringify(next));
+    emitLocalItemsEvent();
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
 export function loadLocalCustomCyberware(): StartCyberware[] {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(LOCAL_CUSTOM_CYBERWARE_KEY) ?? "[]");
     if (!Array.isArray(raw)) return [];
     return raw.flatMap((item) => {
       const parsed = StartCyberwareSchema.safeParse(item);
-      return parsed.success && parsed.data.slot
-        ? [{ ...parsed.data, custom: true, packId: parsed.data.packId ?? "local" }]
-        : [];
+      if (!parsed.success || !parsed.data.slot) return [];
+      const resolved: StartCyberware = {
+        ...parsed.data,
+        custom: true,
+        packId: parsed.data.packId ?? "local",
+      };
+      registerCustomCyberwareArt(resolved);
+      return [resolved];
     });
   } catch {
     return [];
@@ -448,6 +508,7 @@ export function saveLocalCustomCyberware(item: StartCyberware): StartCyberware[]
     custom: true,
     packId: item.packId ?? "local",
   };
+  registerCustomCyberwareArt(normalized);
   const index = existing.findIndex((c) => c.id === normalized.id);
   const next =
     index >= 0
@@ -518,12 +579,116 @@ export function removeLocalCustomModule(id: string): BoardModule[] {
   return next;
 }
 
+const LOCAL_CUSTOM_NPCS_KEY = "cp.workshop.localNpcs";
+const LOCAL_NPC_OVERRIDES_KEY = "cp.workshop.localNpcOverrides";
+const LOCAL_NPCS_EVENT = "cp:local-npcs-changed";
+
+function emitLocalNpcsEvent(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(LOCAL_NPCS_EVENT));
+  }
+}
+
+export function subscribeLocalCustomNpcs(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(LOCAL_NPCS_EVENT, listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    window.removeEventListener(LOCAL_NPCS_EVENT, listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+export function loadLocalCustomNpcs(): npcRules.NpcCard[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CUSTOM_NPCS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const out: npcRules.NpcCard[] = [];
+    for (const entry of parsed) {
+      const result = npcRules.NpcCardSchema.safeParse(entry);
+      if (result.success) out.push(result.data);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalCustomNpc(npc: npcRules.NpcCard): npcRules.NpcCard[] {
+  const parsed = npcRules.NpcCardSchema.parse({ ...npc, canon: false });
+  const existing = loadLocalCustomNpcs().filter((item) => item.id !== parsed.id);
+  const next = [parsed, ...existing];
+  try {
+    localStorage.setItem(LOCAL_CUSTOM_NPCS_KEY, JSON.stringify(next));
+    emitLocalNpcsEvent();
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
+export function removeLocalCustomNpc(id: string): npcRules.NpcCard[] {
+  const next = loadLocalCustomNpcs().filter((item) => item.id !== id);
+  try {
+    localStorage.setItem(LOCAL_CUSTOM_NPCS_KEY, JSON.stringify(next));
+    emitLocalNpcsEvent();
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
+/** 本地持久化的原作/世界 NPC 改写档案（在角色档案库直接编辑原作 NPC 时保存，创建新存档或建档时自动生效） */
+export function loadLocalNpcOverrides(): npcRules.NpcCard[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_NPC_OVERRIDES_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const out: npcRules.NpcCard[] = [];
+    for (const entry of parsed) {
+      const result = npcRules.NpcCardSchema.safeParse(entry);
+      if (result.success) out.push(result.data);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalNpcOverride(npc: npcRules.NpcCard): npcRules.NpcCard[] {
+  const parsed = npcRules.NpcCardSchema.parse(npc);
+  const existing = loadLocalNpcOverrides().filter((item) => item.id !== parsed.id);
+  const next = [parsed, ...existing];
+  try {
+    localStorage.setItem(LOCAL_NPC_OVERRIDES_KEY, JSON.stringify(next));
+    emitLocalNpcsEvent();
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
+export function removeLocalNpcOverride(id: string): npcRules.NpcCard[] {
+  const next = loadLocalNpcOverrides().filter((item) => item.id !== id);
+  try {
+    localStorage.setItem(LOCAL_NPC_OVERRIDES_KEY, JSON.stringify(next));
+    emitLocalNpcsEvent();
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
 /** 将官方目录与本地自定义池 / 创意工坊模组包按 id 去重合并 */
 export function mergeCreatorCatalog(
   base: BoardData,
   extraModules: readonly BoardModule[],
   packs: readonly WorkshopPack[] = [],
   extraCyberware: readonly StartCyberware[] = [],
+  extraItems: readonly inventoryRules.ItemDef[] = [],
 ): BoardData {
   const seen = new Set(base.modules.map((m) => m.id));
   const mergedModules: BoardModule[] = [...base.modules];
@@ -536,9 +701,14 @@ export function mergeCreatorCatalog(
   }
   const seenChrome = new Set(base.cyberware.map((c) => c.id));
   const mergedCyberware: BoardData["cyberware"][number][] = [...base.cyberware];
+  const baseNpcChrome = base.npcCyberware ?? base.cyberware;
+  const seenNpcChrome = new Set(baseNpcChrome.map((c) => c.id));
+  const mergedNpcCyberware: BoardData["cyberware"][number][] = [...baseNpcChrome];
+  for (const c of baseNpcChrome) {
+    if (c.custom || c.art || c.customImage) registerCustomCyberwareArt(c);
+  }
   for (const item of extraCyberware) {
-    if (!item.slot || seenChrome.has(item.id)) continue;
-    seenChrome.add(item.id);
+    if (!item.slot) continue;
     const cat =
       item.category ??
       cyberwareRules.cyberwareCategoryOf({
@@ -550,7 +720,14 @@ export function mergeCreatorCatalog(
         ...(item.deckProfile ? { deckProfile: item.deckProfile } : {}),
         ...(item.exclusiveGroup ? { exclusiveGroup: item.exclusiveGroup } : {}),
       });
-    mergedCyberware.unshift({
+    registerCustomCyberwareArt({
+      id: item.id,
+      category: cat,
+      slot: item.slot,
+      art: item.art,
+      customImage: item.customImage,
+    });
+    const offer: BoardData["cyberware"][number] = {
       id: item.id,
       name: item.name,
       slot: item.slot,
@@ -570,15 +747,93 @@ export function mergeCreatorCatalog(
       ...(item.smartLink ? { smartLink: true } : {}),
       ...(item.carryBonus !== undefined ? { carryBonus: item.carryBonus } : {}),
       ...(item.defenses ? { defenses: item.defenses } : {}),
+      ...(item.art ? { art: item.art } : {}),
+      ...(item.customImage ? { customImage: item.customImage } : {}),
       custom: true,
       packId: item.packId ?? "local",
       ability: item.ability || item.summary || "自定义义体模块",
-    });
+    };
+    if (!seenChrome.has(item.id)) {
+      seenChrome.add(item.id);
+      mergedCyberware.unshift(offer);
+    }
+    if (!seenNpcChrome.has(item.id)) {
+      seenNpcChrome.add(item.id);
+      mergedNpcCyberware.unshift(offer);
+    }
+  }
+  const mergedWeapons = [...(base.weapons ?? [])];
+  const mergedItems = [...(base.items ?? [])];
+  for (const w of mergedWeapons) {
+    if (w.custom || w.art || w.customImage) {
+      registerCustomItemArt({
+        id: w.id,
+        kind: "weapon",
+        category: w.category,
+        art: w.art,
+        customImage: w.customImage,
+      });
+    }
+  }
+  for (const it of mergedItems) {
+    if (it.custom || it.art || it.customImage) registerCustomItemArt(it);
+  }
+  const seenWeapons = new Set(mergedWeapons.map((w) => w.id));
+  const seenItems = new Set(mergedItems.map((i) => i.id));
+  const mergedNames: Record<string, string> = { ...(base.names ?? {}) };
+  for (const def of extraItems) {
+    registerCustomItemArt(def);
+    mergedNames[def.id] = def.name;
+    if (def.kind === "weapon") {
+      if (seenWeapons.has(def.id)) continue;
+      seenWeapons.add(def.id);
+      mergedWeapons.unshift({
+        id: def.id,
+        name: def.name,
+        ...(def.category ? { category: def.category } : {}),
+        ...(def.weaponType ? { weaponType: def.weaponType } : {}),
+        rarity: def.rarity ?? "rare",
+        ...(def.iconic ? { iconic: true } : {}),
+        ...(def.price !== undefined ? { price: def.price } : {}),
+        ...(def.art ? { art: def.art } : {}),
+        ...(def.customImage ? { customImage: def.customImage } : {}),
+        ability: def.ability ?? "",
+        custom: true,
+        packId: "local",
+      });
+    } else {
+      if (seenItems.has(def.id)) continue;
+      seenItems.add(def.id);
+      mergedItems.unshift({
+        id: def.id,
+        name: def.name,
+        kind: def.kind,
+        rarity: def.rarity ?? "common",
+        ...(def.iconic ? { iconic: true } : {}),
+        ...(def.price !== undefined ? { price: def.price } : {}),
+        ...(def.charges !== undefined ? { charges: def.charges } : {}),
+        ...(def.healPercent !== undefined ? { healPercent: def.healPercent } : {}),
+        ...(def.suppressant ? { suppressant: true } : {}),
+        ...(def.clothingSlot ? { clothingSlot: def.clothingSlot } : {}),
+        ...(def.clothingStyle ? { clothingStyle: def.clothingStyle } : {}),
+        ...(def.modSlot ? { modSlot: def.modSlot } : {}),
+        ...(def.modFits ? { modFits: def.modFits } : {}),
+        ...(def.art ? { art: def.art } : {}),
+        ...(def.customImage ? { customImage: def.customImage } : {}),
+        ability: def.ability ?? "",
+        custom: true,
+        packId: "local",
+      });
+    }
   }
   return {
     ...base,
     modules: mergedModules,
     cyberware: mergedCyberware,
+    npcCyberware: mergedNpcCyberware,
+    weapons: mergedWeapons,
+    items: mergedItems,
+    names: mergedNames,
   };
 }
 
@@ -619,17 +874,23 @@ export function exportLocalWorkshopPack(
             ...(c.smartLink ? { smartLink: true } : {}),
             ...(c.carryBonus !== undefined ? { carryBonus: c.carryBonus } : {}),
             ...(c.defenses ? { defenses: c.defenses } : {}),
+            ...(c.art ? { art: c.art } : {}),
           },
         ]
       : [],
   );
+  const localNpcs = loadLocalCustomNpcs();
   return WorkshopPackSchema.parse({
     id: `wk-local-${Date.now().toString(36)}`,
     title,
     author,
-    description: "包含自定义出身背景、角色特质、负面缺陷与自创义体的创意工坊扩展包",
+    description:
+      "包含自定义出身背景、角色特质、负面缺陷、自创义体、自创武器/物品与自建人物的创意工坊扩展包",
     modules: loadLocalCustomModules(),
     cyberware: customChrome,
+    items: loadLocalCustomItems(),
+    npcs: localNpcs,
+    seedNpcs: localNpcs.map((n) => n.id),
   });
 }
 
@@ -745,6 +1006,7 @@ function issueTarget(text: string): CheckTarget {
   if (
     text.includes("行装") ||
     text.includes("武器") ||
+    text.includes("物品") ||
     text.includes("载具") ||
     text.includes("落脚") ||
     text.includes("地点")
@@ -833,7 +1095,7 @@ export const CREATOR_STEPS: readonly CreatorStepMeta[] = [
     code: "03",
     label: "义体与行装",
     title: "义体拓扑装配、神经耐受与开局行装",
-    lead: "在十个身体部位装配义体并调控生理耐受，同时敲定启动资金、随身武器与专属座驾。",
+    lead: "在身体部位装配义体并调控神经负荷，同时自由敲定启动资金、随身武器、随身物品与专属座驾。",
   },
   {
     id: "connections",
@@ -897,6 +1159,7 @@ export function stepProgress(
     board.kit.cashTier !== "standard" ||
     board.kit.customEddies !== null ||
     board.kit.weapons.length > 0 ||
+    (board.kit.items?.length ?? 0) > 0 ||
     board.kit.vehicle !== null;
 
   const peopleCount = board.acquaintances.length;

@@ -241,6 +241,20 @@ export const JudgeDocSchema = z.object({
     .describe(
       "在场的对手或防备你的人（敌人、安保、黑客、要应付或试探的人）这一轮打算干什么、会怎么反制玩家，一句话，只给写正文的一步看；没有对手写 null",
     ),
+  npcPulse: z
+    .string()
+    .max(220)
+    .nullable()
+    .optional()
+    .describe(
+      "幕后导演便笺（只给写正文一步看）：一两句话点出本轮哪位在场人物的哪条诉求、底线、人情债、旧事或隐藏秘密被玩家触动及潜台词算盘，帮助正文写活人物但不直接说破秘密；无在场人物或普通赶路写 null",
+    ),
+  newNpcLikely: z
+    .boolean()
+    .optional()
+    .describe(
+      "本轮是否可能引入尚未建卡的新人物（如搭讪陌生人、新店员/保安/线人、闯入陌生据点）或首次定型「还没定」的旧识；仅老熟人对话、独处、常规交易或既有敌人交火写 false",
+    ),
   sandevistan: z
     .boolean()
     .optional()
@@ -257,6 +271,8 @@ const JudgeShapeSchema = z.object({
   buy: z.unknown().optional(),
   recall: z.array(z.unknown()).optional().catch(undefined),
   foes: z.string().nullable().optional().catch(undefined),
+  npcPulse: z.string().nullable().optional().catch(undefined),
+  newNpcLikely: z.boolean().optional().catch(undefined),
   sandevistan: z.boolean().optional().catch(undefined),
 });
 export type JudgeShape = z.infer<typeof JudgeShapeSchema>;

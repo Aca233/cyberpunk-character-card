@@ -1,11 +1,7 @@
 import {
   type Board,
   type BoardModule,
-  CASH_TIER_INFO,
-  CASH_TIERS,
-  type CashTier,
   type CharacterCard,
-  CUSTOM_EDDIES_MAX,
   cyberwareRules,
   economyRules,
   FLAW_MAX,
@@ -24,10 +20,12 @@ import { itemArtOf } from "../story/art";
 import { CyberItemCell, type CyberSlot } from "../story/CyberDoll";
 import { vehicleArtOf } from "../story/vehicle-art";
 import { CustomCyberwareForm } from "./CustomCyberwareForm";
+import { CustomItemForm } from "./CustomItemForm";
 import { CustomModuleForm } from "./CustomModuleForm";
 import styles from "./characters.module.css";
 import {
   inherentCyberware,
+  loadLocalCustomItems,
   ORIGIN_ECOSYSTEM_LABELS,
   type OriginEcosystem,
   originDefaultLoadout,
@@ -39,6 +37,7 @@ import {
   pickedLoadouts,
   pruneKitForOrigin,
   removeLocalCustomCyberware,
+  removeLocalCustomItem,
   removeLocalCustomModule,
   rollPasts,
   rollTraits,
@@ -78,6 +77,8 @@ type CyberwareShelfProps = Omit<PickerProps, "change"> &
     readonly armTarget?: cyberwareRules.ArmSide;
     readonly onArmTargetChange?: (side: cyberwareRules.ArmSide) => void;
     readonly onCategoryChange?: (category: cyberwareRules.CyberwareCategoryId) => void;
+    /** 可选总装入件数上限（用于 NPC 人物卡上限校验） */
+    readonly maxCount?: number;
   };
 
 const isWorkshopEntry = (packId?: string): boolean => Boolean(packId && packId !== "local");
@@ -819,13 +820,16 @@ const CLASS_LABELS: Readonly<Record<string, string>> = {
   moto: "摩托",
 };
 
-function cashTierDeltaText(tier: CashTier): string {
-  if (tier === "broke") return "0 €";
-  if (tier === "standard") return "出身基准";
-  return `+${CASH_TIER_INFO[tier].eddiesDelta.toLocaleString("en-US")} €`;
-}
-
-type WeaponGroup = "all" | "pistol" | "smg" | "rifle" | "shotgun" | "sniper" | "melee";
+type WeaponGroup =
+  | "all"
+  | "pistol"
+  | "smg"
+  | "rifle"
+  | "shotgun"
+  | "sniper"
+  | "melee"
+  | "iconic"
+  | "custom";
 const WEAPON_GROUPS: readonly {
   readonly id: WeaponGroup;
   readonly label: string;
@@ -838,6 +842,28 @@ const WEAPON_GROUPS: readonly {
   { id: "shotgun", label: "霰弹枪", cats: ["shotgun"] },
   { id: "sniper", label: "狙击/精准", cats: ["sniperRifle", "precisionRifle"] },
   { id: "melee", label: "近战", cats: ["blade", "blunt"] },
+  { id: "iconic", label: "不朽" },
+  { id: "custom", label: "自建与工坊" },
+];
+
+type ItemGroup =
+  | "all"
+  | "healing"
+  | "grenade"
+  | "clothing"
+  | "mod"
+  | "consumable"
+  | "misc"
+  | "custom";
+const ITEM_GROUPS: readonly { readonly id: ItemGroup; readonly label: string }[] = [
+  { id: "all", label: "全部" },
+  { id: "healing", label: "治疗品" },
+  { id: "grenade", label: "手雷" },
+  { id: "clothing", label: "服装" },
+  { id: "mod", label: "改装件" },
+  { id: "consumable", label: "消耗品" },
+  { id: "misc", label: "杂物" },
+  { id: "custom", label: "自建与工坊" },
 ];
 
 type VehicleGroup = "all" | "daily" | "sport" | "offroad" | "moto";
@@ -853,31 +879,179 @@ const VEHICLE_GROUPS: readonly {
   { id: "moto", label: "摩托", classes: ["moto"] },
 ];
 
-export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps) {
+type ItemEditorState =
+  | null
+  | { readonly mode: "create"; readonly kind: inventoryRules.ItemKind }
+  | { readonly mode: "edit"; readonly item: inventoryRules.ItemDef };
+
+export type LoadoutSection = "weapons" | "items" | "kit" | "all";
+
+export function LoadoutPicker({
+  card,
+  board,
+  data,
+  commit,
+  section = "all",
+  onSwitchSection,
+  maxTotalGear,
+  singleItemCount = false,
+}: LoadoutPickerProps & {
+  readonly section?: LoadoutSection;
+  readonly onSwitchSection?: (next: Exclude<LoadoutSection, "all">) => void;
+  /** 可选随身装备总件数上限（武器 + 物品合计，用于 NPC 人物卡） */
+  readonly maxTotalGear?: number;
+  /** 是否每件随身物品固定为单选（数量恒为 1，隐藏 +/- 计数，用于 NPC 人物卡） */
+  readonly singleItemCount?: boolean;
+}) {
+  const showWeapons = section === "all" || section === "weapons";
+  const showItems = section === "all" || section === "items";
+  const showKit = section === "all" || section === "kit";
   const [hoverWeaponId, setHoverWeaponId] = useState<string | null>(null);
   const [weaponGroup, setWeaponGroup] = useState<WeaponGroup>("all");
   const [weaponQuery, setWeaponQuery] = useState("");
+  const [hoverItemId, setHoverItemId] = useState<string | null>(null);
+  const [itemGroup, setItemGroup] = useState<ItemGroup>("all");
+  const [itemQuery, setItemQuery] = useState("");
+  const [itemEditor, setItemEditor] = useState<ItemEditorState>(null);
   const [vehicleGroup, setVehicleGroup] = useState<VehicleGroup>("all");
   const base = originDefaultLoadout(card, data);
   const kit = board.kit;
+  const kitItems = kit.items ?? [];
+  const kitCustomItems = kit.customItems ?? [];
   const ownedGear = new Set(pickedLoadouts(card, data).flatMap((l) => l.gear.map((g) => g.id)));
-  const setKit = (patch: Partial<Board["kit"]>) => commit({ ...board, kit: { ...kit, ...patch } });
+
+  const localCustomDefs = new Map<string, inventoryRules.ItemDef>();
+  for (const def of loadLocalCustomItems()) localCustomDefs.set(def.id, def);
+  for (const def of kitCustomItems) {
+    if (!localCustomDefs.has(def.id)) localCustomDefs.set(def.id, def);
+  }
+
+  const syncKit = (patch: Partial<Board["kit"]>) => {
+    const nextWeapons = patch.weapons ?? kit.weapons;
+    const nextItems = patch.items ?? kitItems;
+    const baseCustom = patch.customItems ?? kitCustomItems;
+    const activeIds = new Set([...nextWeapons, ...nextItems.map((entry) => entry.id)]);
+    const customMap = new Map<string, inventoryRules.ItemDef>();
+    for (const def of baseCustom) {
+      if (activeIds.has(def.id)) customMap.set(def.id, def);
+    }
+    for (const id of activeIds) {
+      if (!customMap.has(id)) {
+        const localDef = localCustomDefs.get(id);
+        if (localDef) customMap.set(id, localDef);
+      }
+    }
+    commit({
+      ...board,
+      kit: {
+        ...kit,
+        ...patch,
+        weapons: nextWeapons,
+        items: nextItems,
+        customItems: [...customMap.values()],
+      },
+    });
+  };
+  const setKit = syncKit;
+
+  const totalGearCount = kit.weapons.length + kitItems.length;
+  const gearCapReached = maxTotalGear !== undefined && totalGearCount >= maxTotalGear;
+
+  const toggleWeapon = (weaponId: string) => {
+    const on = kit.weapons.includes(weaponId);
+    if (!on && gearCapReached) return;
+    syncKit({
+      weapons: on ? kit.weapons.filter((x) => x !== weaponId) : [...kit.weapons, weaponId],
+    });
+  };
+
+  const setItemCount = (itemId: string, nextCount: number) => {
+    const maxPerItem = singleItemCount ? 1 : 20;
+    const clamped = Math.max(0, Math.min(maxPerItem, Math.floor(nextCount)));
+    if (clamped <= 0) {
+      syncKit({ items: kitItems.filter((entry) => entry.id !== itemId) });
+      return;
+    }
+    const exists = kitItems.some((entry) => entry.id === itemId);
+    if (!exists && gearCapReached) return;
+    syncKit({
+      items: exists
+        ? kitItems.map((entry) => (entry.id === itemId ? { ...entry, count: clamped } : entry))
+        : [...kitItems, { id: itemId, count: clamped }],
+    });
+  };
+
+  const handleCustomItemAccepted = (def: inventoryRules.ItemDef, equipToKit: boolean) => {
+    const updatedCustom = [...kitCustomItems.filter((entry) => entry.id !== def.id), def];
+    if (equipToKit) {
+      if (def.kind === "weapon") {
+        const nextWeapons = kit.weapons.includes(def.id) ? kit.weapons : [...kit.weapons, def.id];
+        syncKit({
+          weapons: nextWeapons,
+          items: kitItems.filter((entry) => entry.id !== def.id),
+          customItems: updatedCustom,
+        });
+      } else {
+        const exists = kitItems.some((entry) => entry.id === def.id);
+        syncKit({
+          weapons: kit.weapons.filter((id) => id !== def.id),
+          items: exists ? kitItems : [...kitItems, { id: def.id, count: 1 }],
+          customItems: updatedCustom,
+        });
+      }
+    } else if (kit.weapons.includes(def.id) || kitItems.some((entry) => entry.id === def.id)) {
+      // 仅更新已带在行装里的自建定义快照
+      syncKit({ customItems: updatedCustom });
+    }
+    setItemEditor(null);
+    const targetSection = def.kind === "weapon" ? "weapons" : "items";
+    if (section !== "all" && section !== targetSection) {
+      onSwitchSection?.(targetSection);
+    }
+  };
+
+  const handleDeleteLocalItem = (id: string) => {
+    removeLocalCustomItem(id);
+    if (itemEditor?.mode === "edit" && itemEditor.item.id === id) setItemEditor(null);
+    if (kit.weapons.includes(id) || kitItems.some((entry) => entry.id === id)) {
+      syncKit({
+        weapons: kit.weapons.filter((w) => w !== id),
+        items: kitItems.filter((entry) => entry.id !== id),
+        customItems: kitCustomItems.filter((entry) => entry.id !== id),
+      });
+    }
+  };
+
   const weapons = data.weapons ?? [];
   const activeWeaponCats = WEAPON_GROUPS.find((g) => g.id === weaponGroup)?.cats;
   const normalizedWeaponQuery = weaponQuery.trim().toLowerCase();
   const shownWeapons = weapons.filter((w) => {
+    if (weaponGroup === "iconic" && !w.iconic) return false;
+    if (weaponGroup === "custom" && !w.custom && !isWorkshopEntry(w.packId)) return false;
     if (activeWeaponCats && (w.category === undefined || !activeWeaponCats.includes(w.category))) {
       return false;
     }
     if (!normalizedWeaponQuery) return true;
     return `${w.name} ${w.ability}`.toLowerCase().includes(normalizedWeaponQuery);
   });
+
+  const items = data.items ?? [];
+  const normalizedItemQuery = itemQuery.trim().toLowerCase();
+  const shownItems = items.filter((item) => {
+    if (itemGroup === "custom") {
+      if (!item.custom && !isWorkshopEntry(item.packId)) return false;
+    } else if (itemGroup !== "all" && item.kind !== itemGroup) {
+      return false;
+    }
+    if (!normalizedItemQuery) return true;
+    return `${item.name} ${item.ability}`.toLowerCase().includes(normalizedItemQuery);
+  });
+
   const vehicles = data.vehicles ?? [];
   const activeVehicleClasses = VEHICLE_GROUPS.find((g) => g.id === vehicleGroup)?.classes;
   const shownVehicles = activeVehicleClasses
     ? vehicles.filter((v) => activeVehicleClasses.includes(v.class))
     : vehicles;
-  const customVehicle = kit.vehicle ? vehicles.find((v) => v.id === kit.vehicle) : undefined;
   const previewWeapon =
     weapons.find((w) => w.id === hoverWeaponId) ??
     weapons.find((w) => kit.weapons.includes(w.id)) ??
@@ -888,106 +1062,96 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
           previewWeapon.category as keyof typeof inventoryRules.WEAPON_CATEGORY_LABELS
         ]
       : undefined;
+  const previewWeaponType =
+    previewWeapon?.weaponType && previewWeapon.weaponType in inventoryRules.WEAPON_TYPE_LABELS
+      ? inventoryRules.WEAPON_TYPE_LABELS[
+          previewWeapon.weaponType as keyof typeof inventoryRules.WEAPON_TYPE_LABELS
+        ]
+      : undefined;
+
+  const previewItem =
+    items.find((i) => i.id === hoverItemId) ??
+    items.find((i) => kitItems.some((entry) => entry.id === i.id)) ??
+    null;
+  const totalKitItemUnits = kitItems.reduce((sum, entry) => sum + entry.count, 0);
+  const nameOf = (id: string) =>
+    data.names?.[id] ??
+    weapons.find((w) => w.id === id)?.name ??
+    items.find((i) => i.id === id)?.name ??
+    localCustomDefs.get(id)?.name ??
+    id;
 
   return (
     <div className={styles.pickerBody}>
-      <section className={styles.loadoutBase} aria-label="出身默认行装">
-        <CellFrame />
-        <strong className={styles.pickName}>
-          出身默认行装{base.labels.length > 0 ? ` · ${base.labels.join(" + ")}` : ""}
-        </strong>
-        <Line k="启动资金">
-          基准 {base.baseEddies.toLocaleString("en-US")} € → 实际进场{" "}
-          <b>{base.finalEddies.toLocaleString("en-US")} €</b>
-          {kit.customEddies !== null ? "（自定义覆盖）" : ""}
-        </Line>
-        {base.gearNames.length > 0 && <Line k="随身装备">{base.gearNames.join("、")}</Line>}
-        {customVehicle ? (
-          <Line k="开局座驾">
-            <b>{customVehicle.name}</b>（专属座驾
-            {base.freeVehicleNames.length > 0
-              ? `，已替换出身自带的 ${base.freeVehicleNames.join("、")}`
-              : ""}
-            ）
-          </Line>
-        ) : base.freeVehicleNames.length > 0 ? (
-          <Line k="开局座驾">{base.freeVehicleNames.join("、")}（出身自带）</Line>
-        ) : null}
-      </section>
+      {/* ———— 原地自建武器 / 物品表单 ———— */}
+      {(showWeapons || showItems) && itemEditor && (
+        <CustomItemForm
+          key={itemEditor.mode === "edit" ? itemEditor.item.id : `new-${itemEditor.kind}`}
+          initialKind={itemEditor.mode === "create" ? itemEditor.kind : itemEditor.item.kind}
+          {...(itemEditor.mode === "edit" ? { initial: itemEditor.item } : {})}
+          onCancel={() => setItemEditor(null)}
+          onAccept={handleCustomItemAccepted}
+        />
+      )}
 
-      <h4 className={styles.subTitle}>启动资金档位</h4>
-      <fieldset className={styles.shelfFilter} aria-label="启动资金档位">
-        {CASH_TIERS.map((t) => (
-          <Button
-            key={t}
-            small
-            pressed={kit.customEddies === null && kit.cashTier === t}
-            onClick={() => setKit({ cashTier: t, customEddies: null })}
-          >
-            {CASH_TIER_INFO[t].label} · {cashTierDeltaText(t)}
-          </Button>
-        ))}
-      </fieldset>
-      <div className={styles.slotTools}>
-        <FrameBox className={styles.searchBox}>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={CUSTOM_EDDIES_MAX}
-            step={1000}
-            value={kit.customEddies ?? ""}
-            placeholder="或直接输入任意开局欧元（如 50000）覆盖档位…"
-            aria-label="自定义开局启动资金（欧元）"
-            onChange={(e) => {
-              const raw = e.target.value.trim();
-              if (raw === "") {
-                setKit({ customEddies: null });
-                return;
-              }
-              const parsed = Math.floor(Number(raw));
-              if (!Number.isFinite(parsed)) return;
-              setKit({ customEddies: Math.max(0, Math.min(CUSTOM_EDDIES_MAX, parsed)) });
-            }}
-          />
-        </FrameBox>
-        {kit.customEddies !== null && (
-          <Button small onClick={() => setKit({ customEddies: null })}>
-            改回档位
-          </Button>
-        )}
-      </div>
-      <p className={styles.note}>
-        {kit.customEddies !== null
-          ? `已自定义开局启动资金为 ${kit.customEddies.toLocaleString("en-US")} 欧元（覆盖出身基准与档位加成，上限 ${CUSTOM_EDDIES_MAX.toLocaleString("en-US")} €）。`
-          : CASH_TIER_INFO[kit.cashTier].desc}
-      </p>
-
-      {weapons.length > 0 && (
+      {/* ———— 随身武器（无数量限制，含全稀有度、不朽与自建武器） ———— */}
+      {showWeapons && (
         <>
-          <h4 className={styles.subTitle}>
-            额外随身武器{" "}
-            <small className={styles.stepNote}>
-              {kit.weapons.length} / 2 · 共 {weapons.length} 款
-            </small>
-          </h4>
+          <div className={styles.slotTools}>
+            <h4 className={styles.subTitle}>
+              随身武器{" "}
+              <small className={styles.stepNote}>
+                {maxTotalGear !== undefined
+                  ? `已选 ${kit.weapons.length} 把（装备总计 ${totalGearCount}/${maxTotalGear}）· 共 ${weapons.length} 款`
+                  : `已选 ${kit.weapons.length} 把（无数量限制，前 3 把进快捷栏，其余入背包）· 共 ${weapons.length} 款`}
+              </small>
+            </h4>
+            {!itemEditor && (
+              <Button small onClick={() => setItemEditor({ mode: "create", kind: "weapon" })}>
+                ＋ 自建武器
+              </Button>
+            )}
+          </div>
+          {kit.weapons.length > 0 && (
+            <section className={styles.itemSelectedBar} aria-label="已选随身武器清单">
+              {kit.weapons.map((weaponId) => (
+                <span key={weaponId} className={styles.itemSelectedChip}>
+                  <strong>{nameOf(weaponId)}</strong>
+                  <button
+                    type="button"
+                    className={styles.qtyBtn}
+                    aria-label={`移除 ${nameOf(weaponId)}`}
+                    onClick={() => toggleWeapon(weaponId)}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </section>
+          )}
           <div className={styles.slotTools}>
             <FrameBox className={styles.searchBox}>
               <input
                 type="search"
                 value={weaponQuery}
-                placeholder="搜索武器名称或特性…"
-                aria-label="搜索额外随身武器"
+                placeholder="搜索任意武器（含不朽、传说、自建武器）…"
+                aria-label="搜索随身武器"
                 onChange={(e) => setWeaponQuery(e.target.value)}
               />
             </FrameBox>
           </div>
           <fieldset className={styles.shelfFilter} aria-label="按武器类别筛选">
             {WEAPON_GROUPS.map((g) => {
-              const count = g.cats
-                ? weapons.filter((w) => w.category !== undefined && g.cats?.includes(w.category))
-                    .length
-                : weapons.length;
+              const count =
+                g.id === "iconic"
+                  ? weapons.filter((w) => w.iconic).length
+                  : g.id === "custom"
+                    ? weapons.filter((w) => w.custom || isWorkshopEntry(w.packId)).length
+                    : g.cats
+                      ? weapons.filter(
+                          (w) => w.category !== undefined && g.cats?.includes(w.category),
+                        ).length
+                      : weapons.length;
               return (
                 <Button
                   key={g.id}
@@ -1000,36 +1164,73 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
               );
             })}
           </fieldset>
-          <div className={styles.weaponPreview} aria-live="polite">
+          <div
+            className={styles.weaponPreview}
+            data-rarity={previewWeapon?.rarity}
+            data-empty={previewWeapon ? undefined : ""}
+            aria-live="polite"
+          >
             <CellFrame />
             {previewWeapon ? (
               <>
-                <div className={styles.weaponPreviewHead}>
-                  <span className={styles.weaponPreviewMeta}>
-                    <strong className={styles.pickName}>{previewWeapon.name}</strong>
-                    <span className={styles.shelfRarity} data-rarity={previewWeapon.rarity}>
-                      · {RARITY_LABELS[previewWeapon.rarity] ?? previewWeapon.rarity}
-                    </span>
-                    {previewCategory && (
-                      <span className={styles.shelfMeta}>· {previewCategory}</span>
-                    )}
-                    {(previewWeapon.custom || isWorkshopEntry(previewWeapon.packId)) && (
-                      <span className={styles.moduleBadge} data-tone="workshop">
-                        工坊
-                      </span>
-                    )}
-                  </span>
-                  {(ownedGear.has(previewWeapon.id) || kit.weapons.includes(previewWeapon.id)) && (
-                    <span className={styles.moduleBadge} data-tone="active">
-                      {ownedGear.has(previewWeapon.id) ? "出身自带" : "已选配"}
+                <span className={styles.previewArtBox}>
+                  {itemArtOf(previewWeapon.id) ? (
+                    <Asset
+                      id={itemArtOf(previewWeapon.id) as AssetId}
+                      className={styles.previewArtImg}
+                    />
+                  ) : (
+                    <span className={styles.previewArtFallback}>
+                      {previewCategory?.slice(0, 2) ?? "武装"}
                     </span>
                   )}
+                </span>
+                <div className={styles.previewBody}>
+                  <div className={styles.weaponPreviewHead}>
+                    <span className={styles.weaponPreviewMeta}>
+                      <strong className={styles.previewTitle}>{previewWeapon.name}</strong>
+                      {previewWeapon.iconic && (
+                        <span className={styles.moduleBadge} data-tone="iconic">
+                          不朽
+                        </span>
+                      )}
+                      {(previewWeapon.custom || isWorkshopEntry(previewWeapon.packId)) && (
+                        <span className={styles.moduleBadge} data-tone="workshop">
+                          {previewWeapon.packId === "local" ? "自建" : "工坊"}
+                        </span>
+                      )}
+                    </span>
+                    {(ownedGear.has(previewWeapon.id) ||
+                      kit.weapons.includes(previewWeapon.id)) && (
+                      <span className={styles.moduleBadge} data-tone="active">
+                        {ownedGear.has(previewWeapon.id) ? "出身自带" : "已选配"}
+                      </span>
+                    )}
+                  </div>
+                  <div className={styles.previewSpecs}>
+                    <span className={styles.previewSpecChip}>
+                      {RARITY_LABELS[previewWeapon.rarity] ?? previewWeapon.rarity}
+                    </span>
+                    {previewCategory && (
+                      <span className={styles.previewSpecChip} data-tone="accent">
+                        {previewCategory}
+                        {previewWeaponType ? ` · ${previewWeaponType}` : ""}
+                      </span>
+                    )}
+                    {previewWeapon.price !== undefined && previewWeapon.price > 0 && (
+                      <span className={styles.previewSpecChip} data-tone="price">
+                        {previewWeapon.price.toLocaleString("en-US")} €
+                      </span>
+                    )}
+                  </div>
+                  <p className={styles.weaponPreviewDesc}>
+                    {previewWeapon.ability || "暂无详细特性说明。"}
+                  </p>
                 </div>
-                <p className={styles.weaponPreviewDesc}>{previewWeapon.ability}</p>
               </>
             ) : (
               <p className={styles.weaponPreviewDesc}>
-                把鼠标悬停在任意武器上即可查看详细说明，点击选配（最多 2 把）。
+                将光标移至任意武器卡片即可检视大图与属性，点击自由选配（不限把数、支持不朽与自建武器）。
               </p>
             )}
           </div>
@@ -1040,39 +1241,114 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
               {shownWeapons.map((w) => {
                 const on = kit.weapons.includes(w.id);
                 const owned = ownedGear.has(w.id);
-                const full = !on && kit.weapons.length >= 2;
-                const isCustomWeapon = Boolean(w.custom || isWorkshopEntry(w.packId));
+                const isLocalCustom = w.packId === "local" && localCustomDefs.has(w.id);
+                const isWorkshop = isWorkshopEntry(w.packId);
+                const catLabel =
+                  w.category && w.category in inventoryRules.WEAPON_CATEGORY_LABELS
+                    ? inventoryRules.WEAPON_CATEGORY_LABELS[
+                        w.category as keyof typeof inventoryRules.WEAPON_CATEGORY_LABELS
+                      ]
+                    : undefined;
+                const typeLabel =
+                  w.weaponType && w.weaponType in inventoryRules.WEAPON_TYPE_LABELS
+                    ? inventoryRules.WEAPON_TYPE_LABELS[
+                        w.weaponType as keyof typeof inventoryRules.WEAPON_TYPE_LABELS
+                      ]
+                    : undefined;
                 return (
                   <li
                     key={w.id}
                     onMouseEnter={() => setHoverWeaponId(w.id)}
                     onFocus={() => setHoverWeaponId(w.id)}
                   >
-                    <button
-                      type="button"
-                      className={styles.weaponTile}
+                    <div
+                      className={styles.gearCard}
                       data-rarity={w.rarity}
-                      aria-pressed={on}
-                      disabled={!on && (owned || full)}
-                      title={`${w.name}（${owned ? "出身自带" : (RARITY_LABELS[w.rarity] ?? w.rarity)}）：${w.ability}`}
-                      onClick={() =>
-                        setKit({
-                          weapons: on
-                            ? kit.weapons.filter((x) => x !== w.id)
-                            : [...kit.weapons, w.id],
-                        })
-                      }
+                      data-on={on || undefined}
+                      data-disabled={(!on && owned) || undefined}
+                      data-hovered={hoverWeaponId === w.id || undefined}
                     >
                       <CellFrame />
-                      {isCustomWeapon && <span className={styles.weaponWorkshopTag}>工坊</span>}
-                      {itemArtOf(w.id) ? (
-                        <Asset id={itemArtOf(w.id) as AssetId} className={styles.weaponImg} />
-                      ) : null}
-                      <span className={styles.weaponName} data-rarity={w.rarity}>
-                        {w.name}
-                      </span>
-                      <span className={styles.weaponAbility}>{w.ability}</span>
-                    </button>
+                      <button
+                        type="button"
+                        className={styles.gearCardMain}
+                        aria-pressed={on}
+                        disabled={!on && owned}
+                        onClick={() => toggleWeapon(w.id)}
+                      >
+                        <span className={styles.gearArtBox}>
+                          {itemArtOf(w.id) ? (
+                            <Asset id={itemArtOf(w.id) as AssetId} className={styles.weaponImg} />
+                          ) : (
+                            <span className={styles.gearArtFallback}>
+                              {catLabel?.slice(0, 2) ?? "武装"}
+                            </span>
+                          )}
+                        </span>
+                        <span className={styles.gearCardBody}>
+                          <span className={styles.gearCardHead}>
+                            <span className={styles.weaponName} data-rarity={w.rarity}>
+                              {w.name}
+                            </span>
+                            <span
+                              className={styles.gearStatusTag}
+                              data-state={owned ? "owned" : on ? "on" : undefined}
+                            >
+                              {owned ? "自带" : on ? "已选" : "选用"}
+                            </span>
+                          </span>
+                          <span className={styles.gearMetaRow}>
+                            <span>{RARITY_LABELS[w.rarity] ?? w.rarity}</span>
+                            {catLabel && (
+                              <span>
+                                · {catLabel}
+                                {typeLabel ? `/${typeLabel}` : ""}
+                              </span>
+                            )}
+                            {w.iconic && (
+                              <span className={styles.moduleBadge} data-tone="iconic">
+                                不朽
+                              </span>
+                            )}
+                            {(isLocalCustom || isWorkshop) && (
+                              <span className={styles.moduleBadge} data-tone="workshop">
+                                {isLocalCustom ? "自建" : "工坊"}
+                              </span>
+                            )}
+                            {w.price !== undefined && w.price > 0 && (
+                              <span className={styles.gearPrice}>
+                                {w.price.toLocaleString("en-US")} €
+                              </span>
+                            )}
+                          </span>
+                          <span className={styles.weaponAbility}>{w.ability || "自定义武器"}</span>
+                        </span>
+                      </button>
+                      {isLocalCustom && (
+                        <div className={styles.gearCardFoot}>
+                          <span className={styles.gearFootGroup}>本地自建武器</span>
+                          <span className={styles.gearFootGroup}>
+                            <button
+                              type="button"
+                              className={styles.qtyBtn}
+                              onClick={() => {
+                                const def = localCustomDefs.get(w.id);
+                                if (def) setItemEditor({ mode: "edit", item: def });
+                              }}
+                            >
+                              编辑
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.qtyBtn}
+                              onClick={() => handleDeleteLocalItem(w.id)}
+                            >
+                              删除
+                            </button>
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -1081,7 +1357,326 @@ export function LoadoutPicker({ card, board, data, commit }: LoadoutPickerProps)
         </>
       )}
 
-      {vehicles.length > 0 && (
+      {/* ———— 开局随身物品（治疗品、手雷、服装、改装件、消耗品、杂物与自建物品） ———— */}
+      {showItems && (
+        <>
+          <div className={styles.slotTools}>
+            <h4 className={styles.subTitle}>
+              {singleItemCount ? "随身物品" : "开局随身物品"}{" "}
+              <small className={styles.stepNote}>
+                {maxTotalGear !== undefined
+                  ? `已选 ${kitItems.length} 件（装备总计 ${totalGearCount}/${maxTotalGear}）· 目录 ${items.length} 款`
+                  : `已选 ${kitItems.length} 种（共 ${totalKitItemUnits} 件）· 目录 ${items.length} 款`}
+              </small>
+            </h4>
+            {!itemEditor && (
+              <Button small onClick={() => setItemEditor({ mode: "create", kind: "healing" })}>
+                ＋ 自建物品
+              </Button>
+            )}
+          </div>
+
+          {kitItems.length > 0 && (
+            <section className={styles.itemSelectedBar} aria-label="已选随身物品清单">
+              {kitItems.map((entry) => (
+                <span key={entry.id} className={styles.itemSelectedChip}>
+                  <strong>{nameOf(entry.id)}</strong>
+                  {singleItemCount ? (
+                    <button
+                      type="button"
+                      className={styles.qtyBtn}
+                      aria-label={`移除 ${nameOf(entry.id)}`}
+                      onClick={() => setItemCount(entry.id, 0)}
+                    >
+                      ×
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.qtyBtn}
+                        aria-label={`减少 ${nameOf(entry.id)} 数量`}
+                        onClick={() => setItemCount(entry.id, entry.count - 1)}
+                      >
+                        −
+                      </button>
+                      <span className="num">{entry.count}</span>
+                      <button
+                        type="button"
+                        className={styles.qtyBtn}
+                        disabled={entry.count >= 20}
+                        aria-label={`增加 ${nameOf(entry.id)} 数量`}
+                        onClick={() => setItemCount(entry.id, entry.count + 1)}
+                      >
+                        ＋
+                      </button>
+                    </>
+                  )}
+                </span>
+              ))}
+            </section>
+          )}
+
+          <div className={styles.slotTools}>
+            <FrameBox className={styles.searchBox}>
+              <input
+                type="search"
+                value={itemQuery}
+                placeholder="搜索治疗针、压制剂、手雷、服装、改装件、超梦设备或杂物…"
+                aria-label="搜索开局随身物品"
+                onChange={(e) => setItemQuery(e.target.value)}
+              />
+            </FrameBox>
+          </div>
+
+          <fieldset className={styles.shelfFilter} aria-label="按物品类别筛选">
+            {ITEM_GROUPS.map((g) => {
+              const count =
+                g.id === "all"
+                  ? items.length
+                  : g.id === "custom"
+                    ? items.filter((i) => i.custom || isWorkshopEntry(i.packId)).length
+                    : items.filter((i) => i.kind === g.id).length;
+              return (
+                <Button
+                  key={g.id}
+                  small
+                  pressed={itemGroup === g.id}
+                  onClick={() => setItemGroup(g.id)}
+                >
+                  {g.label} ({count})
+                </Button>
+              );
+            })}
+          </fieldset>
+
+          <div
+            className={styles.weaponPreview}
+            data-rarity={previewItem?.rarity}
+            data-empty={previewItem ? undefined : ""}
+            aria-live="polite"
+          >
+            <CellFrame />
+            {previewItem ? (
+              <>
+                <span className={styles.previewArtBox}>
+                  {itemArtOf(previewItem.id) ? (
+                    <Asset
+                      id={itemArtOf(previewItem.id) as AssetId}
+                      className={styles.previewArtImg}
+                    />
+                  ) : (
+                    <span className={styles.previewArtFallback}>
+                      {(
+                        inventoryRules.ITEM_KIND_LABELS[
+                          previewItem.kind as inventoryRules.ItemKind
+                        ] ?? previewItem.kind
+                      ).slice(0, 2)}
+                    </span>
+                  )}
+                </span>
+                <div className={styles.previewBody}>
+                  <div className={styles.weaponPreviewHead}>
+                    <span className={styles.weaponPreviewMeta}>
+                      <strong className={styles.previewTitle}>{previewItem.name}</strong>
+                      {previewItem.iconic && (
+                        <span className={styles.moduleBadge} data-tone="iconic">
+                          不朽
+                        </span>
+                      )}
+                      {previewItem.suppressant && (
+                        <span className={styles.moduleBadge} data-tone="active">
+                          压制剂
+                        </span>
+                      )}
+                      {(previewItem.custom || isWorkshopEntry(previewItem.packId)) && (
+                        <span className={styles.moduleBadge} data-tone="workshop">
+                          {previewItem.packId === "local" ? "自建" : "工坊"}
+                        </span>
+                      )}
+                    </span>
+                    {(() => {
+                      const chosen = kitItems.find((entry) => entry.id === previewItem.id);
+                      return chosen ? (
+                        <span className={styles.moduleBadge} data-tone="active">
+                          已选 ×{chosen.count}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
+                  <div className={styles.previewSpecs}>
+                    <span className={styles.previewSpecChip}>
+                      {RARITY_LABELS[previewItem.rarity] ?? previewItem.rarity}
+                    </span>
+                    <span className={styles.previewSpecChip} data-tone="accent">
+                      {inventoryRules.ITEM_KIND_LABELS[
+                        previewItem.kind as inventoryRules.ItemKind
+                      ] ?? previewItem.kind}
+                    </span>
+                    {previewItem.charges ? (
+                      <span className={styles.previewSpecChip}>{previewItem.charges} 次充能</span>
+                    ) : null}
+                    {previewItem.healPercent ? (
+                      <span className={styles.previewSpecChip}>
+                        回血 {previewItem.healPercent}%
+                      </span>
+                    ) : null}
+                    {previewItem.price !== undefined && previewItem.price > 0 && (
+                      <span className={styles.previewSpecChip} data-tone="price">
+                        {previewItem.price.toLocaleString("en-US")} €
+                      </span>
+                    )}
+                  </div>
+                  <p className={styles.weaponPreviewDesc}>
+                    {previewItem.ability || "实用随身物品，点击加入开局背包。"}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className={styles.weaponPreviewDesc}>
+                将光标移至任意物品卡片即可检视详情，点击加入开局背包（支持治疗品、手雷、服装、改装件、消耗品、杂物与自建物品）。
+              </p>
+            )}
+          </div>
+
+          {shownItems.length === 0 ? (
+            <p className={styles.note}>没有匹配当前筛选条件的物品。</p>
+          ) : (
+            <ul className={styles.weaponGrid}>
+              {shownItems.map((item) => {
+                const chosen = kitItems.find((entry) => entry.id === item.id);
+                const count = chosen?.count ?? 0;
+                const isLocalCustom = item.packId === "local" && localCustomDefs.has(item.id);
+                const isWorkshop = isWorkshopEntry(item.packId);
+                const kindLabel =
+                  inventoryRules.ITEM_KIND_LABELS[item.kind as inventoryRules.ItemKind] ??
+                  item.kind;
+                return (
+                  <li
+                    key={item.id}
+                    onMouseEnter={() => setHoverItemId(item.id)}
+                    onFocus={() => setHoverItemId(item.id)}
+                  >
+                    <div
+                      className={styles.gearCard}
+                      data-rarity={item.rarity}
+                      data-on={count > 0 || undefined}
+                      data-hovered={hoverItemId === item.id || undefined}
+                    >
+                      <CellFrame />
+                      <button
+                        type="button"
+                        className={styles.gearCardMain}
+                        aria-pressed={count > 0}
+                        onClick={() => setItemCount(item.id, count > 0 ? 0 : 1)}
+                      >
+                        <span className={styles.gearArtBox}>
+                          {itemArtOf(item.id) ? (
+                            <Asset
+                              id={itemArtOf(item.id) as AssetId}
+                              className={styles.weaponImg}
+                            />
+                          ) : (
+                            <span className={styles.gearArtFallback}>{kindLabel.slice(0, 2)}</span>
+                          )}
+                        </span>
+                        <span className={styles.gearCardBody}>
+                          <span className={styles.gearCardHead}>
+                            <span className={styles.weaponName} data-rarity={item.rarity}>
+                              {item.name}
+                            </span>
+                            <span
+                              className={styles.gearStatusTag}
+                              data-state={count > 0 ? "on" : undefined}
+                            >
+                              {count > 0 ? (singleItemCount ? "已选" : `×${count}`) : "携带"}
+                            </span>
+                          </span>
+                          <span className={styles.gearMetaRow}>
+                            <span>{RARITY_LABELS[item.rarity] ?? item.rarity}</span>
+                            <span>· {kindLabel}</span>
+                            {item.charges ? <span>· {item.charges}次</span> : null}
+                            {item.suppressant && (
+                              <span className={styles.moduleBadge} data-tone="active">
+                                压制
+                              </span>
+                            )}
+                            {(isLocalCustom || isWorkshop) && (
+                              <span className={styles.moduleBadge} data-tone="workshop">
+                                {isLocalCustom ? "自建" : "工坊"}
+                              </span>
+                            )}
+                            {item.price !== undefined && item.price > 0 && (
+                              <span className={styles.gearPrice}>
+                                {item.price.toLocaleString("en-US")} €
+                              </span>
+                            )}
+                          </span>
+                          <span className={styles.weaponAbility}>{item.ability || kindLabel}</span>
+                        </span>
+                      </button>
+                      {(count > 0 || isLocalCustom) && (
+                        <div className={styles.gearCardFoot}>
+                          <span className={styles.gearFootGroup}>
+                            {count > 0 ? (
+                              <>
+                                <span>数量</span>
+                                <button
+                                  type="button"
+                                  className={styles.qtyBtn}
+                                  aria-label={`减少 ${item.name} 数量`}
+                                  onClick={() => setItemCount(item.id, count - 1)}
+                                >
+                                  −
+                                </button>
+                                <span className={styles.gearFootCount}>{count}</span>
+                                <button
+                                  type="button"
+                                  className={styles.qtyBtn}
+                                  disabled={count >= 20}
+                                  aria-label={`增加 ${item.name} 数量`}
+                                  onClick={() => setItemCount(item.id, count + 1)}
+                                >
+                                  ＋
+                                </button>
+                              </>
+                            ) : (
+                              <span>本地自建物品</span>
+                            )}
+                          </span>
+                          {isLocalCustom && (
+                            <span className={styles.gearFootGroup}>
+                              <button
+                                type="button"
+                                className={styles.qtyBtn}
+                                onClick={() => {
+                                  const def = localCustomDefs.get(item.id);
+                                  if (def) setItemEditor({ mode: "edit", item: def });
+                                }}
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.qtyBtn}
+                                onClick={() => handleDeleteLocalItem(item.id)}
+                              >
+                                删除
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+
+      {showKit && vehicles.length > 0 && (
         <>
           <h4 className={styles.subTitle}>
             专属载具{" "}
@@ -1185,6 +1780,7 @@ export function CyberwareShelf({
   armTarget = "both",
   onArmTargetChange,
   onCategoryChange,
+  maxCount,
 }: CyberwareShelfProps) {
   type Offer = BoardData["cyberware"][number];
   const [shelfState, setShelfState] = useState<{
@@ -1436,6 +2032,10 @@ export function CyberwareShelf({
       ...board.cyberware.filter((c) => !replaceSet.has(c.id)),
       toStartEntry(o, effectiveSide),
     ];
+    if (maxCount !== undefined && nextList.length > maxCount) {
+      setEditorNotice(`最多可装配 ${maxCount} 件义体，请先卸下其他义体再装入。`);
+      return;
+    }
     commit({ ...board, cyberware: nextList });
     setEditorNotice(null);
   };
@@ -1780,6 +2380,11 @@ export function CyberwareShelf({
                               {o.name}
                             </span>
                             <span className={styles.moduleBadges}>
+                              {o.iconic && (
+                                <span className={styles.moduleBadge} data-tone="iconic">
+                                  不朽
+                                </span>
+                              )}
                               {isWorkshopEntry(o.packId) && (
                                 <span className={styles.moduleBadge} data-tone="workshop">
                                   工坊

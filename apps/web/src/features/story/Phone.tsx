@@ -561,7 +561,24 @@ function ThreadHead({
   const hasLocate = Boolean(locateId && locateName && actions.onLocatePlace);
   const hasActions = Boolean(commAction || hasLocate || canOpenDoc);
   const highlightTone = contact.badges[0]?.tone === "danger" ? "danger" : undefined;
-  const visibleBadges = !alive ? [] : contact.badges.slice(0, 2);
+  const relTag = npc?.met && npc.alive ? npcRelationTag(npc) : null;
+  // relTag 已完整展示宿敌或最高优先级的未结人情/仇怨，从联系人徽章中剔除同类短标，避免顶栏并排重复
+  const redundantBadgeShort = relTag
+    ? relTag.label === "宿敌"
+      ? "宿敌"
+      : relTag.label.startsWith("记仇")
+        ? "有仇"
+        : relTag.label.startsWith("欠你人情")
+          ? "欠你情"
+          : relTag.label.startsWith("你欠人情")
+            ? "欠他情"
+            : null
+    : null;
+  const visibleBadges = !alive
+    ? []
+    : contact.badges
+        .filter((b) => !redundantBadgeShort || (b.shortLabel ?? b.label) !== redundantBadgeShort)
+        .slice(0, 2);
 
   return (
     <header className={styles.threadHead}>
@@ -632,20 +649,11 @@ function ThreadHead({
                 {badge.shortLabel ?? badge.label}
               </span>
             ))}
-            {npc?.met &&
-              npc.alive &&
-              (() => {
-                const relTag = npcRelationTag(npc);
-                return relTag ? (
-                  <span
-                    className={styles.affinityPill}
-                    data-tone={relTag.tone}
-                    title={relTag.title}
-                  >
-                    {relTag.label}
-                  </span>
-                ) : null;
-              })()}
+            {relTag && (
+              <span className={styles.affinityPill} data-tone={relTag.tone} title={relTag.title}>
+                {relTag.label}
+              </span>
+            )}
           </span>
           <span className={styles.threadMetaRow}>
             {metaText && (

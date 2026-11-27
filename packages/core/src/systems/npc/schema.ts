@@ -109,7 +109,13 @@ export const HANGOUTS_MAX = 4;
 
 const NpcIdSchema = z
   .string()
-  .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 judy");
+  .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 judy")
+  .describe("人物稳定 id（小写英文、数字和连字符，如 judy）");
+
+const ExistingNpcIdSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]*$/, "人物 id 用小写英文、数字和连字符，例如 judy")
+  .describe("已有的人物卡 id（如 royce，勿填事件 slug）");
 
 /** 装备与植入物记录上限。 */
 export const NPC_GEAR_MAX = 12;
@@ -489,7 +495,7 @@ export type NewNpc = z.infer<typeof NewNpcSchema>;
 export const NpcUpdateSchema = z
   .object({
     type: z.literal("npcUpdate"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     pronoun: NpcCardSchema.shape.pronoun.optional(),
     age: NpcCardSchema.shape.age,
     adult: NpcCardSchema.shape.adult,
@@ -526,7 +532,7 @@ export type NpcUpdate = z.infer<typeof NpcUpdateSchema>;
 export const MeetSchema = z
   .object({
     type: z.literal("meet"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     location: LocationSchema.optional(),
   })
   .describe(
@@ -537,7 +543,7 @@ export type Meet = z.infer<typeof MeetSchema>;
 export const MemorySchema = z
   .object({
     type: z.literal("memory"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
     source: z
       .enum(["experienced", "told", "log", "phone"])
@@ -548,13 +554,15 @@ export const MemorySchema = z
     device: z.string().min(1).optional(),
     log: z.string().min(1).optional().describe("source:log 引用本人已查阅的稳定日志 id"),
   })
-  .describe("记下这个人和玩家角色之间值得记住的事：承诺、人情、冲突、秘密被说破；一句话");
+  .describe(
+    "记下这个人和玩家角色之间值得记住的事：承诺、人情、冲突、秘密被说破；一句话。id 必须填【人物】里的目标人物 id（如 yoko-tsuru、ozob），不要给记忆条目自造 slug",
+  );
 export type Memory = z.infer<typeof MemorySchema>;
 
 export const NpcDeathSchema = z
   .object({
     type: z.literal("npcDeath"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
   .describe("人物死亡；死了的人不会再出场");
@@ -563,7 +571,7 @@ export type NpcDeath = z.infer<typeof NpcDeathSchema>;
 export const DoingSchema = z
   .object({
     type: z.literal("doing"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
     /**
      * NPC 会移动（用户 2026-11-02："npc是能移动的"）：这段时间他去了别处，写现在在的地点 id；
@@ -587,7 +595,7 @@ export type NpcOffscreenDoing = z.infer<typeof NpcOffscreenDoingSchema>;
 export const RelationSchema = z
   .object({
     type: z.literal("relation"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     text: z.string().trim().min(1).max(RELATION_CHARS),
   })
   .describe(
@@ -599,7 +607,7 @@ export type Relation = z.infer<typeof RelationSchema>;
 export const NpcOutfitSchema = z
   .object({
     type: z.literal("npcOutfit"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     text: z.string().trim().min(1).max(OUTFIT_CHARS),
   })
   .describe(
@@ -621,8 +629,8 @@ export type InitialNpcTie = z.infer<typeof InitialNpcTieSchema>;
 export const TieSchema = z
   .object({
     type: z.literal("tie"),
-    a: NpcIdSchema,
-    b: NpcIdSchema,
+    a: ExistingNpcIdSchema,
+    b: ExistingNpcIdSchema,
     aToB: z
       .string()
       .trim()
@@ -643,7 +651,7 @@ export type Tie = z.infer<typeof TieSchema>;
 export const LedgerSchema = z
   .object({
     type: z.literal("ledger"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     kind: LedgerKindSchema.describe(
       "owesYou 对方欠玩家角色人情，youOwe 玩家角色欠对方人情，grudge 对方记玩家角色的仇",
     ),
@@ -655,7 +663,7 @@ export type Ledger = z.infer<typeof LedgerSchema>;
 export const LedgerSettleSchema = z
   .object({
     type: z.literal("ledgerSettle"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     entry: z.number().int().min(1).describe("【人物】里这个人的人情和仇的第几条"),
     how: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
@@ -665,21 +673,21 @@ export type LedgerSettle = z.infer<typeof LedgerSettleSchema>;
 export const LearnSchema = z
   .object({
     type: z.literal("learn"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     text: z.string().trim().min(1).max(NPC_NOTE_CHARS),
     source: KnownSourceSchema.describe(
       "seen 玩家角色亲眼看到，self 本人说的，told 别人说的，rumor 传闻、新闻，scan 扫描",
     ),
   })
   .describe(
-    "玩家角色得知了有卡的人的一件事（身份、来历、去向、和谁有来往）：正文里真的透出来才写，一句话，写玩家角色以为的样子；对方骗人的话照骗的写，传闻照传的写",
+    "玩家角色得知了有卡的人的一件事（身份、来历、去向、和谁有来往）：正文里真的透出来才写，一句话，写玩家角色以为的样子；对方骗人的话照骗的写，传闻照传的写。id 必须填【人物】里的目标人物 id（如 royce），不要给情报条目自造 slug",
   );
 export type Learn = z.infer<typeof LearnSchema>;
 
 export const NpcHurtSchema = z
   .object({
     type: z.literal("npcHurt"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     part: BodyPartSchema.optional().describe(
       "受伤部位（head、face、chest、belly、left-arm、right-arm、left-leg、right-leg 之一），打中哪就写哪",
     ),
@@ -694,7 +702,7 @@ export type NpcHurt = z.infer<typeof NpcHurtSchema>;
 export const NpcHealSchema = z
   .object({
     type: z.literal("npcHeal"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     how: z
       .enum(["rest", "maxdoc", "ripperdoc"])
       .describe("rest 休整了一阵，maxdoc 用了治疗品，ripperdoc 找义体医生治好了"),
@@ -708,7 +716,7 @@ export type NpcHeal = z.infer<typeof NpcHealSchema>;
 export const NpcGearSchema = z
   .object({
     type: z.literal("npcGear"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     action: z.enum(["add", "remove"]),
     item: z.string().min(1).describe("物品表里的 id"),
   })
@@ -720,7 +728,7 @@ export type NpcGear = z.infer<typeof NpcGearSchema>;
 export const NpcChromeSchema = z
   .object({
     type: z.literal("npcChrome"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     action: z.enum(["install", "remove"]),
     cyberware: z.string().min(1).describe("义体表里的 id"),
   })
@@ -732,7 +740,7 @@ export type NpcChrome = z.infer<typeof NpcChromeSchema>;
 export const NpcHumanitySchema = z
   .object({
     type: z.literal("npcHumanity"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     action: z.enum(["affect", "recover"]),
     symptomId: z.string().min(1),
     stage: z.enum(["detached", "unstable", "edge", "crisis"]).optional(),
@@ -751,7 +759,7 @@ export type NpcHumanity = z.infer<typeof NpcHumanitySchema>;
 export const NpcScanSchema = z
   .object({
     type: z.literal("npcScan"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
   })
   .describe(
     "玩家角色用义眼扫描了有卡的人（打斗里扫描有卡敌人也写这条）：之后人物档案能看到他的身体状况、装备、显眼的义体和人性阶段",
@@ -760,7 +768,7 @@ export type NpcScan = z.infer<typeof NpcScanSchema>;
 
 export const NpcBehaviorSchema = BehaviorChipTermsSchema.extend({
   type: z.literal("npcBehavior"),
-  id: NpcIdSchema,
+  id: ExistingNpcIdSchema,
 }).describe(
   "已装行为芯片人物的四态切换（off/doll/protocol/glitch）、设备摘要（log）或本人查阅（review）。扭扭街等未装行为芯片的普通从业者不可启用；清醒意愿、玩偶托管反应、改装协议与本人亲历分别处理。",
 );
@@ -769,7 +777,7 @@ export type NpcBehavior = z.infer<typeof NpcBehaviorSchema>;
 export const NpcCompanionSchema = z
   .object({
     type: z.literal("npcCompanion"),
-    id: NpcIdSchema,
+    id: ExistingNpcIdSchema,
     following: z.boolean().describe("true 开始与玩家同行；false 分开、留守或各自行动"),
     reason: z.string().trim().min(1).max(NPC_NOTE_CHARS).optional().describe("同行或分开的原因"),
   })

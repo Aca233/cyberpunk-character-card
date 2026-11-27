@@ -1,83 +1,103 @@
 import { z } from "zod";
+import { IncomingMessageSchema, MESSAGES_PER_TURN } from "../systems/phone/schema";
 
 const EventIdSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]*$/, "事件 id 用小写英文、数字和连字符，不能以连字符或 $ 开头");
-const EntryReferenceSchema = z
-  .string()
-  .regex(/^(changes|messages)\[(0|[1-9]\d*)\]$/, "条目引用须精确写 changes[0] 或 messages[0]");
 
-/** 一件不可拆分的事实及其成功前提；只负责结算归属，不替业务指令添加字段。 */
+/** 一件不可拆分的事实及其成功前提：直接内嵌同成同撤的 changes 与可选 messages，彻底消除手数下标错位。 */
 export const EventPlanSchema = z.strictObject({
   id: EventIdSchema.describe("本轮唯一事件 id"),
   requires: z
     .array(z.union([z.literal("$action"), EventIdSchema]))
     .describe("成功前提：只能写前序事件 id 或 $action（本轮主行动成功）；独立事件明确写 []"),
-  entries: z
-    .array(EntryReferenceSchema)
-    .min(1)
-    .describe("同成同撤的条目，引用 changes[i] 或 messages[i]；每条恰属一组并保持各数组原顺序"),
+  changes: z
+    .array(z.object({ type: z.string() }))
+    .describe("本事件同成同撤的状态变化指令，按发生顺序；本事件仅有来信时写 []"),
+  messages: z
+    .array(IncomingMessageSchema)
+    .optional()
+    .describe(
+      `本事件触发的植入式通讯来信（本轮所有事件合计最多 ${MESSAGES_PER_TURN} 条）；无来信时省略`,
+    ),
 });
 export type EventPlan = z.infer<typeof EventPlanSchema>;
 
+/** 解析阶段对单个事件外壳校验：内部 changes / messages 保留 unknown，交给后续逐条 Zod 校验与批量修复。 */
+const RawEventPlanSchema = z.strictObject({
+  id: EventIdSchema,
+  requires: z.array(z.union([z.literal("$action"), EventIdSchema])),
+  changes: z.array(z.unknown()).optional(),
+  messages: z.array(z.unknown()).optional(),
+});
+
+export interface NormalizedEventPlan {
+  readonly id: string;
+  readonly requires: readonly string[];
+  readonly entries: readonly string[];
+}
+
 export type EventPlanResult =
-  | { readonly ok: true; readonly events: EventPlan[] }
+  | {
+      readonly ok: true;
+      readonly events: NormalizedEventPlan[];
+      readonly changes: unknown[];
+      readonly messages: unknown[];
+    }
   | { readonly ok: false; readonly error: string };
 
-/** 不猜依赖、不重排事实；图不完整时由调用方保留整轮零结算草稿。 */
-export function readEventPlan(
-  raw: unknown,
-  changeCount: number,
-  messageCount: number,
-): EventPlanResult {
-  if (
-    !Number.isSafeInteger(changeCount) ||
-    changeCount < 0 ||
-    !Number.isSafeInteger(messageCount) ||
-    messageCount < 0
-  )
-    return { ok: false, error: "事件条目数量必须是非负安全整数" };
-  const parsed = z.array(EventPlanSchema).safeParse(raw);
-  if (!parsed.success)
+/** 校验内嵌事件图（唯一 id、有效前序依赖、非空事件），并平铺成稳定内部键 changes[i] / messages[i]。 */
+export function readEventPlan(raw: unknown): EventPlanResult {
+  const parsed = z.array(RawEventPlanSchema).safeParse(raw);
+  if (!parsed.success) {
     return {
       ok: false,
       error: `events 格式不正确：${parsed.error.issues
         .map((issue) => `${issue.path.join(".")}：${issue.message}`)
         .join("；")}`,
     };
+  }
 
   const prior = new Set<string>();
-  const assigned = new Set<string>();
-  const next = { changes: 0, messages: 0 };
-  const counts = { changes: changeCount, messages: messageCount };
+  const events: NormalizedEventPlan[] = [];
+  const changes: unknown[] = [];
+  const messages: unknown[] = [];
+
   for (const event of parsed.data) {
     if (prior.has(event.id)) return { ok: false, error: `事件 id 重复：${event.id}` };
     const required = new Set<string>();
     for (const dependency of event.requires) {
-      if (required.has(dependency))
+      if (required.has(dependency)) {
         return { ok: false, error: `事件 ${event.id} 重复依赖 ${dependency}` };
+      }
       required.add(dependency);
-      if (dependency !== "$action" && !prior.has(dependency))
+      if (dependency !== "$action" && !prior.has(dependency)) {
         return { ok: false, error: `事件 ${event.id} 的依赖 ${dependency} 不是前序事件或 $action` };
+      }
     }
-    for (const entry of event.entries) {
-      if (assigned.has(entry)) return { ok: false, error: `条目 ${entry} 重复归属事件` };
-      const kind = entry.startsWith("changes[") ? "changes" : "messages";
-      const index = Number(entry.slice(kind.length + 1, -1));
-      if (!Number.isSafeInteger(index) || index >= counts[kind])
-        return { ok: false, error: `事件 ${event.id} 引用了不存在的 ${entry}` };
-      if (index !== next[kind])
-        return {
-          ok: false,
-          error: `事件 ${event.id} 的 ${entry} 打乱了原顺序或漏掉条目，应先归属 ${kind}[${next[kind]}]`,
-        };
-      assigned.add(entry);
-      next[kind] += 1;
+
+    const eventChanges = event.changes ?? [];
+    const eventMessages = event.messages ?? [];
+    if (eventChanges.length === 0 && eventMessages.length === 0) {
+      return {
+        ok: false,
+        error: `事件 ${event.id} 没有包含任何 changes 或 messages；空事件请直接删除`,
+      };
     }
+
+    const entries: string[] = [];
+    for (const item of eventChanges) {
+      entries.push(`changes[${changes.length}]`);
+      changes.push(item);
+    }
+    for (const item of eventMessages) {
+      entries.push(`messages[${messages.length}]`);
+      messages.push(item);
+    }
+
+    events.push({ id: event.id, requires: [...event.requires], entries });
     prior.add(event.id);
   }
-  for (const kind of ["changes", "messages"] as const)
-    if (next[kind] !== counts[kind])
-      return { ok: false, error: `${kind}[${next[kind]}] 没有归属任何事件` };
-  return { ok: true, events: parsed.data };
+
+  return { ok: true, events, changes, messages };
 }

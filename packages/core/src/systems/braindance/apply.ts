@@ -2,6 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import type { CyberwareState } from "../cyberware";
 import type { HealthState } from "../health";
+import { HumanityStateSchema, isImmunosuppressed, neuralStage, STAGE_LABELS } from "../humanity";
 import { InventoryStateSchema, itemCatalog } from "../inventory";
 import { chipContentCatalog, ShardsStateSchema } from "../shards";
 import { merchantAt, merchantSites, type WorldClockState } from "../world";
@@ -171,6 +172,62 @@ function sourceBlock(
   return { analysis: matched.analysis };
 }
 
+function settleXbdImpact(
+  work: BdWork,
+  mode: "immerse" | "edit",
+  experienceId: string,
+  ctx: SystemContext,
+): { readonly notes: string[]; readonly emit: Command[] } {
+  if (work.tier !== "xbd") return { notes: [], emit: [] };
+  if (mode === "edit") {
+    return {
+      notes: ["编辑模式已切断直接感官回灌，规避了地下黑超梦的无滤波神经冲击"],
+      emit: [],
+    };
+  }
+  const humanity = HumanityStateSchema.parse(ctx.read("humanity"));
+  const eventKey = `bd:xbd:${experienceId}`;
+  if (humanity.settled.includes(eventKey)) {
+    return { notes: [], emit: [] };
+  }
+  const stage = neuralStage(humanity);
+  if (isImmunosuppressed(humanity, ctx.now)) {
+    return {
+      notes: [
+        `警告：地下黑超梦《${work.title}》触发强感官冲击，但体内神经压制剂暂时压住了失控（当前神经阶段：${STAGE_LABELS[stage]}）`,
+      ],
+      emit: [],
+    };
+  }
+  const nextStage =
+    stage === "stable"
+      ? "detached"
+      : stage === "detached"
+        ? "unstable"
+        : stage === "unstable"
+          ? "edge"
+          : "crisis";
+  const symptom = work.xbdRisk
+    ? `黑超梦无滤波感官过载（${work.xbdRisk}），引发剧烈眩晕、感官残留与解离`
+    : "黑超梦无滤波感官过载引发剧烈眩晕、视听残留与短暂解离";
+  return {
+    notes: [
+      `警告：未经过滤的地下黑超梦《${work.title}》造成神经冲击，神经状态进入「${STAGE_LABELS[nextStage]}」`,
+    ],
+    emit: [
+      {
+        type: "humanity",
+        action: "affect",
+        id: `xbd:${work.id}`,
+        stage: nextStage,
+        symptom,
+        reason: `沉浸观看地下黑超梦《${work.title}》`,
+        event: eventKey,
+      },
+    ],
+  };
+}
+
 export function applyBraindance(
   draft: Draft<BraindanceState>,
   command: BraindanceCommand,
@@ -303,9 +360,11 @@ export function applyBraindance(
       if (check.error) return fail(check.error);
       draft.active = nextState;
       draft.settled.push(settlementKey);
+      const impact = settleXbdImpact(work, command.mode, nextState.id, ctx);
       return {
         ok: true,
-        notes: [`继续《${work.title}》（${BD_MODE_LABELS[command.mode]}模式）`],
+        notes: [`继续《${work.title}》（${BD_MODE_LABELS[command.mode]}模式）`, ...impact.notes],
+        ...(impact.emit.length > 0 ? { emit: impact.emit } : {}),
       };
     }
 
@@ -332,15 +391,14 @@ export function applyBraindance(
     draft.works[work.id] = work;
     draft.active = active;
     draft.settled.push(settlementKey);
-    const xbdWarn =
-      work.tier === "xbd"
-        ? `；警告：这是未经过滤的地下黑超梦（XBD）${work.xbdRisk ? `——${work.xbdRisk}` : ""}，请按剧烈感官冲击在正文中结算精神症状`
-        : "";
+    const impact = settleXbdImpact(work, command.mode, active.id, ctx);
     return {
       ok: true,
       notes: [
-        `接入超梦《${work.title}》（${BD_TIER_LABELS[work.tier]}｜${BD_MODE_LABELS[command.mode]}）${xbdWarn}`,
+        `接入超梦《${work.title}》（${BD_TIER_LABELS[work.tier]}｜${BD_MODE_LABELS[command.mode]}）`,
+        ...impact.notes,
       ],
+      ...(impact.emit.length > 0 ? { emit: impact.emit } : {}),
     };
   }
 

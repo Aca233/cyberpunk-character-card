@@ -1,13 +1,14 @@
 import { characterRules, cyberwareRules, type PlayerAction } from "@cp/core";
 import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
+import { cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { CellFrame } from "../../ui/FrameBox";
 import { Panel } from "../../ui/Panel";
-import { BiomonitorPanel } from "./BiomonitorPanel";
+import { BiomonitorPanel, HostDossierCard } from "./BiomonitorPanel";
 import { ContentMediaList, InlineContentText } from "./ContentMedia";
 import { type BodyFocusKey, CyberBodySilhouette, CyberItemCell, NeuralLoadBar } from "./CyberDoll";
 import mediaStyles from "./content-media.module.css";
-import { rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
+import { CYBER_SLOT_ICON, type CyberSlot, rarityLabelOf, rarityTintOf } from "./cyberwareMeta";
 import { type HabitAction, Habits } from "./Habits";
 import { NewsBody } from "./NewsPanel";
 import neural from "./neural.module.css";
@@ -143,6 +144,7 @@ export function CharacterPage({
           )}
         </section>
       )}
+      <HostDossierCard brief={character.brief} />
       {character.deeds.length > 0 && (
         <section className={styles.habits} aria-label="外界知道的事">
           <h4 className={styles.habitsTitle}>外界知道的事 · {character.reputationLabel}</h4>
@@ -176,6 +178,7 @@ type CyberPart = View["cyberware"][number];
 interface CoreSlotEntry {
   readonly id: cyberwareRules.CoreSlotId;
   readonly label: string;
+  readonly iconSlot: CyberSlot;
   readonly ripperCategory: cyberwareRules.CyberwareCategoryId;
   readonly part: CyberPart | null;
   readonly mirrorOf?: CyberPart | null;
@@ -291,6 +294,7 @@ export function CyberwarePage({
       {
         id: "chassis",
         label: cyberwareRules.CORE_SLOT_LABELS.chassis,
+        iconSlot: "skeleton",
         ripperCategory: "chassis",
         part: chassis,
         emptyHint: "原生血肉",
@@ -298,6 +302,7 @@ export function CyberwarePage({
       {
         id: "cyberdeck",
         label: cyberwareRules.CORE_SLOT_LABELS.cyberdeck,
+        iconSlot: "frontalCortex",
         ripperCategory: "cyberdeck",
         part: cyberdeck,
         emptyHint: "未安装",
@@ -306,6 +311,7 @@ export function CyberwarePage({
       {
         id: "spineDrive",
         label: cyberwareRules.CORE_SLOT_LABELS.spineDrive,
+        iconSlot: "os",
         ripperCategory: "spineDrive",
         part: spineDrive ?? capacityCore,
         emptyHint: "未安装",
@@ -313,6 +319,7 @@ export function CyberwarePage({
       {
         id: "optics",
         label: cyberwareRules.CORE_SLOT_LABELS.optics,
+        iconSlot: "eyes",
         ripperCategory: "optics",
         part: optics,
         emptyHint: "原生双眼",
@@ -320,6 +327,7 @@ export function CyberwarePage({
       {
         id: "leftArm",
         label: cyberwareRules.CORE_SLOT_LABELS.leftArm,
+        iconSlot: "arms",
         ripperCategory: "arms",
         part: leftArm,
         emptyHint: "原生左臂",
@@ -327,6 +335,7 @@ export function CyberwarePage({
       {
         id: "rightArm",
         label: cyberwareRules.CORE_SLOT_LABELS.rightArm,
+        iconSlot: "arms",
         ripperCategory: "arms",
         part: rightArm,
         mirrorOf: rightArm ? null : rightMirror,
@@ -335,6 +344,7 @@ export function CyberwarePage({
       {
         id: "legDrive",
         label: cyberwareRules.CORE_SLOT_LABELS.legDrive,
+        iconSlot: "legs",
         ripperCategory: "legDrive",
         part: legDrive,
         emptyHint: "原生双腿",
@@ -342,6 +352,7 @@ export function CyberwarePage({
       {
         id: "skinArmor",
         label: cyberwareRules.CORE_SLOT_LABELS.skinArmor,
+        iconSlot: "integumentary",
         ripperCategory: "skinArmor",
         part: skinArmor,
         emptyHint: "无表皮主甲",
@@ -499,6 +510,8 @@ export function CyberwarePage({
                     type="button"
                     className={neural.coreCard}
                     data-filled={shown ? true : undefined}
+                    data-rarity={shown?.rarity ?? undefined}
+                    data-iconic={shown?.iconic || undefined}
                     data-mirror={isMirror || undefined}
                     data-broken={shown?.broken || undefined}
                     data-active={active || undefined}
@@ -515,6 +528,7 @@ export function CyberwarePage({
                       }
                     }}
                   >
+                    <CellFrame />
                     <div className={neural.coreCardBody}>
                       {shown ? (
                         <CyberItemCell
@@ -525,24 +539,37 @@ export function CyberwarePage({
                           iconic={shown.iconic}
                           broken={shown.broken}
                           on={!shown.broken}
-                          size={40}
+                          size={42}
                         />
                       ) : (
-                        <span className={neural.coreEmptyIcon} aria-hidden />
+                        <span className={neural.coreEmptyIcon} aria-hidden>
+                          <span
+                            className={neural.coreEmptyGlyph}
+                            style={{
+                              maskImage: cssUrl(CYBER_SLOT_ICON[entry.iconSlot]),
+                              WebkitMaskImage: cssUrl(CYBER_SLOT_ICON[entry.iconSlot]),
+                            }}
+                          />
+                        </span>
                       )}
                       <div className={neural.coreInfo}>
                         <div className={neural.coreCardHead}>
                           <span className={neural.coreSlotLabel}>{entry.label}</span>
                           {shown && !isMirror && shown.effectiveLoad > 0 && (
                             <span className={neural.loadNum} title="神经承载">
-                              {shown.effectiveLoad}
+                              承载 {shown.effectiveLoad}
                             </span>
                           )}
                           {isMirror && <span className={neural.coreMirrorTag}>双臂同款</span>}
                         </div>
                         {shown ? (
                           <div className={neural.coreNameRow}>
-                            <strong className={neural.coreItemName}>{shown.name}</strong>
+                            <strong
+                              className={neural.coreItemName}
+                              style={tint ? { color: tint } : undefined}
+                            >
+                              {shown.name}
+                            </strong>
                             {shown.broken ? (
                               <span className={neural.coreBrokenTag}>受损</span>
                             ) : (
@@ -716,35 +743,46 @@ export function CyberwarePage({
                       <li
                         key={part.id}
                         className={neural.v2Row}
+                        data-rarity={part.rarity ?? undefined}
+                        data-iconic={part.iconic || undefined}
                         data-broken={part.broken || undefined}
                         style={{ "--card-tint": tint } as CSSProperties}
                         onMouseEnter={() => setHoveredFocus(activeZone)}
                         onMouseLeave={() => setHoveredFocus(null)}
                       >
-                        <CyberItemCell
-                          id={part.id}
-                          name={part.name}
-                          slot={part.slot}
-                          rarity={part.rarity ?? undefined}
-                          iconic={part.iconic}
-                          broken={part.broken}
-                          on={!part.broken}
-                          size={38}
-                        />
-                        <div className={neural.v2RowMain}>
+                        <CellFrame />
+                        <div className={neural.v2RowInner}>
                           <div className={neural.v2RowTop}>
-                            <strong className={neural.v2RowName}>{part.name}</strong>
-                            {rarityLabel && (
-                              <span className={neural.v2RowRarity} style={{ color: tint }}>
-                                {rarityLabel}
-                              </span>
-                            )}
-                            {part.broken && <span className={neural.coreBrokenTag}>受损</span>}
-                            {part.effectiveLoad > 0 && (
-                              <span className={neural.v2RowLoad} title="神经承载">
-                                {part.effectiveLoad}
-                              </span>
-                            )}
+                            <CyberItemCell
+                              id={part.id}
+                              name={part.name}
+                              slot={part.slot}
+                              rarity={part.rarity ?? undefined}
+                              iconic={part.iconic}
+                              broken={part.broken}
+                              on={!part.broken}
+                              size={42}
+                            />
+                            <div className={neural.v2RowHeadMeta}>
+                              <div className={neural.v2RowTitleLine}>
+                                <strong className={neural.v2RowName} style={{ color: tint }}>
+                                  {part.name}
+                                </strong>
+                                {part.broken && <span className={neural.coreBrokenTag}>受损</span>}
+                              </div>
+                              <div className={neural.v2RowSubLine}>
+                                {rarityLabel && (
+                                  <span className={neural.v2RowRarity} style={{ color: tint }}>
+                                    {rarityLabel}
+                                  </span>
+                                )}
+                                {part.effectiveLoad > 0 && (
+                                  <span className={neural.v2RowLoad} title="神经承载">
+                                    承载 {part.effectiveLoad}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                           {part.ability && <p className={neural.v2RowDesc}>{part.ability}</p>}
                           {part.behaviorChip && (
@@ -795,6 +833,59 @@ export function CyberwarePage({
               )}
             </div>
           </div>
+
+          {view.ripperdocDebts.length > 0 && (
+            <section className={neural.cyberExtraBlock} aria-label="义体诊所欠款">
+              <div className={neural.cyberExtraHead}>
+                <span className={neural.v2BlockCode}>{"DEBT // 义体赊账"}</span>
+                <span className={neural.cyberExtraHint}>
+                  共 {view.ripperdocDebts.length} 笔，总计{" "}
+                  {view.ripperdocDebts
+                    .reduce((sum, d) => sum + d.amount, 0)
+                    .toLocaleString("en-US")}{" "}
+                  €
+                </span>
+              </div>
+              <ul className={neural.cyberExtraList}>
+                {view.ripperdocDebts.map((debt) => (
+                  <li
+                    key={`${debt.docId}-${debt.due}`}
+                    className={neural.cyberExtraItem}
+                    data-warn={debt.overdue || undefined}
+                  >
+                    <strong>{debt.docName}</strong>
+                    <span>{debt.amount.toLocaleString("en-US")} €</span>
+                    <small>{debt.overdue ? `已逾期 · ${debt.due}` : `期限：${debt.due}`}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {view.cyberwareParts.length > 0 && (
+            <section className={neural.cyberExtraBlock} aria-label="未安装随身义体实物">
+              <div className={neural.cyberExtraHead}>
+                <span className={neural.v2BlockCode}>{"LOOSE // 未装义体实物"}</span>
+                <span className={neural.cyberExtraHint}>
+                  共 {view.cyberwareParts.length} 件，可带去义体医生诊所安装或折抵
+                </span>
+              </div>
+              <ul className={neural.cyberExtraList}>
+                {view.cyberwareParts.map((part) => (
+                  <li
+                    key={part.id}
+                    className={neural.cyberExtraItem}
+                    data-warn={part.condition === "damaged" || undefined}
+                    title={part.ability ?? part.source}
+                  >
+                    <strong>{part.name}</strong>
+                    <span>{part.condition === "damaged" ? "受损需修" : "完好未装"}</span>
+                    <small>{part.source}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </section>
       </div>
     </div>

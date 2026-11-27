@@ -11,10 +11,10 @@ import {
 } from "./schema";
 import { sidegigsStatus } from "./status";
 
-/** 拳赛和赛车：报名扣押金，赢了拿奖金并在场子圈内留名；比赛本身走物理裁决 */
+/** 拳赛和赛车：与势力看场、地盘火拼与押金特权联动；赢了拿奖金、留名并在中/高阶赛场赢得势力尊重 */
 export const sidegigs = defineSystem<SidegigsState, SidegigCommand>({
   id: "sidegigs",
-  dependsOn: ["economy", "character", "world", "travel"],
+  dependsOn: ["economy", "character", "world", "travel", "factions"],
   state: SidegigsStateSchema,
   initial: () => ({ active: null, record: {} }),
   commands: { sidegig: SidegigCommandSchema },
@@ -29,6 +29,7 @@ export const sidegigs = defineSystem<SidegigsState, SidegigCommand>({
         data,
         WorldClockStateSchema.parse(world.slices.world).location,
         world.time,
+        world.slices.factions,
       ),
   },
   status: sidegigsStatus,

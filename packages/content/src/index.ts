@@ -35,7 +35,12 @@ import { vehicles } from "./vehicles";
 export { agendas } from "./agendas";
 export { arcs } from "./arcs";
 export { braindances } from "./braindance";
-export { sampleCharacters } from "./characters";
+export {
+  buildVCharacterCard,
+  sampleCharacters,
+  type VGender,
+  type VOriginKey,
+} from "./characters";
 export { chipContents } from "./chips";
 export { cyberware } from "./cyberware";
 export { encounters } from "./encounters";
@@ -57,7 +62,7 @@ export { SERVICE_POINTS, type ServicePoint, type ServicePointKind } from "./mapS
 export { merchantSites } from "./merchant-sites";
 export { boardModules } from "./modules";
 export { ncpdAlerts } from "./ncpd";
-export { npcs } from "./npcs";
+export { npcs, vMaleNpcVariant } from "./npcs";
 export { npcTies } from "./npcTies";
 export {
   DEFAULT_OPENING,

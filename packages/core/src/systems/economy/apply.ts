@@ -1,6 +1,12 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome } from "../../kernel/system";
-import { type EconomyState, LOOT_EDDIES, type LootCommand, type MoneyCommand } from "./schema";
+import {
+  type ChromeCareCommand,
+  type EconomyState,
+  LOOT_EDDIES,
+  type LootCommand,
+  type MoneyCommand,
+} from "./schema";
 
 export function formatEddies(n: number): string {
   return `${n.toLocaleString("en-US")} 欧元`;
@@ -35,4 +41,13 @@ export function applyLoot(draft: Draft<EconomyState>, command: LootCommand): App
   draft.eddies += amount;
   if (command.event !== undefined) draft.settled.push(command.event);
   return { ok: true, notes: [`欧元 +${amount}（${command.reason}），现有 ${draft.eddies}`] };
+}
+
+/** 更新重度义体神经校准维护已缴清截止时刻 */
+export function applyChromeCare(
+  draft: Draft<EconomyState>,
+  command: ChromeCareCommand,
+): ApplyOutcome {
+  draft.chromeCarePaidUntil = command.paidUntil;
+  return { ok: true, notes: ["已完成重度义体神经校准与排异维护，未来 14 天神经接口状态平稳"] };
 }

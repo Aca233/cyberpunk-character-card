@@ -326,10 +326,11 @@ function routeHazard(
       warnings.push("幽冥犬关口严查，开偷来的车极易暴露");
     } else if (w.heat >= 2) {
       risk = "high";
-      warnings.push("通缉在身，过狗镇关口风险极高");
+      warnings.push("通缉在身，过狗镇关口盘查风险极高");
+    } else if (mode === "taxi") {
+      warnings.push("Delamain 送至狗镇关口接驳，经幽冥犬例行查验后进出");
     } else {
-      risk = raiseRisk(risk, "medium");
-      warnings.push("需经狗镇幽冥犬关口检查");
+      warnings.push("经狗镇幽冥犬关口例行查验（非敌对可正常通行）");
     }
   }
 
@@ -483,7 +484,6 @@ function blockOf(
   if (here && here.id === there.id) return "已经在这里了";
   if (d === undefined)
     return spot(there) ? "现在的位置不在地图上，用自由输入写怎么去" : `${there.name}还没上地图`;
-  if (mode === "taxi" && crossesDogtown(here, there)) return "狗镇关口封锁，Delamain 不进出狗镇";
   if (mode === "metro" && !(here?.metro && there.metro)) return "两头不都有轻轨站";
   if (cost > w.eddies) return `钱不够：要 ${cost}，只有 ${w.eddies}`;
   return undefined;

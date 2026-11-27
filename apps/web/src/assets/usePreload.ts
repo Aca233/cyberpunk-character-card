@@ -12,6 +12,7 @@ import {
 import { backdropOf, itemArtOf, portraitOf, shopPoiIconOf } from "../features/story/art";
 import { vehicleArtOf } from "../features/story/vehicle-art";
 import type { View } from "../features/story/view";
+import { isCustomImageAssetId } from "./customArt";
 import type { AssetId } from "./index";
 import {
   preloadAsset,
@@ -215,30 +216,28 @@ export function useStoryPreload(
       else if (npc.met) normalAssets.add(portrait);
     }
 
+    const addGearArt = (bucket: Set<AssetId>, art: ReturnType<typeof itemArtOf>) => {
+      if (art && !isCustomImageAssetId(art)) bucket.add(art);
+    };
+
     // 3. 玩家当前装备、随身物品、已装义体与名下载具
     for (const weapon of view.inventory.carriedWeapons) {
-      const art = itemArtOf(weapon.id);
-      if (art) highAssets.add(art);
+      addGearArt(highAssets, itemArtOf(weapon.id));
     }
     if (view.inventory.healing) {
-      const art = itemArtOf(view.inventory.healing.id);
-      if (art) highAssets.add(art);
+      addGearArt(highAssets, itemArtOf(view.inventory.healing.id));
     }
     if (view.inventory.grenade) {
-      const art = itemArtOf(view.inventory.grenade.id);
-      if (art) highAssets.add(art);
+      addGearArt(highAssets, itemArtOf(view.inventory.grenade.id));
     }
     for (const worn of view.inventory.clothing) {
-      const art = itemArtOf(worn.id);
-      if (art) highAssets.add(art);
+      addGearArt(highAssets, itemArtOf(worn.id));
     }
     for (const itemId of Object.keys(view.inventory.backpack)) {
-      const art = itemArtOf(itemId);
-      if (art) normalAssets.add(art);
+      addGearArt(normalAssets, itemArtOf(itemId));
     }
     for (const cw of view.cyberware) {
-      const art = itemArtOf(cw.id);
-      if (art) highAssets.add(art);
+      addGearArt(highAssets, itemArtOf(cw.id));
     }
     for (const vehicle of view.travel.vehicles) {
       const art = vehicleArtOf(vehicle.model);
@@ -249,15 +248,13 @@ export function useStoryPreload(
     if (view.ripperdoc) {
       preloadCharacterWorkbenchAssets("high");
       for (const item of view.ripperdoc.shelf) {
-        const art = itemArtOf(item.id);
-        if (art) normalAssets.add(art);
+        addGearArt(normalAssets, itemArtOf(item.id));
       }
     }
     for (const shop of view.shops) {
       highAssets.add(shopPoiIconOf(shop.kind));
       for (const item of shop.shelf) {
-        const art = itemArtOf(item.id);
-        if (art) normalAssets.add(art);
+        addGearArt(normalAssets, itemArtOf(item.id));
       }
     }
 
@@ -298,11 +295,11 @@ export function useCharactersPreload(
       }
       for (const cw of board.cyberware) {
         const art = itemArtOf(cw.id);
-        if (art) ids.add(art);
+        if (art && !isCustomImageAssetId(art)) ids.add(art);
       }
       for (const weaponId of board.kit.weapons) {
         const art = itemArtOf(weaponId);
-        if (art) ids.add(art);
+        if (art && !isCustomImageAssetId(art)) ids.add(art);
       }
       if (board.kit.vehicle) {
         const art = vehicleArtOf(board.kit.vehicle);

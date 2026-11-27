@@ -119,7 +119,13 @@ export const travelActions = {
         return locationForTravel(travelData, loc)?.district === "狗镇";
       };
       if (isDogtown(location) !== isDogtown(car.location)) {
-        return "狗镇封锁关口拦住了自动驶入，无法跨区呼叫车辆";
+        const factions = world.slices.factions as
+          | { readonly stances?: Readonly<Record<string, { readonly attitude?: string }>> }
+          | undefined;
+        const barghest = factions?.stances?.barghest?.attitude;
+        if (barghest === "hostile" || barghest === "kos") {
+          return "幽冥犬对你敌对，狗镇关口拦截了无人驶入的车辆，无法跨区呼叫";
+        }
       }
       return [{ type: "vehicle.summon", id: car.id, to: location }];
     },
