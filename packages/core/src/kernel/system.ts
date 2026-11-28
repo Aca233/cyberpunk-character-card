@@ -110,10 +110,14 @@ export interface SystemDef<S, C extends Command, I extends Command = never> {
   readonly proposals?: CommandProposals<C>;
   /** 在草稿上结算一条指令；返回 ok: false 时这条指令整体不生效 */
   apply(draft: Draft<S>, command: C | I, ctx: SystemContext): ApplyOutcome;
-  /** 信号处理：只改自己的状态，不能失败 */
-  readonly on?: Readonly<Record<string, (draft: Draft<S>, ctx: SystemContext) => void>>;
-  /** 时间推进时的结算，例如重伤失血、期限到期；不能失败 */
-  tick?(draft: Draft<S>, span: TimeSpan, ctx: SystemContext): void;
+  /** 信号处理：跨系统更新返回派生指令，与触发操作一起结算；派生连锁不能改变时间。 */
+  readonly on?: Readonly<
+    // biome-ignore lint/suspicious/noConfusingVoidType: 允许现有无返回值的回调与返回派生指令的回调共存。
+    Record<string, (draft: Draft<S>, ctx: SystemContext) => readonly Command[] | void>
+  >;
+  /** 时间推进时的结算；派生连锁不能再次改变时间，失败时回滚本次推进。 */
+  // biome-ignore lint/suspicious/noConfusingVoidType: 允许现有无返回值的回调与返回派生指令的回调共存。
+  tick?(draft: Draft<S>, span: TimeSpan, ctx: SystemContext): readonly Command[] | void;
   /**
    * 往静态数据表里并进这个存档自己的东西（例如存档记下的地点并进地点表，各系统照旧用 locationCatalog 查）。
    * 只读；状态没变时要返回同一个对象，各系统按对象缓存的查表才有效
@@ -514,22 +518,46 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     },
   });
 
-  const advance = (draft: Draft<WorldState>, to: number, ctx: ApplyContext) => {
+  const advance = (
+    draft: Draft<WorldState>,
+    to: number,
+    ctx: ApplyContext,
+    depth = 0,
+    notes: string[] = [],
+  ): string | undefined => {
     if (!Number.isInteger(to)) return `游戏时间必须是整数分钟：${to}`;
     if (to < draft.time) return "游戏时间不能倒退";
     if (to === draft.time) return undefined;
     const span = { from: draft.time, to };
     draft.time = to;
     for (const system of order) {
-      system.tick?.(draft.slices[system.id], span, contextFor(system, draft, ctx));
+      const emitted = system.tick?.(draft.slices[system.id], span, contextFor(system, draft, ctx));
+      for (const command of emitted ?? []) {
+        const failed = run(draft, command, system, depth + 1, notes, ctx, false);
+        if (failed !== undefined) return failed;
+      }
     }
     return undefined;
   };
 
-  const broadcast = (draft: Draft<WorldState>, signal: string, ctx: ApplyContext) => {
+  const broadcast = (
+    draft: Draft<WorldState>,
+    signal: string,
+    ctx: ApplyContext,
+    depth = 0,
+    notes: string[] = [],
+  ): string | undefined => {
     for (const system of order) {
-      system.on?.[signal]?.(draft.slices[system.id], contextFor(system, draft, ctx));
+      const emitted = system.on?.[signal]?.(
+        draft.slices[system.id],
+        contextFor(system, draft, ctx),
+      );
+      for (const command of emitted ?? []) {
+        const failed = run(draft, command, system, depth + 1, notes, ctx, false);
+        if (failed !== undefined) return failed;
+      }
     }
+    return undefined;
   };
 
   const parse = (raw: unknown, allowInternal: boolean): ParseResult => {
@@ -554,6 +582,7 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     depth: number,
     notes: string[],
     ctx: ApplyContext,
+    allowTimeAdvance = true,
   ): string | undefined => {
     if (depth > MAX_CHAIN) {
       throw new RegistryError(`指令连锁超过 ${MAX_CHAIN} 层：${command.type}`);
@@ -577,14 +606,20 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
     if (!outcome.ok) return outcome.reason;
     if (outcome.notes) notes.push(...outcome.notes);
     for (const next of outcome.emit ?? []) {
-      const failed = run(draft, next, system, depth + 1, notes, ctx);
+      const failed = run(draft, next, system, depth + 1, notes, ctx, allowTimeAdvance);
       if (failed !== undefined) return failed;
     }
     if (outcome.advanceTo !== undefined) {
-      const failed = advance(draft, outcome.advanceTo, ctx);
+      if (!allowTimeAdvance && outcome.advanceTo !== draft.time) {
+        return "信号或时间结算的派生指令不能再次改变游戏时间";
+      }
+      const failed = advance(draft, outcome.advanceTo, ctx, depth, notes);
       if (failed !== undefined) return failed;
     }
-    for (const signal of outcome.signals ?? []) broadcast(draft, signal, ctx);
+    for (const signal of outcome.signals ?? []) {
+      const failed = broadcast(draft, signal, ctx, depth, notes);
+      if (failed !== undefined) return failed;
+    }
     return undefined;
   };
 
@@ -746,7 +781,11 @@ export function createRegistry(systems: readonly AnySystem[]): Registry {
       return { world: state, patches, results };
     },
     signal(world, signal, ctx) {
-      const [next, patches] = produceWithPatches(world, (draft) => broadcast(draft, signal, ctx));
+      let failed = undefined as string | undefined;
+      const [next, patches] = produceWithPatches(world, (draft) => {
+        failed = broadcast(draft, signal, ctx);
+      });
+      if (failed !== undefined) throw new RegistryError(failed);
       return { world: next, patches };
     },
     advanceTo(world, to, ctx) {

@@ -41,6 +41,7 @@ interface ChatChunk {
   readonly choices?: readonly {
     readonly delta?: {
       readonly content?: string | null;
+      readonly refusal?: string | null;
       readonly reasoning_content?: string | null;
       readonly reasoning?: string | null;
       readonly thinking?: string | null;
@@ -218,11 +219,12 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
         }
         throw statusError(provider, res.status, detail.message);
       }
-      if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status, true);
+      if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status);
 
       let finishReason = "";
       let usage: LlmUsage | undefined;
       let finished = false;
+      let visible = false;
       // 开头先攒住，确认不是写成正文的上游错误再放出去；是错误就一直攒到结束再报
       let head = "";
       let headState: "pending" | "story" | "error" = "pending";
@@ -261,11 +263,17 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
           );
         }
         for (const choice of chunk.choices ?? []) {
+          const refusal = choice.delta?.refusal;
+          if (typeof refusal === "string" && refusal.trim() !== "") {
+            yield { type: "blocked", reason: refusal.trim() };
+            return;
+          }
           const thought =
             choice.delta?.reasoning_content ?? choice.delta?.reasoning ?? choice.delta?.thinking;
           if (thought) yield { type: "thought", text: thought };
           const text = choice.delta?.content;
           if (text) {
+            if (text.trim() !== "") visible = true;
             if (headState === "story") {
               yield { type: "text", text };
             } else {
@@ -302,6 +310,7 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
       }
       if (!finished && !finishReason)
         throw new UpstreamError(`${provider} 的回复没有正常结束`, undefined, true);
+      if (!visible) throw new UpstreamError(`${provider} 没有返回正文，检查模型名和最大输出`);
       yield { type: "done", finishReason: finishReason || "stop", ...(usage ? { usage } : {}) };
     },
   };

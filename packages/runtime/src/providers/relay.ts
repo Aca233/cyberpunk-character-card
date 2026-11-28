@@ -17,13 +17,40 @@ function relayAvailable(): boolean {
 }
 
 function isLocalHost(host: string): boolean {
-  return (
+  host = host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  if (
     host === "localhost" ||
     host.endsWith(".localhost") ||
-    host === "127.0.0.1" ||
-    host === "[::1]" ||
-    host.startsWith("192.168.") ||
-    host.startsWith("10.")
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    (!host.includes(".") && !host.includes(":"))
+  ) {
+    return true;
+  }
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (ipv4) {
+    const a = Number(ipv4[1]);
+    const b = Number(ipv4[2]);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  return (
+    host.includes(":") &&
+    (host === "::1" ||
+      host === "::" ||
+      /^f[cd]/.test(host) ||
+      /^fe[89ab]/.test(host) ||
+      host.startsWith("::ffff:"))
   );
 }
 
@@ -34,13 +61,17 @@ function viaRelay(url: string, init: RequestInit): Promise<Response> {
 }
 
 export async function relayFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  let host: string;
+  let target: URL;
   try {
-    host = new URL(url).host;
+    target = new URL(url);
   } catch {
     return fetch(url, init);
   }
-  const canRelay = relayAvailable() && !isLocalHost(host);
+  const host = target.host;
+  const canRelay =
+    relayAvailable() &&
+    (target.protocol === "http:" || target.protocol === "https:") &&
+    !isLocalHost(target.hostname);
   if (canRelay && relayHosts.has(host)) {
     const res = await viaRelay(url, init);
     // 转发层自己拒绝或失败：当作网络错误，让调用方给出统一的「连不上」提示

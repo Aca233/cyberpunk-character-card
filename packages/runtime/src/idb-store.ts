@@ -311,17 +311,29 @@ export class IdbSaveStore implements SaveStorage {
     });
   }
 
-  /** 导入存档：一次写下整份日志（调用方已经逐行校验过，存档是刚建的空档） */
-  async importLog(id: string, text: string): Promise<void> {
+  /** 导入新存档的全部内容共用一个事务，配额或任一步写入失败时整份回滚。 */
+  async createImported(
+    id: string,
+    meta: SaveMeta,
+    lines: readonly string[],
+    snapshot: Snapshot,
+  ): Promise<void> {
     checkSaveId(id);
-    if (text !== "" && !text.endsWith("\n")) throw new Error("导入的日志最后一行不完整");
-    const lines = text === "" ? [] : text.slice(0, -1).split("\n");
-    await inTx(this.db, [METAS, LOG], "readwrite", async (tx) => {
-      await requireMeta(tx, id);
+    const body = `${JSON.stringify(SaveMetaSchema.parse(meta), null, 2)}\n`;
+    for (const line of lines) checkLine(line);
+    if (snapshot.nextSeq !== lines.length) throw new Error("导入快照的版本与日志条数不一致");
+    const snapshotBody = JSON.stringify(SnapshotFileSchema.parse(snapshot));
+    await inTx(this.db, [METAS, LOG, SNAPSHOTS], "readwrite", async (tx) => {
+      const metas = tx.objectStore(METAS);
+      if ((await req(metas.count(id))) > 0) throw new SaveExistsError(`存档已存在：${id}`);
       const log = tx.objectStore(LOG);
       log.delete(saveRange(id));
-      // 不逐条等：任何一条失败都会中止整个事务，inTx 等 complete 时会报出来
-      for (const [seq, line] of lines.entries()) log.add(`${line}\n`, [id, seq]);
+      const snapshots = tx.objectStore(SNAPSHOTS);
+      snapshots.delete(saveRange(id));
+      // 不逐条等：任何请求失败都会中止同一个事务，inTx 等 complete 才返回。
+      for (const [seq, line] of lines.entries()) log.add(line, [id, seq]);
+      snapshots.add(snapshotBody, [id, snapshot.nextSeq]);
+      await req(metas.add(body, id));
     });
   }
 

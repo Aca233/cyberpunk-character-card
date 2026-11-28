@@ -5,7 +5,7 @@ import { relayFetch } from "./relay";
 /**
  * Gemini / Vertex AI 显式上下文缓存（Explicit Context Caching / cachedContents）管理器：
  * - 仅在 profile.promptCacheMode === "on" 且静态 system 超过最低门槛（~2400 字符）时启用；
- * - 按 (endpoint, model, hash(staticSystem)) 复用远端 cachedContents 资源，临期自动后台 PATCH 续期；
+ * - 按 (endpoint, model, 凭据指纹, hash(staticSystem)) 复用远端 cachedContents 资源，临期自动后台 PATCH 续期；
  * - 若上游不支持（如中转站 404/400 或未配置项目路径的 Vertex 快捷模式），记录负缓存并静默回退到常规 systemInstruction，
  *   绝不拖慢或阻断正常回合生成。
  */
@@ -100,7 +100,15 @@ export async function resolveGeminiCachedContent(
   if (staticSystem.length < MIN_STATIC_SYSTEM_CHARS) return undefined;
   if (signal?.aborted) return undefined;
 
-  const negKey = `${endpoint.collectionUrl}|${endpoint.resourceModel}`;
+  // 不同密钥或 OAuth token 的缓存权限可能不同；连负缓存与创建中的请求也必须隔离。
+  // 指纹只留在内存键里，不把认证头或 query 密钥本身放进缓存键、日志或持久化数据。
+  const credentialScope = hashEmbeddingText(
+    JSON.stringify([
+      endpoint.apiKeyQuery ?? "",
+      [...new Headers(headers)].sort(([a], [b]) => a.localeCompare(b)),
+    ]),
+  );
+  const negKey = `${endpoint.collectionUrl}|${endpoint.resourceModel}|${credentialScope}`;
   const blockedUntil = unsupportedEndpoints.get(negKey);
   if (blockedUntil !== undefined && blockedUntil > Date.now()) return undefined;
 

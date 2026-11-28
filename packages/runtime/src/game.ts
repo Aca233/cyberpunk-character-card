@@ -16,6 +16,7 @@ import {
   buildJudgePrompt,
   buildLedger,
   buildNarratorPrompt,
+  buildRewritePrompt,
   type Clock,
   characterRules,
   checkpointSummaryOf,
@@ -54,6 +55,7 @@ import {
   pickStartLocation,
   projectState,
   type Rng,
+  registry,
   replay,
   rewriteNarrative,
   runNarratorTurn,
@@ -144,6 +146,35 @@ function stableJson(value: unknown): string {
       ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
       : v,
   );
+}
+
+/** 导入不能只确认补丁能执行：最终每块系统状态都必须能被当前版本读取。 */
+function validateImportedWorld(world: WorldState): void {
+  const shape = ImportedSnapshotSchema.shape.world.safeParse(world);
+  if (!shape.success) throw new Error(`世界状态结构不合法：${shape.error.message}`);
+  const known = new Set(registry.order.map((system) => system.id));
+  for (const id of Object.keys(world.slices)) {
+    if (!known.has(id)) throw new Error(`世界状态包含当前版本不支持的系统：${id}`);
+  }
+  for (const system of registry.order) {
+    const state = system.state.safeParse(world.slices[system.id]);
+    if (!state.success) {
+      throw new Error(`系统 ${system.id} 的状态不合法：${state.error.message}`);
+    }
+  }
+}
+
+/** 改写沿用原回合的结算；它的结算前世界应追溯到最初被改写的回合。 */
+function originalTurnSeq(record: TurnRecord, records: readonly LogRecord[]): number {
+  let original = record;
+  while (original.replaces !== undefined) {
+    const previous = records[original.replaces];
+    if (previous?.kind !== "turn" || previous.seq >= original.seq) {
+      throw new Error(`第 ${original.seq} 轮的改写来源不合法`);
+    }
+    original = previous;
+  }
+  return original.seq;
 }
 
 function openingContextOf(world: WorldState, startTime: number): OpeningContext {
@@ -432,6 +463,8 @@ export class GameService {
         { nextSeq: 0, world: withAllSlices(newGameWorld(meta.data, runtime.content)) },
         records,
       );
+      validateImportedWorld(world);
+      projectState(world, records, runtime.data);
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error);
       return { status: 400, body: { error: `回合日志重放不了：${why}` } };
@@ -451,20 +484,21 @@ export class GameService {
       if (!same) notes.push("导出文件里的快照和回合日志对不上，已按回合日志重建");
     }
     const id = newSaveId();
-    await this.deps.saves.create(id, meta.data);
-    if (records.length > 0) {
-      await this.deps.saves.importLog(id, records.map(serializeRecord).join(""));
-      await this.deps.saves.writeSnapshot(id, { nextSeq: records.length, world });
-    }
+    await this.deps.saves.createImported(id, meta.data, records.map(serializeRecord), {
+      nextSeq: records.length,
+      world,
+    });
     return { status: 201, body: { id, ...meta.data, notes } };
   }
 
   async state(id: string): Promise<PlayerView & { readonly checkpoint?: TurnCheckpointSummary }> {
     return this.locks.run(id, async () => {
       const { meta, world, records } = await this.load(id);
-      // 最后一条记录之前的世界：系统通知比的是这一步前后的变化
+      // 撤销可能原子追加多条 void；不能截在这批记录中间重放，也不把撤销当成新事件通知。
       const before =
-        records.length > 0 ? await this.worldAt(id, meta, records.slice(0, -1)) : undefined;
+        records.length > 0 && records.at(-1)?.kind !== "void"
+          ? await this.worldAt(id, meta, records.slice(0, -1))
+          : undefined;
       const view = projectState(world, records, this.runtime(meta).data, before);
       const version = logVersion(records);
       const cp = await this.deps.checkpoints?.get(id);
@@ -1001,122 +1035,135 @@ export class GameService {
       if (record?.kind !== "turn" || !effectiveTurns(records).includes(record)) {
         return { status: 404, body: { error: `没有第 ${seq} 轮` } };
       }
-      const before = records.slice(0, seq);
+      const before = records.slice(0, originalTurnSeq(record, records));
       const upto = records.slice(0, seq + 1);
       const world = await this.worldAt(id, meta, before);
       const input = TurnInputSchema.safeParse(record.input);
       let prompts: StagePrompt[] = [];
       let rebuildError: string | null = null;
       try {
-        if (!input.success) throw new Error("这一轮的玩家输入格式不对");
-        const plan: NarratorPlan = { kind: "action", input: input.data };
-        const extras = {
-          data: runtime.data,
-          opening: openingPremise(
-            meta.opening,
-            meta.startLocation,
-            openingContextOf(world, meta.startTime),
-          ),
-          startTime: meta.startTime,
-        };
-        const stage = (
-          id: StagePrompt["stage"],
-          label: string,
-          built: { messages: readonly LlmMessage[]; modules: readonly string[] },
-        ): StagePrompt => ({
-          stage: id,
-          label,
-          messages: [...built.messages],
-          modules: [...built.modules],
-          chars: built.messages.reduce((n, m) => n + m.content.length, 0),
-        });
-        // ① 判断：确认检定的那一轮、场外提问的旧存档没有这一步
-        if (plan.kind === "action" && input.data.mode !== "ooc") {
-          const lately = effectiveTurns(before)
-            .slice(-2)
-            .map((t) => t.text)
-            .join("\n");
-          const pool = memoryPool(
-            world,
-            before,
-            record.budget?.history ?? HISTORY_TURNS,
-            record.budget?.recapTokens,
-          );
-          const memories = judgeCandidates(pool, world, {
-            input: input.data.text,
-            context: lately,
+        if (record.replaces !== undefined) {
+          const previous = records[record.replaces];
+          if (previous?.kind !== "turn") throw new Error("改写前的回合记录不存在");
+          const messages = buildRewritePrompt(previous);
+          prompts.push({
+            stage: "narrate",
+            label: "③ 按账目改写",
+            messages,
+            modules: [],
+            chars: messages.reduce((n, message) => n + message.content.length, 0),
           });
-          prompts.push(
-            stage("judge", "① 判断", buildJudgePrompt(world, before, plan, extras, memories)),
+        } else {
+          if (!input.success) throw new Error("这一轮的玩家输入格式不对");
+          const plan: NarratorPlan = { kind: "action", input: input.data };
+          const extras = {
+            data: runtime.data,
+            opening: openingPremise(
+              meta.opening,
+              meta.startLocation,
+              openingContextOf(world, meta.startTime),
+            ),
+            startTime: meta.startTime,
+          };
+          const stage = (
+            id: StagePrompt["stage"],
+            label: string,
+            built: { messages: readonly LlmMessage[]; modules: readonly string[] },
+          ): StagePrompt => ({
+            stage: id,
+            label,
+            messages: [...built.messages],
+            modules: [...built.modules],
+            chars: built.messages.reduce((n, m) => n + m.content.length, 0),
+          });
+          // ① 判断：确认检定的那一轮、场外提问的旧存档没有这一步
+          if (plan.kind === "action" && input.data.mode !== "ooc") {
+            const lately = effectiveTurns(before)
+              .slice(-2)
+              .map((t) => t.text)
+              .join("\n");
+            const pool = memoryPool(
+              world,
+              before,
+              record.budget?.history ?? HISTORY_TURNS,
+              record.budget?.recapTokens,
+            );
+            const memories = judgeCandidates(pool, world, {
+              input: input.data.text,
+              context: lately,
+            });
+            prompts.push(
+              stage("judge", "① 判断", buildJudgePrompt(world, before, plan, extras, memories)),
+            );
+          }
+          const boosted = record.commands.some(
+            (c) =>
+              typeof c === "object" &&
+              c !== null &&
+              (c as { type?: unknown }).type === "cyberware.boost",
           );
-        }
-        const boosted = record.commands.some(
-          (c) =>
-            typeof c === "object" &&
-            c !== null &&
-            (c as { type?: unknown }).type === "cyberware.boost",
-        );
-        const livePlan: NarratorPlan =
-          plan.kind === "action" && boosted && plan.input.sandevistan !== true
-            ? { ...plan, input: { ...plan.input, sandevistan: true } }
-            : plan;
-        prompts.push(
-          stage(
-            "narrate",
-            record.decided === undefined
-              ? "③ 写正文（旧存档没记已定的事，只是大致还原）"
-              : "③ 写正文",
-            buildNarratorPrompt(world, before, livePlan, {
-              ...extras,
-              decided: record.decided,
-              recalled: [...(record.recalled ?? []), ...(record.expanded ?? [])],
-              lore: record.lore?.section,
-              history: record.budget?.history,
-              recapTokens: record.budget?.recapTokens,
-            }),
-          ),
-        );
-        // ④ 抽取：场外提问和等检定的轮次不抽
-        if (record.ooc !== true) {
+          const livePlan: NarratorPlan =
+            plan.kind === "action" && boosted && plan.input.sandevistan !== true
+              ? { ...plan, input: { ...plan.input, sandevistan: true } }
+              : plan;
           prompts.push(
             stage(
-              "extract",
-              "④ 抽取",
-              buildExtractPrompt(
-                world,
-                before,
-                livePlan,
-                { ...extras, decided: record.decided },
-                record.text,
-              ),
+              "narrate",
+              record.decided === undefined
+                ? "③ 写正文（旧存档没记已定的事，只是大致还原）"
+                : "③ 写正文",
+              buildNarratorPrompt(world, before, livePlan, {
+                ...extras,
+                decided: record.decided,
+                recalled: [...(record.recalled ?? []), ...(record.expanded ?? [])],
+                lore: record.lore?.section,
+                history: record.budget?.history,
+                recapTokens: record.budget?.recapTokens,
+              }),
             ),
           );
-        }
-        // ⑥ 场外推演：发出的内容和回复是记下来的，不用重建
-        if (record.offscreen) {
-          prompts.push(
-            stage("offscreen", "⑥ 场外推演", {
-              messages: [
-                { role: "system", content: OFFSCREEN_SYSTEM },
-                { role: "user", content: record.offscreen.prompt },
-                { role: "assistant", content: record.offscreen.reply },
-              ],
-              modules: [],
-            }),
-          );
-        }
-        // ⑦ 场景摘要：同样是记下来的
-        if (record.summary) {
-          prompts.push(
-            stage("summary", "⑦ 场景摘要", {
-              messages: [
-                { role: "system", content: SUMMARY_SYSTEM },
-                { role: "user", content: record.summary.prompt },
-                { role: "assistant", content: record.summary.reply },
-              ],
-              modules: [],
-            }),
-          );
+          // ④ 抽取：场外提问和等检定的轮次不抽
+          if (record.ooc !== true) {
+            prompts.push(
+              stage(
+                "extract",
+                "④ 抽取",
+                buildExtractPrompt(
+                  world,
+                  before,
+                  livePlan,
+                  { ...extras, decided: record.decided },
+                  record.text,
+                ),
+              ),
+            );
+          }
+          // ⑥ 场外推演：发出的内容和回复是记下来的，不用重建
+          if (record.offscreen) {
+            prompts.push(
+              stage("offscreen", "⑥ 场外推演", {
+                messages: [
+                  { role: "system", content: OFFSCREEN_SYSTEM },
+                  { role: "user", content: record.offscreen.prompt },
+                  { role: "assistant", content: record.offscreen.reply },
+                ],
+                modules: [],
+              }),
+            );
+          }
+          // ⑦ 场景摘要：同样是记下来的
+          if (record.summary) {
+            prompts.push(
+              stage("summary", "⑦ 场景摘要", {
+                messages: [
+                  { role: "system", content: SUMMARY_SYSTEM },
+                  { role: "user", content: record.summary.prompt },
+                  { role: "assistant", content: record.summary.reply },
+                ],
+                modules: [],
+              }),
+            );
+          }
         }
       } catch (error) {
         prompts = [];
@@ -1147,7 +1194,7 @@ export class GameService {
           input: input.success ? input.data : null,
           text: record.text,
           read: record.read ?? null,
-          modules: record.modules ?? [],
+          modules: record.replaces === undefined ? (record.modules ?? []) : [],
           commands: record.commands,
           dropped: record.dropped,
           notes: record.notes ?? [],
@@ -1171,10 +1218,13 @@ export class GameService {
               }
             : null,
           // ⑥ 没跑的原因：收场时记下的，其余按这一轮的情况推
-          offscreenSkip: record.offscreen
-            ? null
-            : (record.offscreenSkip ??
-              (record.ooc ? "场外提问，不推演" : "尚未触发需要推演的世界变化")),
+          offscreenSkip:
+            record.replaces !== undefined
+              ? "按账目改写只修改正文，不执行场外推演"
+              : record.offscreen
+                ? null
+                : (record.offscreenSkip ??
+                  (record.ooc ? "场外提问，不推演" : "尚未触发需要推演的世界变化")),
           // 这一轮结算之后城里的动静（含已结束的），只在剧透视图里看
           city: cityRules.CityStateSchema.parse(
             applyRecordPatches(world, record.patches).slices.city ?? {},
@@ -1218,8 +1268,25 @@ export class GameService {
       const meta = await this.deps.saves.readMeta(id);
       const { records } = await this.deps.saves.loadLog(id);
       const record = records[seq];
-      if (record?.kind !== "turn" || !effectiveTurns(records).includes(record)) {
+      const effective = effectiveTurns(records);
+      if (
+        record?.kind !== "turn" ||
+        (!effective.includes(record) &&
+          !effective.some((turn) => originalTurnSeq(turn, records) === seq))
+      ) {
         return { status: 404, body: { error: `没有第 ${seq} 轮` } };
+      }
+      if (record.replaces !== undefined) {
+        const originalSeq = originalTurnSeq(record, records);
+        const alternative = `/api/saves/${id}/turns/${originalSeq}/eval-case`;
+        return {
+          status: 409,
+          body: {
+            error: `第 ${seq} 轮是按账目改写，当前评测器只支持普通回合。请改为导出原第 ${originalSeq} 轮：${alternative}`,
+            originalSeq,
+            alternative,
+          },
+        };
       }
       const input = TurnInputSchema.safeParse(record.input);
       if (!input.success) return { status: 400, body: { error: "这一轮的玩家输入格式不对" } };
@@ -1356,117 +1423,133 @@ export class GameService {
         const parsedInput = TurnInputSchema.safeParse(lastTurn.input);
         if (lastSeq !== undefined && parsedInput.success) {
           try {
-            const before = records.slice(0, lastSeq);
-            const beforeWorld = await this.worldAt(id, meta, before);
-            const plan: NarratorPlan = { kind: "action", input: parsedInput.data };
-            const extras = {
-              data: runtime.data,
-              startTime: meta.startTime,
-              opening: openingPremise(
-                meta.opening,
-                meta.startLocation,
-                openingContextOf(beforeWorld, meta.startTime),
-              ),
-            };
-            const stage = (
-              stageId: StagePrompt["stage"],
-              label: string,
-              built: { messages: readonly LlmMessage[]; modules: readonly string[] },
-            ): StagePrompt => ({
-              stage: stageId,
-              label,
-              messages: [...built.messages],
-              modules: [...built.modules],
-              chars: built.messages.reduce((n, m) => n + m.content.length, 0),
-            });
-            const stages: StagePrompt[] = [];
-            if (parsedInput.data.mode !== "ooc") {
-              const lately = effectiveTurns(before)
-                .slice(-2)
-                .map((t) => t.text)
-                .join("\n");
-              const pool = memoryPool(
-                beforeWorld,
-                before,
-                lastTurn.budget?.history ?? HISTORY_TURNS,
-                lastTurn.budget?.recapTokens,
-              );
-              const memories = judgeCandidates(pool, beforeWorld, {
-                input: parsedInput.data.text,
-                context: lately,
+            if (lastTurn.replaces !== undefined) {
+              const previous = records[lastTurn.replaces];
+              if (previous?.kind !== "turn") throw new Error("改写前的回合记录不存在");
+              const messages = buildRewritePrompt(previous);
+              lastTurnStages = [
+                {
+                  stage: "narrate",
+                  label: "③ 按账目改写",
+                  messages,
+                  modules: [],
+                  chars: messages.reduce((n, message) => n + message.content.length, 0),
+                },
+              ];
+              lastTurnMessages = messages;
+            } else {
+              const before = records.slice(0, lastSeq);
+              const beforeWorld = await this.worldAt(id, meta, before);
+              const plan: NarratorPlan = { kind: "action", input: parsedInput.data };
+              const extras = {
+                data: runtime.data,
+                startTime: meta.startTime,
+                opening: openingPremise(
+                  meta.opening,
+                  meta.startLocation,
+                  openingContextOf(beforeWorld, meta.startTime),
+                ),
+              };
+              const stage = (
+                stageId: StagePrompt["stage"],
+                label: string,
+                built: { messages: readonly LlmMessage[]; modules: readonly string[] },
+              ): StagePrompt => ({
+                stage: stageId,
+                label,
+                messages: [...built.messages],
+                modules: [...built.modules],
+                chars: built.messages.reduce((n, m) => n + m.content.length, 0),
               });
-              stages.push(
-                stage(
-                  "judge",
-                  "① 判断",
-                  buildJudgePrompt(beforeWorld, before, plan, extras, memories),
-                ),
-              );
-            }
-            const boosted = lastTurn.commands.some(
-              (c) =>
-                typeof c === "object" &&
-                c !== null &&
-                (c as { type?: unknown }).type === "cyberware.boost",
-            );
-            const livePlan: NarratorPlan =
-              boosted && plan.input.sandevistan !== true
-                ? { ...plan, input: { ...plan.input, sandevistan: true } }
-                : plan;
-            const narrateStage = stage(
-              "narrate",
-              "③ 写正文",
-              buildNarratorPrompt(beforeWorld, before, livePlan, {
-                ...extras,
-                decided: lastTurn.decided,
-                recalled: [...(lastTurn.recalled ?? []), ...(lastTurn.expanded ?? [])],
-                lore: lastTurn.lore?.section,
-                history: lastTurn.budget?.history,
-                recapTokens: lastTurn.budget?.recapTokens,
-              }),
-            );
-            stages.push(narrateStage);
-            if (lastTurn.ooc !== true) {
-              stages.push(
-                stage(
-                  "extract",
-                  "④ 抽取",
-                  buildExtractPrompt(
-                    beforeWorld,
-                    before,
-                    livePlan,
-                    { ...extras, decided: lastTurn.decided },
-                    lastTurn.text,
+              const stages: StagePrompt[] = [];
+              if (parsedInput.data.mode !== "ooc") {
+                const lately = effectiveTurns(before)
+                  .slice(-2)
+                  .map((t) => t.text)
+                  .join("\n");
+                const pool = memoryPool(
+                  beforeWorld,
+                  before,
+                  lastTurn.budget?.history ?? HISTORY_TURNS,
+                  lastTurn.budget?.recapTokens,
+                );
+                const memories = judgeCandidates(pool, beforeWorld, {
+                  input: parsedInput.data.text,
+                  context: lately,
+                });
+                stages.push(
+                  stage(
+                    "judge",
+                    "① 判断",
+                    buildJudgePrompt(beforeWorld, before, plan, extras, memories),
                   ),
-                ),
+                );
+              }
+              const boosted = lastTurn.commands.some(
+                (c) =>
+                  typeof c === "object" &&
+                  c !== null &&
+                  (c as { type?: unknown }).type === "cyberware.boost",
               );
-            }
-            if (lastTurn.offscreen) {
-              stages.push(
-                stage("offscreen", "⑥ 场外推演", {
-                  messages: [
-                    { role: "system", content: OFFSCREEN_SYSTEM },
-                    { role: "user", content: lastTurn.offscreen.prompt },
-                    { role: "assistant", content: lastTurn.offscreen.reply },
-                  ],
-                  modules: [],
+              const livePlan: NarratorPlan =
+                boosted && plan.input.sandevistan !== true
+                  ? { ...plan, input: { ...plan.input, sandevistan: true } }
+                  : plan;
+              const narrateStage = stage(
+                "narrate",
+                "③ 写正文",
+                buildNarratorPrompt(beforeWorld, before, livePlan, {
+                  ...extras,
+                  decided: lastTurn.decided,
+                  recalled: [...(lastTurn.recalled ?? []), ...(lastTurn.expanded ?? [])],
+                  lore: lastTurn.lore?.section,
+                  history: lastTurn.budget?.history,
+                  recapTokens: lastTurn.budget?.recapTokens,
                 }),
               );
+              stages.push(narrateStage);
+              if (lastTurn.ooc !== true) {
+                stages.push(
+                  stage(
+                    "extract",
+                    "④ 抽取",
+                    buildExtractPrompt(
+                      beforeWorld,
+                      before,
+                      livePlan,
+                      { ...extras, decided: lastTurn.decided },
+                      lastTurn.text,
+                    ),
+                  ),
+                );
+              }
+              if (lastTurn.offscreen) {
+                stages.push(
+                  stage("offscreen", "⑥ 场外推演", {
+                    messages: [
+                      { role: "system", content: OFFSCREEN_SYSTEM },
+                      { role: "user", content: lastTurn.offscreen.prompt },
+                      { role: "assistant", content: lastTurn.offscreen.reply },
+                    ],
+                    modules: [],
+                  }),
+                );
+              }
+              if (lastTurn.summary) {
+                stages.push(
+                  stage("summary", "⑦ 场景摘要", {
+                    messages: [
+                      { role: "system", content: SUMMARY_SYSTEM },
+                      { role: "user", content: lastTurn.summary.prompt },
+                      { role: "assistant", content: lastTurn.summary.reply },
+                    ],
+                    modules: [],
+                  }),
+                );
+              }
+              lastTurnStages = stages;
+              lastTurnMessages = narrateStage.messages;
             }
-            if (lastTurn.summary) {
-              stages.push(
-                stage("summary", "⑦ 场景摘要", {
-                  messages: [
-                    { role: "system", content: SUMMARY_SYSTEM },
-                    { role: "user", content: lastTurn.summary.prompt },
-                    { role: "assistant", content: lastTurn.summary.reply },
-                  ],
-                  modules: [],
-                }),
-              );
-            }
-            lastTurnStages = stages;
-            lastTurnMessages = narrateStage.messages;
           } catch (error) {
             promptRebuildError = error instanceof Error ? error.message : String(error);
           }

@@ -771,6 +771,11 @@ function computePlayerView(
   const clock = WorldClockStateSchema.parse(world.slices.world);
   const health = HealthStateSchema.parse(world.slices.health);
   const turns = effectiveTurns(records);
+  const voided = voidedSeqs(records);
+  const activeRecords = records.filter(
+    (record) => record.kind !== "void" && !voided.has(record.seq),
+  );
+  const blackouts = blackoutTurns(turns, world.slices.psychosis, activeRecords);
   const feed = registry.feed({ world, records, data });
   const carried = looseCyberwareView(
     views.inventory as ReturnType<typeof inventoryView>,
@@ -988,7 +993,7 @@ function computePlayerView(
         /** 这一轮的赛博精神病发作：诱因和严重度 */
         episode: episodeOf(t.commands),
         /** 落在严重发作后的记忆空白里：角色视角折起来，原文以回合日志为准 */
-        blackout: blackoutTurns(turns, world.slices.psychosis).has(t.seq),
+        blackout: blackouts.has(t.seq),
       };
     }),
   };

@@ -108,6 +108,14 @@ interface AutoImageTask {
   readonly boundIds: string[];
 }
 
+interface StorySaveContext {
+  readonly saveId: string;
+  readonly readFeed: Set<string>;
+  readingPromise: Promise<void> | null;
+  readVersion: number | null;
+  readError: string | null;
+}
+
 function isTyping(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
@@ -129,6 +137,24 @@ function glitchLevel(view: View): 0 | 1 | 2 | 3 {
 /** 剧情主界面：左右夜之城角块 HUD、中列连续叙事流、底部选项与神经输入终端 */
 export function StoryScreen() {
   const { saveId = "" } = useParams();
+  const saveContext = useMemo<StorySaveContext>(
+    () => ({
+      saveId,
+      readFeed: new Set(),
+      readingPromise: null,
+      readVersion: null,
+      readError: null,
+    }),
+    [saveId],
+  );
+  const saveContextRef = useRef<StorySaveContext | null>(saveContext);
+  saveContextRef.current = saveContext;
+  useEffect(() => {
+    saveContextRef.current = saveContext;
+    return () => {
+      if (saveContextRef.current === saveContext) saveContextRef.current = null;
+    };
+  }, [saveContext]);
   const navigate = useNavigate();
   const client = useQueryClient();
   const story = useStory(
@@ -144,11 +170,19 @@ export function StoryScreen() {
       submit: s.submit,
       stop: s.stop,
       setDraft: s.setDraft,
+      restoreDraft: s.restoreDraft,
       dismiss: s.dismiss,
       cancelSpend: s.cancelSpend,
     })),
   );
-  const { enter, submit: submitStory, dismiss: dismissStory, stop: stopStory, setDraft } = story;
+  const {
+    enter,
+    submit: submitStory,
+    dismiss: dismissStory,
+    stop: stopStory,
+    setDraft,
+    restoreDraft,
+  } = story;
 
   useEffect(() => enter(saveId), [enter, saveId]);
 
@@ -890,14 +924,16 @@ export function StoryScreen() {
     async (fromSeq?: number) => {
       try {
         const r = await api.undoTurn(saveId, version, fromSeq);
+        if (saveContextRef.current !== saveContext) return;
         cancelTurnImagesFrom(r.fromSeq);
         const restoredText = r.input?.text?.trim() ?? "";
         if (restoredText !== "") {
-          setDraft({
+          restoreDraft(saveId, {
+            ...r.input,
             text: restoredText,
-            ...(r.input?.sandevistan ? { sandevistan: true } : {}),
           });
           requestAnimationFrame(() => {
+            if (saveContextRef.current !== saveContext) return;
             const el = inputRef.current;
             if (!el || el.disabled) return;
             el.focus();
@@ -907,11 +943,12 @@ export function StoryScreen() {
         }
         await refresh();
       } catch (error) {
+        if (saveContextRef.current !== saveContext) return;
         warn("undo", error);
         await refresh();
       }
     },
-    [saveId, version, cancelTurnImagesFrom, setDraft, refresh, warn],
+    [saveId, saveContext, version, cancelTurnImagesFrom, restoreDraft, refresh, warn],
   );
 
   // 按账目改写最后一轮：只换正文，不改状态
@@ -978,26 +1015,70 @@ export function StoryScreen() {
     setExpand((cur) => (cur === id ? null : id));
   }, []);
   // 只在具体某个会话被打开时按联系人粒度标已读；并发触发时排队合并，避免切联系人吞掉已读请求
-  const readingPromise = useRef<Promise<void> | null>(null);
-  const queuedFeed = useRef<Set<string>>(new Set());
   const readPhoneFeed = useCallback(
     (feed: readonly string[]) => {
-      if (feed.length === 0) return;
-      for (const id of feed) queuedFeed.current.add(id);
-      if (readingPromise.current !== null) return;
+      if (saveContextRef.current !== saveContext) return;
+      for (const id of feed) saveContext.readFeed.add(id);
+      if (saveContext.readingPromise !== null || saveContext.readFeed.size === 0) return;
+      saveContext.readError = null;
       const drain = async () => {
-        while (queuedFeed.current.size > 0) {
-          const batch = [...queuedFeed.current];
-          queuedFeed.current.clear();
-          await act({ type: "readMessages", feed: batch }, "phone");
+        let nextVersion = Math.max(
+          version,
+          saveContext.readVersion ?? version,
+          client.getQueryData<View>(["state", saveId])?.version ?? version,
+        );
+        let retriedConflict = false;
+        while (saveContextRef.current === saveContext && saveContext.readFeed.size > 0) {
+          nextVersion = Math.max(
+            nextVersion,
+            client.getQueryData<View>(["state", saveId])?.version ?? nextVersion,
+          );
+          const batch = [...saveContext.readFeed];
+          saveContext.readFeed.clear();
+          try {
+            const result = await api.action(saveId, {
+              requestId: newRequestId(),
+              baseVersion: nextVersion,
+              action: { type: "readMessages", feed: batch },
+            });
+            if (saveContextRef.current !== saveContext) return;
+            nextVersion = result.version;
+            saveContext.readVersion = result.version;
+          } catch (error) {
+            for (const id of batch) saveContext.readFeed.add(id);
+            const currentVersion = error instanceof ApiError ? error.body.version : undefined;
+            if (
+              error instanceof ApiError &&
+              error.status === 409 &&
+              typeof currentVersion === "number" &&
+              Number.isInteger(currentVersion) &&
+              currentVersion > nextVersion &&
+              !retriedConflict &&
+              saveContextRef.current === saveContext
+            ) {
+              nextVersion = currentVersion;
+              retriedConflict = true;
+              continue;
+            }
+            throw error;
+          }
+          retriedConflict = false;
+          await refresh();
         }
       };
-      const pending = drain().finally(() => {
-        if (readingPromise.current === pending) readingPromise.current = null;
-      });
-      readingPromise.current = pending;
+      const pending = drain()
+        .catch(async (error: unknown) => {
+          if (saveContextRef.current !== saveContext) return;
+          saveContext.readError = error instanceof Error ? error.message : String(error);
+          warn("phone", error);
+          await refresh().catch(() => {});
+        })
+        .finally(() => {
+          if (saveContext.readingPromise === pending) saveContext.readingPromise = null;
+        });
+      saveContext.readingPromise = pending;
     },
-    [act],
+    [client, saveId, saveContext, version, refresh, warn],
   );
   const readThread = useCallback(
     (unreadIds: readonly number[]) => readPhoneFeed(unreadIds.map((id) => `phone:message:${id}`)),
@@ -1022,10 +1103,19 @@ export function StoryScreen() {
       sendingChat.current = true;
       setPendingChat({ contact, text });
       try {
-        if (readingPromise.current !== null) {
-          await readingPromise.current;
+        readPhoneFeed([]);
+        if (saveContext.readingPromise !== null) await saveContext.readingPromise;
+        if (saveContextRef.current !== saveContext) {
+          return { ok: false, error: "存档已经切换，这条私信未发送" };
         }
-        const baseVersion = client.getQueryData<View>(["state", saveId])?.version ?? version;
+        if (saveContext.readError !== null && saveContext.readFeed.size > 0) {
+          throw new Error(saveContext.readError);
+        }
+        const baseVersion = Math.max(
+          version,
+          saveContext.readVersion ?? version,
+          client.getQueryData<View>(["state", saveId])?.version ?? version,
+        );
         await api.phoneChat(saveId, {
           requestId: newRequestId(),
           baseVersion,
@@ -1044,7 +1134,7 @@ export function StoryScreen() {
         setPendingChat(null);
       }
     },
-    [client, saveId, version, refresh, warn],
+    [client, saveId, saveContext, version, readPhoneFeed, refresh, warn],
   );
   // 切到消息页的新闻栏：把新闻播报和听说过的街头传闻一并标成已读
   const unreadNews = view?.phone.feedUnread.news;

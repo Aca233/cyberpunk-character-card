@@ -1,4 +1,4 @@
-import type { ParsedLog, SaveMeta, Storage } from "@cp/core";
+import type { ParsedLog, SaveMeta, Snapshot, Storage } from "@cp/core";
 import { z } from "zod";
 
 /**
@@ -30,8 +30,13 @@ export interface SaveStorage extends Storage {
   readMeta(id: string): Promise<SaveMeta>;
   /** 读取并解析日志；末尾有写到一半的行时截到最后一条完整记录 */
   loadLog(id: string): Promise<ParsedLog>;
-  /** 导入存档：一次写下整份日志（调用方已经逐行校验过，存档是刚建的空档） */
-  importLog(id: string, text: string): Promise<void>;
+  /** 导入新存档：meta、完整日志与快照必须一起提交；失败时不得留下可见的半份存档。 */
+  createImported(
+    id: string,
+    meta: SaveMeta,
+    lines: readonly string[],
+    snapshot: Snapshot,
+  ): Promise<void>;
   /**
    * 写回前的快照核对：确认日志现在正好有 seq 条记录，再追加这一行，核对和追加不可分
    * （IndexedDB 版在同一个事务里做）。条数不对时什么都不写，抛 SaveMovedError；不自动重试

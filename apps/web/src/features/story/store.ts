@@ -69,6 +69,7 @@ interface StoryState {
   /** 输入框：方式和文字；发送成功、这一轮写进存档后才清空 */
   readonly draft: TurnInput;
   setDraft(draft: Partial<TurnInput>): void;
+  restoreDraft(saveId: string, draft: TurnInput): void;
   dismiss(): void;
   /** 不花这笔钱：关掉确认框，输入留在输入框里 */
   cancelSpend(): void;
@@ -398,6 +399,13 @@ export const useStory = create<StoryState>()((set, get) => {
       set((s) => {
         const next = mergeDraft(s.draft, draft);
         persistDraft(s.saveId, next);
+        return { draft: next };
+      }),
+    restoreDraft: (saveId, draft) =>
+      set((s) => {
+        if (s.saveId !== saveId) return s;
+        const next = mergeDraft(EMPTY_DRAFT, draft);
+        persistDraft(saveId, next);
         return { draft: next };
       }),
     dismiss: () => set({ failure: null }),

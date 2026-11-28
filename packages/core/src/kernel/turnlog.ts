@@ -263,6 +263,7 @@ export function parseLog(text: string): ParsedLog {
     }
     records.push(parsed.data);
   }
+  validateLogSemantics(records);
   return { records, droppedPartialTail: !endsClean, cleanLength: body.length };
 }
 
@@ -276,6 +277,34 @@ function voidTarget(record: LogRecord): number | undefined {
   if (record.kind === "void") return record.target;
   if (record.kind === "turn") return record.replaces;
   return undefined;
+}
+
+/** 只校验完整日志；voidedSeqs 还会用于筛过的历史，不能在它里面要求连续 seq。 */
+function validateLogSemantics(records: readonly LogRecord[]): void {
+  const voided = new Set<number>();
+  for (const [index, record] of records.entries()) {
+    if (record.seq !== index) {
+      throw new LogCorruptError(`回合日志第 ${index + 1} 行的 seq 是 ${record.seq}，应为 ${index}`);
+    }
+    const target = voidTarget(record);
+    if (target === undefined) continue;
+    if (!Number.isInteger(target) || target < 0 || target >= record.seq) {
+      throw new LogCorruptError(
+        `回合日志第 ${index + 1} 行只能作废或替换之前存在的记录：${target}`,
+      );
+    }
+    const previous = records[target];
+    if (!previous || previous.kind === "void") {
+      throw new LogCorruptError(`回合日志第 ${index + 1} 行的目标 ${target} 不是可作废的记录`);
+    }
+    if (record.kind === "turn" && previous.kind !== "turn") {
+      throw new LogCorruptError(`回合日志第 ${index + 1} 行的改写目标 ${target} 不是回合`);
+    }
+    if (voided.has(target)) {
+      throw new LogCorruptError(`回合日志第 ${index + 1} 行的目标 ${target} 已经作废或被替换`);
+    }
+    voided.add(target);
+  }
 }
 
 export function voidedSeqs(records: readonly LogRecord[]): ReadonlySet<number> {
@@ -304,7 +333,13 @@ export function effectiveTurns(records: readonly LogRecord[]): readonly TurnReco
 
 /** 快照之后追加的作废记录如果指向快照已经算进去的记录，这个快照就失效了 */
 export function isSnapshotValid(snapshot: Snapshot, records: readonly LogRecord[]): boolean {
-  if (snapshot.nextSeq > records.length) return false;
+  if (
+    !Number.isInteger(snapshot.nextSeq) ||
+    snapshot.nextSeq < 0 ||
+    snapshot.nextSeq > records.length
+  ) {
+    return false;
+  }
   for (const record of records.slice(snapshot.nextSeq)) {
     const target = voidTarget(record);
     if (target !== undefined && target < snapshot.nextSeq) return false;
@@ -322,99 +357,86 @@ export function pickSnapshot(
     .find((snapshot) => isSnapshotValid(snapshot, records));
 }
 
-/** 已经删掉的状态字段：旧日志里改它们的补丁重放时跳过，否则从新的初始世界重放会找不到路径 */
-const RETIRED_PATHS: readonly (readonly string[])[] = [
-  // 锚点机制已删除
-  ["slices", "psychosis", "anchors"],
-  ["slices", "psychosis", "lost"],
-  ["slices", "humanity", "anchored"],
-  // 危机章节已删除
-  ["slices", "psychosis", "crisis"],
-  ["slices", "psychosis", "crises"],
-  // v0.9.9 神经耐受度定性字段已删除
-  ["slices", "humanity", "tolerance"],
-];
-
-function retired(path: readonly (string | number)[]): boolean {
-  if (RETIRED_PATHS.some((r) => r.every((key, i) => path[i] === key))) return true;
-  // v0.9.9 删除了好感数值（npc.npcs.<id>.affinity / phone.chatBudget.<id>.affinityGained / jobs.*.settlement.affinity）
-  if (path[0] === "slices" && path[1] === "npc" && path[2] === "npcs" && path[4] === "affinity") {
-    return true;
-  }
-  if (
-    path[0] === "slices" &&
-    path[1] === "phone" &&
-    path[2] === "chatBudget" &&
-    path[4] === "affinityGained"
-  ) {
-    return true;
-  }
-  if (
-    path[0] === "slices" &&
-    path[1] === "jobs" &&
-    path[2] === "jobs" &&
-    path[4] === "settlement" &&
-    path[5] === "affinity"
-  ) {
-    return true;
-  }
-  return false;
+function arrayIndex(key: string | number | undefined): number | undefined {
+  if (typeof key === "string" && !/^(0|[1-9]\d*)$/.test(key)) return undefined;
+  const index = typeof key === "number" ? key : Number(key);
+  return Number.isSafeInteger(index) && index >= 0 ? index : undefined;
 }
 
-/** 检查补丁的父路径能否在当前状态上解析，避免因内容更新（如删改预制 NPC）导致整条重放崩溃 */
-function canResolvePatch(world: WorldState, patch: Patch): boolean {
+/** Immer 本身会忽略不存在的 remove、放宽 replace 与数组下标，重放前必须逐步核对。 */
+function validatePatchTarget(world: WorldState, patch: Patch): void {
   const { path, op } = patch;
-  if (path.length === 0) return false;
+  if (path.length === 0) {
+    if (op !== "replace") throw new Error("根状态只支持 replace");
+    return;
+  }
+  if (path.some((key) => key === "__proto__" || key === "constructor" || key === "prototype")) {
+    throw new Error("补丁路径含有禁止访问的原型属性");
+  }
   let cur: unknown = world;
   for (let i = 0; i < path.length - 1; i++) {
-    if (cur === null || typeof cur !== "object") return false;
+    if (cur === null || typeof cur !== "object") throw new Error("补丁父路径不是对象或数组");
     const key = path[i];
-    if (key === undefined) return false;
-    if (key === "__proto__" || key === "constructor" || key === "prototype") return false;
+    if (key === undefined || !Object.hasOwn(cur, key)) throw new Error("补丁父路径不存在");
     if (Array.isArray(cur)) {
-      const idx = typeof key === "number" ? key : Number(key);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= cur.length) return false;
-      cur = cur[idx];
+      const index = arrayIndex(key);
+      if (index === undefined || index >= cur.length) throw new Error("补丁父路径的数组下标无效");
+      cur = cur[index];
     } else {
       cur = (cur as Record<string, unknown>)[String(key)];
     }
   }
-  if (cur === null || typeof cur !== "object") return false;
+  if (cur === null || typeof cur !== "object") throw new Error("补丁父路径不是对象或数组");
   const last = path[path.length - 1];
-  if (last === "__proto__" || last === "constructor" || last === "prototype") return false;
+  if (last === undefined) throw new Error("补丁目标不存在");
   if (Array.isArray(cur)) {
-    if (last === "length" && op === "replace") return true;
-    if (last === "-" && op === "add") return true;
-    const idx = typeof last === "number" ? last : Number(last);
-    if (!Number.isInteger(idx) || idx < 0) return false;
-    if (op === "add") return idx <= cur.length;
-    return idx < cur.length;
+    if (last === "length" && op === "replace") {
+      if (
+        typeof patch.value !== "number" ||
+        !Number.isInteger(patch.value) ||
+        patch.value < 0 ||
+        patch.value > 0xffffffff
+      ) {
+        throw new Error("数组 length 必须是有效的非负整数");
+      }
+      return;
+    }
+    if (last === "-" && op === "add") return;
+    const index = arrayIndex(last);
+    if (
+      index === undefined ||
+      (op === "add" ? index > cur.length : index >= cur.length || !Object.hasOwn(cur, index))
+    ) {
+      throw new Error("补丁目标的数组下标无效");
+    }
+  } else if (op !== "add" && !Object.hasOwn(cur, last)) {
+    throw new Error("补丁目标不存在");
   }
-  return true;
 }
 
 /**
- * 过滤掉已退役字段以及因内容表更新导致父路径失效的补丁，逐条按状态前进应用。
+ * 每个补丁必须能严格按顺序应用；任何一步失败都拒绝整次重放，不返回部分状态。
  * 供 replay、buildLedger、sceneStartSeq 共用，保持单一真相。
  */
 export function applyRecordPatches(world: WorldState, patches: readonly Patch[]): WorldState {
-  const active = patches.filter((p) => !retired(p.path));
-  if (active.length === 0) return world;
-  try {
-    return applyPatches(world, active);
-  } catch {
-    // 个别旧日志补丁可能指向已更新/删除的内容路径，退回到逐条检查后跳过无效路径，保留其余状态变更
-    let next = world;
-    for (const patch of active) {
-      if (!canResolvePatch(next, patch)) continue;
+  let next = world;
+  for (const [index, patch] of patches.entries()) {
+    try {
+      validatePatchTarget(next, patch);
       next = applyPatches(next, [patch]);
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error);
+      throw new LogCorruptError(
+        `补丁 ${index + 1}（${JSON.stringify(patch.path)}）无法重放：${why}`,
+      );
     }
-    return next;
   }
+  return next;
 }
 
 /** 从快照往后按记录里的补丁重放：不重掷骰子，不调用模型 */
 export function replay(base: Snapshot, records: readonly LogRecord[]): WorldState {
+  validateLogSemantics(records);
   if (!isSnapshotValid(base, records)) {
     throw new SnapshotStaleError(`快照（nextSeq ${base.nextSeq}）之后有作废记录指向更早的轮次`);
   }

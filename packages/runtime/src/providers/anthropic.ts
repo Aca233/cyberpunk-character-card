@@ -236,7 +236,7 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
         if (signal?.aborted) throw new AbortedError();
         throw statusError(provider, res.status, detail.message);
       }
-      if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status, true);
+      if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status);
 
       let inputTokens = 0;
       let outputTokens = 0;
@@ -245,6 +245,7 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
       let hasUsage = false;
       let finishReason = "";
       let stopped = false;
+      let visible = false;
 
       const absorbUsage = (u: AnthropicUsage) => {
         if (u.input_tokens !== undefined) inputTokens = u.input_tokens;
@@ -279,7 +280,10 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
           absorbUsage(payload.message.usage);
         } else if (kind === "content_block_delta" && payload.delta?.type === "text_delta") {
           const text = payload.delta.text;
-          if (text) yield { type: "text", text };
+          if (text) {
+            if (text.trim() !== "") visible = true;
+            yield { type: "text", text };
+          }
         } else if (kind === "content_block_delta" && payload.delta?.type === "thinking_delta") {
           const thinking = payload.delta.thinking;
           if (thinking) yield { type: "thought", text: thinking };
@@ -299,6 +303,7 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
       if (!stopped && !finishReason) {
         throw new UpstreamError(`${provider} 的回复没有正常结束`, undefined, true);
       }
+      if (!visible) throw new UpstreamError(`${provider} 没有返回正文，检查模型名和最大输出`);
       // Anthropic 的 input_tokens 只含未命中缓存的部分；总输入应加回 cache_read 与 cache_creation，
       // 与 OpenAI prompt_tokens / Gemini promptTokenCount 口径保持一致，便于统一计算缓存命中率。
       const totalInputTokens = inputTokens + cachedInputTokens + cacheWriteTokens;
