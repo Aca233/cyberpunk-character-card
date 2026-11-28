@@ -1299,6 +1299,9 @@ function ConnectionForm({
   const [contextWindow, setContextWindow] = useState(String(source?.contextWindow ?? 128000));
   const [temperature, setTemperature] = useState(source?.temperature?.toString() ?? "");
   const [maxOutput, setMaxOutput] = useState(source?.maxOutputTokens?.toString() ?? "");
+  const [thinkingLevel, setThinkingLevel] = useState<"" | "low" | "medium" | "high">(
+    source?.thinkingLevel ?? "",
+  );
   const [embeddingModel, setEmbeddingModel] = useState(source?.embeddingModel ?? "");
   const [imageProtocol, setImageProtocol] = useState<ImageProtocol>(
     source?.imageProtocol ?? "auto",
@@ -1325,13 +1328,15 @@ function ConnectionForm({
           (baseUrl.trim() !== "" && baseUrl !== baseDefault) ||
           embeddingModel.trim() !== "" ||
           imageProtocol !== "auto" ||
-          comfyWorkflow.trim() !== "",
+          comfyWorkflow.trim() !== "" ||
+          thinkingLevel !== "",
       )
     : model !== profile.model ||
       baseUrl !== (profile.baseUrl ?? "") ||
       contextWindow !== String(profile.contextWindow) ||
       temperature !== (profile.temperature?.toString() ?? "") ||
       maxOutput !== (profile.maxOutputTokens?.toString() ?? "") ||
+      thinkingLevel !== (profile.thinkingLevel ?? "") ||
       embeddingModel !== (profile.embeddingModel ?? "") ||
       imageProtocol !== (profile.imageProtocol ?? "auto") ||
       comfyWorkflow !== (profile.comfyWorkflow ?? "") ||
@@ -1401,6 +1406,11 @@ function ConnectionForm({
         patch.maxOutputTokens = value;
       } else if (profile?.maxOutputTokens !== undefined) {
         patch.maxOutputTokens = null;
+      }
+      if (thinkingLevel) {
+        patch.thinkingLevel = thinkingLevel;
+      } else if (profile?.thinkingLevel !== undefined) {
+        patch.thinkingLevel = null;
       }
 
       if (!persisted.current) {
@@ -1521,6 +1531,7 @@ function ConnectionForm({
     setContextWindow(String(profile?.contextWindow ?? 128000));
     setTemperature(profile?.temperature?.toString() ?? "");
     setMaxOutput(profile?.maxOutputTokens?.toString() ?? "");
+    setThinkingLevel(profile?.thinkingLevel ?? "");
     setEmbeddingModel(profile?.embeddingModel ?? "");
     setImageProtocol(profile?.imageProtocol ?? "auto");
     setComfyWorkflow(profile?.comfyWorkflow ?? "");
@@ -1587,10 +1598,12 @@ function ConnectionForm({
         : isLocalNoKey
           ? { label: "本地免密钥", tone: "dim" as const }
           : { label: "未填写", tone: "warn" as const };
+  const thinkingLabel = { "": "默认", low: "低", medium: "中", high: "高" }[thinkingLevel];
   const advSummaryParts = [
     `窗口 ${contextWindow.trim() ? Number(contextWindow).toLocaleString() : "—"}`,
     `温度 ${temperature.trim() || "默认"}`,
     `输出 ${maxOutput.trim() || "默认"}`,
+    `思考 ${thinkingLabel ?? "默认"}`,
   ];
 
   return (
@@ -1944,6 +1957,28 @@ function ConnectionForm({
                   />
                 </FrameBox>
               </label>
+              {(currentType === "gemini" || currentType === "vertex") && (
+                <label className={styles.field}>
+                  <span>思考强度（Gemini 思考模型）</span>
+                  <FrameBox>
+                    <select
+                      value={thinkingLevel}
+                      onChange={(e) =>
+                        setThinkingLevel(e.target.value as "" | "low" | "medium" | "high")
+                      }
+                    >
+                      <option value="">默认（跟随模型）</option>
+                      <option value="low">低（省 token）</option>
+                      <option value="medium">中</option>
+                      <option value="high">高</option>
+                    </select>
+                  </FrameBox>
+                  <small>
+                    叙事请求始终会带回思维链；这里只控制思考量，选「低」可省下大部分思考 token
+                    开销。
+                  </small>
+                </label>
+              )}
               {(currentType === "openai" ||
                 currentType === "ollama" ||
                 currentType === "gemini") && (

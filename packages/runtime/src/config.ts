@@ -73,9 +73,10 @@ export type Profile = z.infer<typeof ProfileSchema>;
 export const ProfilePatchSchema = z
   .strictObject({
     ...tunables,
-    /** 传 null 表示清空已保存的温度 / 输出上限 / 附挂向量模型 */
+    /** 传 null 表示清空已保存的温度 / 输出上限 / 思考强度 / 附挂向量模型 */
     temperature: z.number().min(0).max(2).nullable().optional(),
     maxOutputTokens: z.number().int().min(1).nullable().optional(),
+    thinkingLevel: z.enum(["low", "medium", "high"]).nullable().optional(),
     embeddingModel: z.string().min(1).nullable().optional(),
   })
   .partial();
@@ -388,7 +389,8 @@ export class ConfigService {
     return this.edit(
       (config) =>
         withProfile(config, name, (p) => {
-          const { embeddingModel, temperature, maxOutputTokens, ...rest } = parsed.data;
+          const { embeddingModel, temperature, maxOutputTokens, thinkingLevel, ...rest } =
+            parsed.data;
           const next: Record<string, unknown> = { ...p, ...rest };
           if (embeddingModel === null) delete next.embeddingModel;
           else if (embeddingModel !== undefined) next.embeddingModel = embeddingModel;
@@ -396,6 +398,8 @@ export class ConfigService {
           else if (temperature !== undefined) next.temperature = temperature;
           if (maxOutputTokens === null) delete next.maxOutputTokens;
           else if (maxOutputTokens !== undefined) next.maxOutputTokens = maxOutputTokens;
+          if (thinkingLevel === null) delete next.thinkingLevel;
+          else if (thinkingLevel !== undefined) next.thinkingLevel = thinkingLevel;
           return next;
         }),
       (config) => this.publicOf(config, name),

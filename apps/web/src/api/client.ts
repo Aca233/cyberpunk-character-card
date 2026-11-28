@@ -709,6 +709,7 @@ export interface ProfilePatch {
   model?: string;
   temperature?: number | null;
   maxOutputTokens?: number | null;
+  thinkingLevel?: PublicProfile["thinkingLevel"] | null;
   contextWindow?: number;
   embeddingModel?: string | null;
   imageProtocol?: ImageProtocol;

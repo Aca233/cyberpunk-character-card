@@ -293,6 +293,9 @@ export function geminiBody(profile: Profile, request: LlmRequest, cachedContent?
     request.responseFormat?.type === "json" && request.responseFormat.schema
       ? sanitizeGeminiSchema(request.responseFormat.schema)
       : undefined;
+  // 叙事请求总要思考摘要：不设思考强度时模型仍会默认走内部思考，
+  // 若不要求 includeThoughts，思考 token 照常计费但摘要在响应里一个部件都不返回。
+  const wantsThoughts = request.purpose === "narrator" && request.responseFormat === undefined;
   return {
     contents,
     ...(cachedContent
@@ -308,12 +311,13 @@ export function geminiBody(profile: Profile, request: LlmRequest, cachedContent?
       ...(request.topP !== undefined ? { topP: request.topP } : {}),
       ...(request.responseFormat?.type === "json" ? { responseMimeType: "application/json" } : {}),
       ...(responseSchema ? { responseSchema } : {}),
-      ...(profile.thinkingLevel !== undefined
+      ...(profile.thinkingLevel !== undefined || wantsThoughts
         ? {
             thinkingConfig: {
-              thinkingLevel: profile.thinkingLevel,
-              includeThoughts:
-                request.purpose === "narrator" && request.responseFormat === undefined,
+              ...(profile.thinkingLevel !== undefined
+                ? { thinkingLevel: profile.thinkingLevel }
+                : {}),
+              includeThoughts: wantsThoughts,
             },
           }
         : {}),
