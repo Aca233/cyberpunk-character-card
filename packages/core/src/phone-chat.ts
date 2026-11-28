@@ -10,6 +10,7 @@ import type {
 } from "./kernel/ports";
 import type { Command } from "./kernel/system";
 import type { WorldState } from "./kernel/world";
+import { completeFinish, isLengthFinish } from "./narrator/completion";
 import { responseJsonSchema, schemaDoc } from "./narrator/doc";
 import { evaluatePhoneAvailability } from "./npc";
 import { CharacterStateSchema } from "./systems/character/schema";
@@ -539,6 +540,7 @@ export async function runPhoneChat(
   let llmText = "";
   let usage: LlmUsage | undefined;
   let blockedReason: string | undefined;
+  let finishReason: string | undefined;
   for await (const event of deps.llm.stream(
     {
       purpose: deps.purpose ?? "aux",
@@ -551,11 +553,28 @@ export async function runPhoneChat(
   )) {
     if (event.type === "text") llmText += event.text;
     else if (event.type === "blocked") blockedReason = event.reason;
-    else if (event.type === "done") usage = event.usage;
+    else if (event.type === "done") {
+      usage = event.usage;
+      finishReason = event.finishReason;
+    }
   }
 
   if (blockedReason !== undefined) {
     return { ok: false, status: 502, reason: `模型拒绝了这段对话：${blockedReason}` };
+  }
+  if (deps.signal?.aborted) return { ok: false, status: 502, reason: "已停止私聊，未发送或结算" };
+  if (finishReason === undefined || !completeFinish(finishReason)) {
+    return {
+      ok: false,
+      status: 502,
+      reason:
+        finishReason !== undefined && isLengthFinish(finishReason)
+          ? "对方回复达到输出上限，未完整结束；未发送或结算，请调整输出上限后重试"
+          : "对方回复没有正常结束，未发送或结算，请重试",
+    };
+  }
+  if (llmText.trim() === "") {
+    return { ok: false, status: 502, reason: "模型没有返回私聊回复，未发送或结算，请重试" };
   }
   const parsed = parsePhoneChatReply(llmText);
   if (!parsed.ok) return { ok: false, status: 502, reason: parsed.reason };

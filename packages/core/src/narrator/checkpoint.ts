@@ -8,6 +8,7 @@ import type { Choice, ExtractShape } from "./block";
 import type { BudgetTrace } from "./budget";
 import type { LoreTrace } from "./lore";
 import type { PreparedPurchase } from "./merchant-settlement";
+import type { PresetRegex } from "./preset";
 import type { Expansion } from "./retrieve";
 import type { BigSpend, CounterHackRuling, JudgeRuling, Memory } from "./stages";
 
@@ -53,6 +54,11 @@ export interface PreparedCheckpointData {
     readonly topK?: number;
   };
   readonly presetName: string | undefined;
+  /** 与已保存提示词配套的正文后处理；切换预设不能改变尚未完成的旧尝试。 */
+  readonly narrationPreset: {
+    readonly regex: readonly PresetRegex[];
+    readonly maxOutputTokens?: number | undefined;
+  } | null;
   readonly auxUsage: LlmUsage;
   readonly repairs: number;
   readonly repairUsage: LlmUsage;

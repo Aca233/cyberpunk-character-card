@@ -20,6 +20,7 @@ import { geminiClient } from "./gemini";
 import { UpstreamError } from "./http";
 import { openAiClient } from "./openai";
 import { createReranker, isRerankProviderType, rerankUrl } from "./rerank";
+import { streamWithWatchdog } from "./stream-watchdog";
 import { vertexClient } from "./vertex";
 
 export type Resolved =
@@ -312,6 +313,6 @@ export class LlmRouter implements LlmClient {
   async *stream(request: LlmRequest, signal?: AbortSignalLike): AsyncGenerator<LlmEvent> {
     const resolved = await this.resolve(request.purpose);
     if (!resolved.ok) throw new UpstreamError(resolved.error);
-    yield* resolved.client.stream(request, signal);
+    yield* streamWithWatchdog(resolved.client, request, signal);
   }
 }

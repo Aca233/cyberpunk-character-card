@@ -8,6 +8,7 @@ import {
   type BoardSlot,
   boardModules,
 } from "../schemas/board";
+import { completeFinish, isLengthFinish } from "./completion";
 import { responseJsonSchema } from "./doc";
 
 /**
@@ -132,6 +133,7 @@ export async function interpretModule(
   | { readonly ok: false; readonly error: string }
 > {
   let text = "";
+  let finishReason: string | undefined;
   for await (const event of llm.stream(
     {
       purpose: "aux",
@@ -145,6 +147,17 @@ export async function interpretModule(
     if (event.type === "text") text += event.text;
     else if (event.type === "blocked")
       return { ok: false, error: `模型拒绝了这段设定：${event.reason}` };
+    else if (event.type === "done") finishReason = event.finishReason;
   }
+  if (signal?.aborted) return { ok: false, error: "已停止解读，原来的设定保留" };
+  if (finishReason === undefined || !completeFinish(finishReason))
+    return {
+      ok: false,
+      error:
+        finishReason !== undefined && isLengthFinish(finishReason)
+          ? "模块解读达到输出上限，未采用不完整结果，请调整输出上限后重试"
+          : "模块解读没有正常结束，未采用不完整结果，请重试",
+    };
+  if (text.trim() === "") return { ok: false, error: "模型没有返回模块解读，请重试" };
   return parseModuleReply(text, request.slot, id);
 }

@@ -322,7 +322,7 @@ export function applyExpandedPreset(
 }
 
 /** 预设正则用在模型输出上：本作存下的正文照这个改；跳过 HTML/JS 界面美化脚本和坏掉的正则 */
-export function applyPresetRegex(input: string, preset: TavernPreset): string {
+export function applyPresetRegex(input: string, preset: Pick<TavernPreset, "regex">): string {
   let out = input;
   for (const r of preset.regex) {
     if (!r.enabled || isHtmlUiRegex(r)) continue;

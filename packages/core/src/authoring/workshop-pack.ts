@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
+import { completeFinish, isLengthFinish } from "../narrator/completion";
 import { type WorkshopPack, WorkshopPackSchema } from "../schemas/workshop";
 import { cyberwareExclusiveGroup } from "../systems/cyberware/schema";
 
@@ -442,6 +443,7 @@ export async function generateWorkshopPack(
 ): Promise<WorkshopGenerateResult> {
   const messages = buildPrompt(request);
   let text = "";
+  let finishReason: string | undefined;
   for await (const event of llm.stream(
     {
       purpose: "aux",
@@ -457,8 +459,18 @@ export async function generateWorkshopPack(
     }
     if (event.type === "text") {
       text += event.text;
-    }
+    } else if (event.type === "done") finishReason = event.finishReason;
   }
+
+  if (signal?.aborted) return { ok: false, error: "已停止生成内容包，未采用不完整结果" };
+  if (finishReason === undefined || !completeFinish(finishReason))
+    return {
+      ok: false,
+      error:
+        finishReason !== undefined && isLengthFinish(finishReason)
+          ? "内容包生成达到输出上限，未采用不完整结果，请减少生成条目或更换模型后重试"
+          : "内容包生成没有正常结束，未采用不完整结果，请重试",
+    };
 
   const trimmed = text.trim();
   if (!trimmed) {

@@ -1,12 +1,14 @@
 import type { AbortSignalLike, LlmClient, LlmEvent, LlmRequest, LlmUsage } from "@cp/core";
 import { z } from "zod";
 import type { Profile } from "../config";
+import { EmptyReplyError } from "./empty-reply";
 import {
   type GeminiCacheEndpoint,
   geminiCacheEndpoint,
   invalidateGeminiCachedContent,
   resolveGeminiCachedContent,
 } from "./gemini-cache";
+import { GEMINI_BLOCK_REASONS, isGeminiBlockedError } from "./gemini-errors";
 import {
   AbortedError,
   errorDetail,
@@ -16,20 +18,21 @@ import {
   toAbortSignal,
   UpstreamError,
 } from "./http";
+import { assertNativeSystemPrefix } from "./native-messages";
+import { markLlmConnected } from "./stream-watchdog";
 
 /** Gemini 原生文本流；不自动重试或续写，避免额外调用。 */
 const DEFAULT_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
-const BLOCK_REASONS = new Set([
-  "SAFETY",
-  "RECITATION",
-  "BLOCKLIST",
-  "PROHIBITED_CONTENT",
-  "SPII",
-  "IMAGE_SAFETY",
-  "IMAGE_PROHIBITED_CONTENT",
-  "JAILBREAK",
-]);
+/** 只有明确指出缓存资源不存在或过期才回退；模型不存在、鉴权、拦截等错误不得重发。 */
+function isMissingCachedContent(status: number, message: string): boolean {
+  return (
+    (status === 400 || status === 404) &&
+    /\bcached[\s_-]*contents?\b(?:\s+with\s+(?:name|id)\s+\S+|\s+(?:["'][^"'\r\n]+["']|(?:projects\/|cachedContents\/)[^\s"']+|\d+))?\s+(?:(?:is|was|has|had)\s+)?(?:not\s+found|does\s+not\s+exist|expired)\b|缓存(?:内容|资源)\s*(?:[「“"'][^」”"'\r\n]+[」”"']\s*)?(?:不存在|已过期|过期了)/i.test(
+      message,
+    )
+  );
+}
 
 const SAFETY_CATEGORIES = [
   "HARM_CATEGORY_HARASSMENT",
@@ -234,6 +237,7 @@ function splitGeminiSystems(request: LlmRequest): {
   readonly staticSystem: string;
   readonly semiStaticSystem: string;
 } {
+  assertNativeSystemPrefix(request.messages, "Gemini / Vertex");
   const staticParts: string[] = [];
   const semiParts: string[] = [];
   for (const m of request.messages) {
@@ -254,6 +258,8 @@ function splitGeminiSystems(request: LlmRequest): {
 export function geminiBody(profile: Profile, request: LlmRequest, cachedContent?: string) {
   const { staticSystem, semiStaticSystem } = splitGeminiSystems(request);
   const fullSystem = [staticSystem, semiStaticSystem].filter(Boolean).join("\n\n");
+  // cachedContent 不允许再传 systemInstruction；半静态 system 必须保持系统角色，不能降为 user。
+  const effectiveCachedContent = semiStaticSystem === "" ? cachedContent : undefined;
   const contents = request.messages
     .filter((m) => m.role !== "system")
     .map((m) => {
@@ -275,31 +281,19 @@ export function geminiBody(profile: Profile, request: LlmRequest, cachedContent?
       };
     });
   if (contents.length === 0) throw new UpstreamError("Gemini 请求里没有对话内容");
-  // 使用显式 cachedContent 时，API 不允许同时再传 systemInstruction；若存在【前情】/【最近几轮】等半静态段，
-  // 顺次挂到首条对话内容之前（不改动预设与历史顺序）。
-  if (cachedContent && semiStaticSystem !== "") {
-    if (contents[0]?.role === "user") {
-      contents[0] = {
-        role: "user",
-        parts: [{ text: semiStaticSystem }, ...contents[0].parts],
-      };
-    } else {
-      contents.unshift({ role: "user", parts: [{ text: semiStaticSystem }] });
-    }
-  }
   const maxOutputTokens = request.maxOutputTokens ?? profile.maxOutputTokens;
   const temperature = request.temperature ?? profile.temperature;
   const responseSchema =
     request.responseFormat?.type === "json" && request.responseFormat.schema
       ? sanitizeGeminiSchema(request.responseFormat.schema)
       : undefined;
-  // 叙事请求总要思考摘要：不设思考强度时模型仍会默认走内部思考，
-  // 若不要求 includeThoughts，思考 token 照常计费但摘要在响应里一个部件都不返回。
-  const wantsThoughts = request.purpose === "narrator" && request.responseFormat === undefined;
+  // 保留 Gemini 的内部思考，但不把原生摘要混进预设输出的思考标签。
+  // 模型按预设输出的 <think> 等标签仍由 narrator 的 ThoughtStreamSplitter 单独提取。
+  const isNarration = request.purpose === "narrator" && request.responseFormat === undefined;
   return {
     contents,
-    ...(cachedContent
-      ? { cachedContent }
+    ...(effectiveCachedContent
+      ? { cachedContent: effectiveCachedContent }
       : fullSystem !== ""
         ? { systemInstruction: { parts: [{ text: fullSystem }] } }
         : {}),
@@ -311,13 +305,13 @@ export function geminiBody(profile: Profile, request: LlmRequest, cachedContent?
       ...(request.topP !== undefined ? { topP: request.topP } : {}),
       ...(request.responseFormat?.type === "json" ? { responseMimeType: "application/json" } : {}),
       ...(responseSchema ? { responseSchema } : {}),
-      ...(profile.thinkingLevel !== undefined || wantsThoughts
+      ...(profile.thinkingLevel !== undefined || isNarration
         ? {
             thinkingConfig: {
               ...(profile.thinkingLevel !== undefined
                 ? { thinkingLevel: profile.thinkingLevel }
                 : {}),
-              includeThoughts: wantsThoughts,
+              includeThoughts: false,
             },
           }
         : {}),
@@ -375,15 +369,20 @@ export function geminiClient(
     async *stream(request: LlmRequest, signalLike?: AbortSignalLike): AsyncGenerator<LlmEvent> {
       const signal = toAbortSignal(signalLike);
       if (signal?.aborted) throw new AbortedError();
+      // 在鉴权换 token、缓存创建等准备请求之前验证消息序列。
+      const { staticSystem, semiStaticSystem } = splitGeminiSystems(request);
       const headers = await headersFor(profile, apiKey, signal ?? undefined);
-      const { staticSystem } = splitGeminiSystems(request);
-      const cachedContent = await resolveGeminiCachedContent(
-        profile,
-        cacheEndpointFor(profile, apiKey),
-        headers,
-        staticSystem,
-        signal ?? undefined,
-      );
+      // 半静态段随历史增长；保留完整 systemInstruction，使用上游隐式缓存，避免反复创建远端缓存。
+      const cachedContent =
+        semiStaticSystem === ""
+          ? await resolveGeminiCachedContent(
+              profile,
+              cacheEndpointFor(profile, apiKey),
+              headers,
+              staticSystem,
+              signal ?? undefined,
+            )
+          : undefined;
       let res = await post(
         provider,
         urlFor(profile, apiKey),
@@ -391,14 +390,16 @@ export function geminiClient(
         geminiBody(profile, request, cachedContent),
         signal,
       );
+      markLlmConnected(signal);
       if (!res.ok) {
         let detail = await errorDetail(res);
         if (signal?.aborted) throw new AbortedError();
-        if (
-          cachedContent &&
-          (res.status === 400 || res.status === 404) &&
-          /cached.?content|not found|expired/i.test(detail.message)
-        ) {
+        // 安全错误优先于缓存失效；即使文案提及 cachedContent 也不能重发。
+        if (isGeminiBlockedError(detail)) {
+          yield { type: "blocked", reason: blockedMessage };
+          return;
+        }
+        if (cachedContent && isMissingCachedContent(res.status, detail.message)) {
           invalidateGeminiCachedContent(cachedContent);
           res = await post(
             provider,
@@ -413,7 +414,7 @@ export function geminiClient(
           }
         }
         if (!res.ok) {
-          if (detail.code && BLOCK_REASONS.has(detail.code.toUpperCase())) {
+          if (isGeminiBlockedError(detail)) {
             yield { type: "blocked", reason: blockedMessage };
             return;
           }
@@ -429,6 +430,7 @@ export function geminiClient(
 
       let finishReason = "";
       let visible = false;
+      let hasThought = false;
       let tokens: z.infer<typeof ChunkSchema>["usageMetadata"];
       for await (const event of readSse(provider, res.body, signal)) {
         if (event.data === "[DONE]") break;
@@ -444,7 +446,7 @@ export function geminiClient(
         }
         const chunk = parsed.data;
         if (chunk.error) {
-          if (BLOCK_REASONS.has(chunk.error.status?.toUpperCase() ?? "")) {
+          if (isGeminiBlockedError(chunk.error)) {
             yield { type: "blocked", reason: blockedMessage };
             return;
           }
@@ -469,7 +471,7 @@ export function geminiClient(
         if (!candidate) continue;
         const reason = candidate.finishReason;
         if (
-          (reason && BLOCK_REASONS.has(reason)) ||
+          (reason && GEMINI_BLOCK_REASONS.has(reason)) ||
           candidate.safetyRatings?.some((r) => r.blocked)
         ) {
           yield { type: "blocked", reason: blockedMessage };
@@ -479,6 +481,7 @@ export function geminiClient(
         for (const part of candidate.content?.parts ?? []) {
           if (!part.text) continue;
           if (part.thought === true) {
+            if (part.text.trim() !== "") hasThought = true;
             yield { type: "thought", text: part.text };
             continue;
           }
@@ -486,21 +489,23 @@ export function geminiClient(
           yield { type: "text", text: part.text };
         }
         if (reason === "MAX_TOKENS") {
-          throw new UpstreamError(
-            `${provider} 写到输出上限停了，回复不完整；把最大输出调大，或把思考强度调低`,
-          );
+          finishReason = "max_tokens";
         }
         if (reason === "CONTINUATION") {
-          throw new UpstreamError(`${provider} 要求续写，这里不自动发起额外的付费请求`);
+          finishReason = "continuation";
         }
-        if (reason && reason !== "FINISH_REASON_UNSPECIFIED" && reason !== "STOP") {
+        if (
+          reason &&
+          reason !== "FINISH_REASON_UNSPECIFIED" &&
+          reason !== "STOP" &&
+          reason !== "MAX_TOKENS" &&
+          reason !== "CONTINUATION"
+        ) {
           throw new UpstreamError(`${provider} 异常结束（${reason}），这次回复不算数`);
         }
         if (reason === "STOP") finishReason = reason;
       }
       if (signal?.aborted) throw new AbortedError();
-      if (!finishReason) throw new UpstreamError(`${provider} 的回复没有正常结束`, undefined, true);
-      if (!visible) throw new UpstreamError(`${provider} 没有返回正文，检查模型名和最大输出`);
       const cachedInputTokens = tokens?.cachedContentTokenCount ?? 0;
       const usage: LlmUsage | undefined = tokens
         ? {
@@ -510,7 +515,20 @@ export function geminiClient(
             ...(cachedInputTokens > 0 ? { cachedInputTokens } : {}),
           }
         : undefined;
-      yield { type: "done", finishReason, ...(usage ? { usage } : {}) };
+      if (!visible) {
+        throw new EmptyReplyError(provider, {
+          finishReason,
+          maxOutputTokens: request.maxOutputTokens ?? profile.maxOutputTokens,
+          usage,
+          hasThought,
+          thinkingTokens: tokens?.thoughtsTokenCount,
+        });
+      }
+      yield {
+        type: "done",
+        finishReason: finishReason || "incomplete",
+        ...(usage ? { usage } : {}),
+      };
     },
   };
 }

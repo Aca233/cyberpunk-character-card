@@ -8,6 +8,7 @@ import type {
   LlmUsage,
 } from "@cp/core";
 import type { Profile } from "../config";
+import { EmptyReplyError } from "./empty-reply";
 import {
   AbortedError,
   errorDetail,
@@ -17,6 +18,8 @@ import {
   toAbortSignal,
   UpstreamError,
 } from "./http";
+import { assertNativeSystemPrefix } from "./native-messages";
+import { markLlmConnected } from "./stream-watchdog";
 
 /** Anthropic 原生 Messages API（/v1/messages）流式接入 */
 
@@ -107,6 +110,7 @@ function buildMessages(
   readonly system?: AnthropicTextBlock[];
   readonly messages: AnthropicTurn[];
 } {
+  assertNativeSystemPrefix(messages, "Anthropic");
   const staticSystems: string[] = [];
   const semiStaticSystems: string[] = [];
   const turns: { role: "user" | "assistant"; content: string; images: LlmMessageImage[] }[] = [];
@@ -231,6 +235,7 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
         body,
         signal,
       );
+      markLlmConnected(signal);
       if (!res.ok) {
         const detail = await errorDetail(res);
         if (signal?.aborted) throw new AbortedError();
@@ -244,8 +249,8 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
       let cacheWriteTokens = 0;
       let hasUsage = false;
       let finishReason = "";
-      let stopped = false;
       let visible = false;
+      let hasThought = false;
 
       const absorbUsage = (u: AnthropicUsage) => {
         if (u.input_tokens !== undefined) inputTokens = u.input_tokens;
@@ -286,12 +291,14 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
           }
         } else if (kind === "content_block_delta" && payload.delta?.type === "thinking_delta") {
           const thinking = payload.delta.thinking;
-          if (thinking) yield { type: "thought", text: thinking };
+          if (thinking) {
+            if (thinking.trim() !== "") hasThought = true;
+            yield { type: "thought", text: thinking };
+          }
         } else if (kind === "message_delta") {
           if (payload.delta?.stop_reason) finishReason = payload.delta.stop_reason;
           if (payload.usage) absorbUsage(payload.usage);
         } else if (kind === "message_stop") {
-          stopped = true;
           break;
         }
       }
@@ -300,10 +307,6 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
         yield { type: "blocked", reason: "Anthropic 拒绝回答这段内容" };
         return;
       }
-      if (!stopped && !finishReason) {
-        throw new UpstreamError(`${provider} 的回复没有正常结束`, undefined, true);
-      }
-      if (!visible) throw new UpstreamError(`${provider} 没有返回正文，检查模型名和最大输出`);
       // Anthropic 的 input_tokens 只含未命中缓存的部分；总输入应加回 cache_read 与 cache_creation，
       // 与 OpenAI prompt_tokens / Gemini promptTokenCount 口径保持一致，便于统一计算缓存命中率。
       const totalInputTokens = inputTokens + cachedInputTokens + cacheWriteTokens;
@@ -315,9 +318,18 @@ export function anthropicClient(profile: Profile, apiKey: string): LlmClient {
             ...(cacheWriteTokens > 0 ? { cacheWriteTokens } : {}),
           }
         : undefined;
+      if (!visible) {
+        throw new EmptyReplyError(provider, {
+          finishReason,
+          maxOutputTokens: maxTokens,
+          usage,
+          hasThought,
+        });
+      }
       yield {
         type: "done",
-        finishReason: finishReason || "end_turn",
+        // message_stop / EOF 不能代替明确 stop_reason。
+        finishReason: finishReason || "incomplete",
         ...(usage ? { usage } : {}),
       };
     },

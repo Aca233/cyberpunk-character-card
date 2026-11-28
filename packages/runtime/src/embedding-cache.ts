@@ -98,11 +98,11 @@ export class EmbeddingCacheStore {
   }
 
   private async persistBucket(saveId: string, bucket: MemoryCacheBucket): Promise<void> {
-    if (!this.docs) return;
     if (bucket.entries.size > MAX_ENTRIES) {
       const sorted = [...bucket.entries.entries()].sort((a, b) => b[1].t - a[1].t);
       bucket.entries = new Map(sorted.slice(0, MAX_ENTRIES));
     }
+    if (!this.docs) return;
     const payload = {
       version: 1 as const,
       modelKey: bucket.modelKey,
@@ -130,6 +130,8 @@ export class EmbeddingCacheStore {
           return upstream.embed(texts, opts);
         }
         const hashes = texts.map(hashEmbeddingText);
+        // 本次结果独立保留：等待上游期间，其他请求或 LRU 淘汰都可能移除已命中的桶条目。
+        const vectors = new Map<string, readonly number[]>();
         // 仅在读写本地桶时持锁，绝不在上游网络请求期间持锁（避免后台预热阻塞下一轮实时检索）
         const { missingHashes, missingTexts } = await this.lock.run(saveId, async () => {
           if (opts.signal?.aborted) throw new AbortedError();
@@ -145,6 +147,7 @@ export class EmbeddingCacheStore {
             const hit = bucket.entries.get(hash);
             if (hit) {
               hit.t = now;
+              vectors.set(hash, hit.v);
               continue;
             }
             if (!seenMissing.has(hash)) {
@@ -172,6 +175,7 @@ export class EmbeddingCacheStore {
               const hash = missingHashes[i];
               const vec = fresh[i];
               if (!hash || !vec || vec.length === 0) return [];
+              vectors.set(hash, vec);
               bucket.entries.set(hash, { v: vec, t: now });
               wrote = true;
             }
@@ -179,9 +183,9 @@ export class EmbeddingCacheStore {
           }
           const resolved: (readonly number[])[] = [];
           for (const hash of hashes) {
-            const entry = bucket.entries.get(hash);
-            if (!entry || entry.v.length === 0) return [];
-            resolved.push(entry.v);
+            const vec = vectors.get(hash);
+            if (!vec || vec.length === 0) return [];
+            resolved.push(vec);
           }
           return resolved;
         });

@@ -1281,10 +1281,12 @@ export const api = {
     request<{ ok: true }>("DELETE", `/saves/${encodeURIComponent(saveId)}`),
   glossary: () => request<{ glossary: Gloss[] }>("GET", "/glossary").then((r) => r.glossary),
   state: (saveId: string) =>
-    request<PlayerView & { readonly checkpoint?: TurnCheckpointSummary }>(
-      "GET",
-      `/saves/${saveId}/state`,
-    ),
+    request<
+      PlayerView & {
+        readonly checkpoint?: TurnCheckpointSummary;
+        readonly checkpointError?: string;
+      }
+    >("GET", `/saves/${saveId}/state`),
   clearCheckpoint: (saveId: string) =>
     request<{ cleared: boolean }>("DELETE", `/saves/${saveId}/checkpoint`),
   async submit(saveId: string, body: TurnBody): Promise<SubmitResult> {

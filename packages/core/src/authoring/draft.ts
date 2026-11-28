@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AbortSignalLike, LlmClient, LlmMessage } from "../kernel/ports";
+import { completeFinish, isLengthFinish } from "../narrator/completion";
 import { responseJsonSchema, schemaDoc } from "../narrator/doc";
 import { CHROME_PRICES, type PriceBand, WEAPON_PRICES } from "./prices";
 import {
@@ -121,6 +122,7 @@ export async function generateAuthoringDraft(
   | { readonly ok: false; readonly error: string }
 > {
   let text = "";
+  let finishReason: string | undefined;
   for await (const event of llm.stream(
     {
       purpose: "aux",
@@ -134,7 +136,17 @@ export async function generateAuthoringDraft(
     if (event.type === "text") text += event.text;
     else if (event.type === "blocked") {
       return { ok: false, error: `模型拒绝了起草：${event.reason}` };
-    }
+    } else if (event.type === "done") finishReason = event.finishReason;
   }
+  if (signal?.aborted) return { ok: false, error: "已停止起草，未采用不完整结果" };
+  if (finishReason === undefined || !completeFinish(finishReason))
+    return {
+      ok: false,
+      error:
+        finishReason !== undefined && isLengthFinish(finishReason)
+          ? "工坊起草达到输出上限，未采用不完整结果，请调整输出上限后重试"
+          : "工坊起草没有正常结束，未采用不完整结果，请重试",
+    };
+  if (text.trim() === "") return { ok: false, error: "模型没有返回起草内容，请重试" };
   return parseAuthoringReply(text, request.kind);
 }

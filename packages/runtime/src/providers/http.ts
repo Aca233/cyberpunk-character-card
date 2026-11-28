@@ -63,7 +63,9 @@ async function send(
   signal?: AbortSignal,
 ): Promise<Response> {
   let lastError: unknown;
-  for (let attempt = 0; attempt <= NETWORK_RETRY_DELAYS_MS.length; attempt += 1) {
+  const safeToRepeat = ["GET", "HEAD"].includes((init.method ?? "GET").toUpperCase());
+  const retryDelays = safeToRepeat ? NETWORK_RETRY_DELAYS_MS : [];
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (signal?.aborted) throw new AbortedError();
     try {
       return await relayFetch(url, {
@@ -73,7 +75,7 @@ async function send(
     } catch (error) {
       if (signal?.aborted) throw new AbortedError();
       lastError = error;
-      const delay = NETWORK_RETRY_DELAYS_MS[attempt];
+      const delay = retryDelays[attempt];
       if (delay !== undefined) {
         await sleepWithAbort(delay, signal);
       }
@@ -85,10 +87,11 @@ async function send(
         ? lastError.cause.message
         : lastError.message
       : String(lastError);
-  throw new UpstreamError(`连不上 ${provider}：${reason}`, undefined, true);
+  const uncertain = safeToRepeat ? "" : "；无法确认上游是否已接单，本次未自动重发";
+  throw new UpstreamError(`连不上 ${provider}：${reason}${uncertain}`, undefined, true);
 }
 
-/** 发 POST 请求；网络失败和停止都转成上面两种错误 */
+/** 发一次 POST；网络错误不能证明上游未执行，不自动重发。 */
 export async function post(
   provider: string,
   url: string,
@@ -127,7 +130,9 @@ export async function get(
 }
 
 /** 读出错误响应里的说明文字，兼容 {error: {message, code}}、{error: "..."} 及顶层 {message|detail|msg} */
-export async function errorDetail(res: Response): Promise<{ message: string; code?: string }> {
+export async function errorDetail(
+  res: Response,
+): Promise<{ message: string; code?: string; status?: string }> {
   const text = await res.text().catch(() => "");
   const trimmed = text.trim();
   if (!trimmed) return { message: "" };
@@ -139,12 +144,11 @@ export async function errorDetail(res: Response): Promise<{ message: string; cod
       msg?: unknown;
       statusMessage?: unknown;
       code?: unknown;
+      status?: unknown;
     };
-    if (typeof json.error === "string" && json.error.trim()) {
-      return { message: json.error.trim() };
-    }
     const nestedError = typeof json.error === "object" && json.error !== null ? json.error : null;
     const candidates = [
+      typeof json.error === "string" ? json.error : undefined,
       nestedError?.message,
       json.message,
       json.detail,
@@ -161,14 +165,16 @@ export async function errorDetail(res: Response): Promise<{ message: string; cod
     if (!message) {
       message = trimmed.slice(0, 300);
     }
-    const rawCode = nestedError?.code ?? nestedError?.status ?? json.code;
+    const rawStatus = nestedError?.status ?? json.status;
+    const status = typeof rawStatus === "string" && rawStatus.trim() ? rawStatus.trim() : undefined;
+    const rawCode = nestedError?.code ?? json.code ?? rawStatus;
     const code =
       typeof rawCode === "string" && rawCode.trim() !== ""
         ? rawCode.trim()
         : typeof rawCode === "number"
           ? String(rawCode)
           : undefined;
-    return code ? { message, code } : { message };
+    return { message, ...(code ? { code } : {}), ...(status ? { status } : {}) };
   } catch {
     return { message: trimmed.slice(0, 300) };
   }

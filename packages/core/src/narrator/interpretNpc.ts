@@ -21,6 +21,7 @@ import {
   VOICE_CHARS,
   WANT_CHARS,
 } from "../systems/npc/schema";
+import { completeFinish, isLengthFinish } from "./completion";
 import { responseJsonSchema } from "./doc";
 
 /**
@@ -279,6 +280,7 @@ export async function interpretNpc(
   { readonly ok: true; readonly npc: NpcCard } | { readonly ok: false; readonly error: string }
 > {
   let text = "";
+  let finishReason: string | null = null;
   for await (const event of llm.stream(
     {
       purpose: "aux",
@@ -292,7 +294,24 @@ export async function interpretNpc(
     if (event.type === "text") text += event.text;
     else if (event.type === "blocked") {
       return { ok: false, error: `模型拒绝了这段人物设定：${event.reason}` };
+    } else if (event.type === "done") {
+      finishReason = event.finishReason;
     }
+  }
+  if (finishReason === null) {
+    return { ok: false, error: "人物设定回复未收到完整结束标记，请重试" };
+  }
+  if (isLengthFinish(finishReason)) {
+    return { ok: false, error: "人物设定输出达到长度上限被截断，请提高最大输出配置后重试" };
+  }
+  if (!completeFinish(finishReason)) {
+    return {
+      ok: false,
+      error: `人物设定回复未正常结束（${finishReason || "未知原因"}），请重试`,
+    };
+  }
+  if (!text.trim()) {
+    return { ok: false, error: "模型没有返回有效的人物设定，请重试" };
   }
   return parseNpcReply(text, id, request);
 }

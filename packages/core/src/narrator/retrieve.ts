@@ -3,7 +3,7 @@ import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CityStateSchema } from "../systems/city";
 import { type Importance, MemoryStateSchema, memoryRecords, recapScenes } from "../systems/memory";
-import { type Npc, NpcStateSchema, npcNamesOf } from "../systems/npc";
+import { type Npc, NpcStateSchema, npcNamesOf, onStage } from "../systems/npc";
 import { withSavedPlaces } from "../systems/world/places";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { presentNpcs } from "./offscreen";
@@ -34,8 +34,6 @@ export interface MemoryEntry extends Memory {
 /** 给判断看的候选最多这么多条；每条正文最多几个字 */
 export const MAX_CANDIDATES = 40;
 const MEMORY_CHARS = 400;
-/** 在场人物卡上已经带了最近几条共同记忆 */
-const CARD_MEMORIES = 3;
 
 function oneLine(text: string, max: number): string {
   const flat = text.replace(/\s+/g, " ").trim();
@@ -112,9 +110,9 @@ export function memoryPool(
 
   // 【前情】没带的场景摘要
   const memory = MemoryStateSchema.parse(world.slices.memory ?? {});
-  const currentScene = WorldClockStateSchema.parse(world.slices.world).scene;
+  const clock = WorldClockStateSchema.parse(world.slices.world);
   const pending = new Map(Object.values(memory.pending).map((entry) => [entry.scene, entry]));
-  if (memory.active && memory.active.scene !== currentScene)
+  if (memory.active && memory.active.scene !== clock.scene)
     pending.set(memory.active.scene, memory.active);
   for (const entry of pending.values()) {
     out.push({
@@ -159,11 +157,11 @@ export function memoryPool(
     });
   }
 
-  // 共同记忆：在场人物卡上已经带了最近几条
-  const present = presentNpcs(world, world);
+  // 与人物提示词使用同一在场判定；完整在场卡已包含全部共同记忆。
+  const stage = { location: clock.location, sceneStartedAt: clock.sceneStartedAt };
   for (const n of npcs) {
-    const hidden = present.has(n.id) ? n.memories.slice(0, -CARD_MEMORIES) : n.memories;
-    hidden.forEach((m, i) => {
+    if (onStage(n, stage)) continue;
+    n.memories.forEach((m, i) => {
       out.push({
         id: `bond:${n.id}:${i}`,
         kind: "bond",

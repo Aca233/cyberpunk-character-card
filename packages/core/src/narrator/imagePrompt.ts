@@ -10,6 +10,7 @@ import {
   type ImageCharacterReference,
   ImageCharacterReferenceSchema,
 } from "../schemas/image";
+import { completeFinish, isLengthFinish } from "./completion";
 
 /**
  * 文生图提示词提炼器：
@@ -791,16 +792,34 @@ export async function draftImagePrompt(
       fallbackReason: message,
     };
   }
-  if (blockedReason) {
+  if (blockedReason !== null) {
     return {
       ...fallbackImagePrompt(input, style, negativePromptMode),
       fallbackReason: `辅助模型拦截了提示词提炼：${blockedReason}`,
     };
   }
-  if (["length", "max_tokens"].includes(finishReason?.trim().toLowerCase() ?? "")) {
+  if (finishReason === null) {
+    return {
+      ...fallbackImagePrompt(input, style, negativePromptMode),
+      fallbackReason: "辅助模型回复未收到完整结束标记，已回退本地拼接提示词",
+    };
+  }
+  if (isLengthFinish(finishReason)) {
     return {
       ...fallbackImagePrompt(input, style, negativePromptMode),
       fallbackReason: `辅助模型输出达到长度上限（${finishReason}），已回退本地拼接提示词`,
+    };
+  }
+  if (!completeFinish(finishReason)) {
+    return {
+      ...fallbackImagePrompt(input, style, negativePromptMode),
+      fallbackReason: `辅助模型回复未正常结束（${finishReason || "未知原因"}），已回退本地拼接提示词`,
+    };
+  }
+  if (!reply.trim()) {
+    return {
+      ...fallbackImagePrompt(input, style, negativePromptMode),
+      fallbackReason: "辅助模型返回空回复，已回退本地拼接提示词",
     };
   }
   const defaultNeg = resolveNegativePrompt(style, lang);

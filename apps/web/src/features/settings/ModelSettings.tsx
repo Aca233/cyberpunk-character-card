@@ -1223,7 +1223,7 @@ export function ModelSettings({
       <div className={styles.privacyBar}>
         <span className={styles.privacyTag}>{"LOCAL // INDEXEDDB"}</span>
         <p className={styles.privacy}>
-          密钥只存在这个浏览器里，由浏览器直接发给模型服务商，不经过本站服务器；公用电脑用完请清除密钥。服务商需允许网页跨域访问（CORS），本地
+          密钥保存在当前浏览器；公网模型请求经本站无状态转发，转发层不保存密钥或请求内容。公用电脑用完请清除密钥。本机与内网服务由浏览器直连，需允许网页跨域访问（CORS）；本地
           Ollama 需设置 OLLAMA_ORIGINS。
         </p>
       </div>
@@ -1974,8 +1974,8 @@ function ConnectionForm({
                     </select>
                   </FrameBox>
                   <small>
-                    叙事请求始终会带回思维链；这里只控制思考量，选「低」可省下大部分思考 token
-                    开销。
+                    这里只控制 Gemini 内部思考量；故事中只显示预设输出的思考标签，不混入 Gemini
+                    原生摘要。选「低」可减少思考 token 开销。
                   </small>
                 </label>
               )}

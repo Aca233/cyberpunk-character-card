@@ -1,5 +1,7 @@
 import type { Profile } from "../config";
 import { hashEmbeddingText } from "../embedding-cache";
+import { GeminiCacheBlockedError, isGeminiBlockedError } from "./gemini-errors";
+import { errorDetail } from "./http";
 import { relayFetch } from "./relay";
 
 /**
@@ -7,7 +9,7 @@ import { relayFetch } from "./relay";
  * - 仅在 profile.promptCacheMode === "on" 且静态 system 超过最低门槛（~2400 字符）时启用；
  * - 按 (endpoint, model, 凭据指纹, hash(staticSystem)) 复用远端 cachedContents 资源，临期自动后台 PATCH 续期；
  * - 若上游不支持（如中转站 404/400 或未配置项目路径的 Vertex 快捷模式），记录负缓存并静默回退到常规 systemInstruction，
- *   绝不拖慢或阻断正常回合生成。
+ *   安全拦截明确报错，不继续发送完整提示词生成。
  */
 
 export interface GeminiCacheEndpoint {
@@ -139,17 +141,20 @@ export async function resolveGeminiCachedContent(
         ...(signal ? { signal } : {}),
       });
       if (!res.ok) {
+        if (isGeminiBlockedError(await errorDetail(res))) throw new GeminiCacheBlockedError();
         if (res.status === 400 || res.status === 403 || res.status === 404 || res.status === 501) {
           unsupportedEndpoints.set(negKey, Date.now() + NEGATIVE_TTL_MS);
         }
         return undefined;
       }
       const raw = (await res.json().catch(() => undefined)) as { name?: unknown } | undefined;
+      if (isGeminiBlockedError(raw)) throw new GeminiCacheBlockedError();
       if (!raw || typeof raw.name !== "string" || raw.name.trim() === "") return undefined;
       const name = raw.name.trim();
       activeCaches.set(cacheKey, { name, expiresAt: Date.now() + ttlSeconds * 1_000 });
       return name;
-    } catch {
+    } catch (error) {
+      if (error instanceof GeminiCacheBlockedError) throw error;
       return undefined;
     } finally {
       inflightCreates.delete(cacheKey);

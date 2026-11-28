@@ -32,6 +32,12 @@ export function moduleFindings(c: EvalCase, modules: readonly string[]): Finding
 
 export function codeFindings(c: EvalCase, turn: NarratorTurn): Finding[] {
   const out: Finding[] = [];
+  out.push(
+    finding("正文完整", [
+      ...(turn.text.trim() === "" ? ["正文为空"] : []),
+      ...(turn.draft ? [turn.unsettled ?? "正文仅保存为草稿，尚未完整生成"] : []),
+    ]),
+  );
   const whole = new Set(["判断", "抽取"]);
   out.push(
     finding(
@@ -55,6 +61,19 @@ export function codeFindings(c: EvalCase, turn: NarratorTurn): Finding[] {
     typeof raw === "object" && raw !== null && typeof (raw as { type?: unknown }).type === "string"
       ? commandKeys(raw as Command)
       : [];
+  // 明确要求拒绝的指令，其防呆行为可以验收通过；仍由 outcome=unsettled 排除出完整结算数。
+  const expectedRuleRejection =
+    !turn.draft &&
+    turn.unsettled !== undefined &&
+    turn.dropped.length > 0 &&
+    turn.dropped.every(
+      (d) => d.stage === "rules" && rawKeys(d.raw).some((k) => meantToBlock.has(k)),
+    );
+  out.push(
+    expectedRuleRejection
+      ? { name: "结算：预期规则拦截", ok: true, detail: turn.unsettled ?? "预期指令已被拒绝" }
+      : finding("结算完整", turn.unsettled === undefined ? [] : [turn.unsettled]),
+  );
   out.push(
     finding(
       "业务校验",

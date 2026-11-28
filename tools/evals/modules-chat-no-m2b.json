@@ -19,7 +19,8 @@
       }
     },
     "modules": {
-      "forbid": ["hacking", "travel", "trauma", "sidegigs", "parts", "safehouse", "suppressant"]
+      "require": ["safehouse"],
+      "forbid": ["hacking", "travel", "trauma", "sidegigs", "parts", "suppressant"]
     }
   },
   "rubric": [

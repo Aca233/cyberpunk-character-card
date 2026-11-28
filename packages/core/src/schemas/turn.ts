@@ -54,6 +54,9 @@ export interface TurnUsage {
   readonly cacheWriteTokens?: number | undefined;
 }
 
+/** 已落盘回合的结果；草稿、未定稿与场外问答不能计为完整结算成功。 */
+export type TurnCompletionOutcome = "complete" | "draft" | "unsettled" | "ooc";
+
 export type TurnStage =
   | "judge"
   | "prepare"
@@ -98,6 +101,7 @@ export type TurnEvent =
       readonly type: "done";
       readonly seq: number;
       readonly version: number;
+      readonly outcome: TurnCompletionOutcome;
       readonly usage?: TurnUsage;
     }
   | { readonly type: "blocked"; readonly reason: string }

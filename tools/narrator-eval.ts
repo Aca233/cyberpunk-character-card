@@ -17,13 +17,19 @@ import { configAt, LlmRouter, UpstreamError } from "@cp/runtime/llm";
 import { buildScenario, type EvalCase, loadCases, type Scenario } from "./narrator-eval/case";
 import { codeFindings, type Finding, moduleFindings } from "./narrator-eval/checks";
 import { grade, type Score } from "./narrator-eval/grader";
+import {
+  type EvalOutcome,
+  type OutcomeSummary,
+  summarizeOutcomes,
+  turnOutcome,
+} from "./narrator-eval/outcomes";
 import { scriptedNarrator } from "./narrator-eval/scripted";
 
 /**
  * 叙事模型测评：pnpm eval [--narrator 方案] [--aux 方案] [--grader 方案] [--tag a,b] [--case id,id]
  *   [--repeat 3] [--jobs 2] [--offline]
  * 调用真实模型，会花钱；--offline 只检查用例和规则模块选择，不调模型。
- * 结果写进 tools/evals/results/，并和上一次对比
+ * 结果写进 tools/evals/results/，并和上一次对比；不经过 GameService 提交，不是落盘成功率。
  */
 
 const ROOT = join(import.meta.dirname, "..");
@@ -34,8 +40,8 @@ const CONNECT_WAIT_MS = 20_000;
 let reconnects = 0;
 
 /**
- * 只在测评里用：连不上（请求还没发出去，不花钱）时等一会儿再连，免得网络抖动把整批结果冲掉。
- * 已经开始返回内容、或上游回了状态码的错误照常报；游戏里仍然不自动重试
+ * 只在测评里用：连接阶段尚未收到模型事件时有限重连；fetch 失败不能保证上游未接单或未计费。
+ * 已经开始返回内容、或上游回了状态码的错误照常报。
  */
 function retryConnect(inner: LlmClient): LlmClient {
   return {
@@ -105,6 +111,8 @@ function add(total: Usage, u: LlmUsage | undefined): void {
 
 interface RunResult {
   readonly rep: number;
+  readonly outcome: EvalOutcome;
+  /** 用例行为是否符合预期；预期规则拦截可通过，但不计为完整输出/结算。 */
   readonly ok: boolean;
   readonly findings: readonly Finding[];
   readonly scores: readonly Score[];
@@ -113,6 +121,7 @@ interface RunResult {
   readonly block?: unknown;
   /** ⑤ 审守则的提醒；只统计，不算失败 */
   readonly flags?: readonly string[];
+  readonly generationUsage?: Usage;
   readonly ms: number;
 }
 
@@ -125,6 +134,7 @@ interface CaseSummary {
   readonly score: number | null;
   readonly failures: Readonly<Record<string, number>>;
   readonly results: readonly RunResult[];
+  readonly reliability: OutcomeSummary;
 }
 
 interface ResultFile {
@@ -135,6 +145,7 @@ interface ResultFile {
   readonly repeat: number;
   readonly usage: Readonly<Record<"narrator" | "aux" | "repair" | "grader", Usage>>;
   readonly cases: Readonly<Record<string, CaseSummary>>;
+  readonly reliability: OutcomeSummary;
 }
 
 async function pool<T>(items: readonly T[], jobs: number, work: (item: T) => Promise<void>) {
@@ -291,14 +302,16 @@ async function main(): Promise<number> {
       if (result.kind === "blocked") {
         run = {
           rep,
+          outcome: "blocked",
           ok: false,
-          findings: [{ name: "拒答", ok: false, detail: redact(result.reason) }],
+          findings: [{ name: "管线拦截", ok: false, detail: redact(result.reason) }],
           scores: [],
           ms: Date.now() - started,
         };
       } else if (result.kind === "confirmSpend") {
         run = {
           rep,
+          outcome: "confirmSpend",
           ok: false,
           findings: [
             {
@@ -316,6 +329,10 @@ async function main(): Promise<number> {
         add(usage.aux, turn.auxUsage);
         add(usage.repair, turn.repairUsage);
         const findings = codeFindings(c, turn);
+        const generationUsage = zero();
+        add(generationUsage, turn.usage);
+        add(generationUsage, turn.auxUsage);
+        add(generationUsage, turn.repairUsage);
         let scores: readonly Score[] = [];
         let gradeError: string | undefined;
         if (graderLlm && c.rubric.length > 0) {
@@ -330,9 +347,14 @@ async function main(): Promise<number> {
         }
         run = {
           rep,
+          outcome: turnOutcome(turn),
           ok: findings.every((f) => f.ok),
           findings,
           scores,
+          ...(turn.usage !== undefined ||
+          generationUsage.inputTokens + generationUsage.outputTokens > 0
+            ? { generationUsage }
+            : {}),
           ...(gradeError ? { gradeError } : {}),
           text: turn.text,
           block: {
@@ -351,6 +373,7 @@ async function main(): Promise<number> {
     } catch (error) {
       run = {
         rep,
+        outcome: "error",
         ok: false,
         findings: [
           {
@@ -370,7 +393,7 @@ async function main(): Promise<number> {
         ? (run.scores.reduce((n, s) => n + s.score, 0) / run.scores.length).toFixed(1)
         : "-";
     console.log(
-      `${run.ok ? "✓" : "✗"} ${c.id} #${rep + 1}  评分 ${avg}  ${(run.ms / 1000).toFixed(1)}s${bad.length > 0 ? `  ${bad.join("、")}` : ""}`,
+      `${run.ok ? "✓" : "✗"} ${c.id} #${rep + 1}  ${run.outcome}  评分 ${avg}  ${(run.ms / 1000).toFixed(1)}s${bad.length > 0 ? `  ${bad.join("、")}` : ""}`,
     );
   });
 
@@ -389,10 +412,12 @@ async function main(): Promise<number> {
       score: scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
       failures,
       results: runs,
+      reliability: summarizeOutcomes(runs),
     };
   }
 
   const previous = await previousResult();
+  const reliability = summarizeOutcomes([...results.values()].flat());
   const file: ResultFile = {
     at: new Date().toISOString(),
     narrator: narratorName,
@@ -401,6 +426,7 @@ async function main(): Promise<number> {
     repeat,
     usage,
     cases: summaries,
+    reliability,
   };
   await mkdir(RESULTS, { recursive: true });
   const name = `${file.at.replace(/[:.]/g, "-")}.json`;
@@ -418,7 +444,25 @@ async function main(): Promise<number> {
   const total = Object.values(summaries);
   const passed = total.reduce((n, s) => n + s.passed, 0);
   const runs = total.reduce((n, s) => n + s.runs, 0);
-  console.log(`\n通过 ${passed}/${runs} 次`);
+  console.log(`\n用例行为验证通过 ${passed}/${runs} 次`);
+  const outcomes = reliability.outcomes;
+  console.log(
+    `管线结果：完整结算 ${outcomes.complete}，完整场外问答 ${outcomes.ooc}，草稿 ${outcomes.draft}，未定稿 ${outcomes.unsettled}，拦截 ${outcomes.blocked}，待确认 ${outcomes.confirmSpend}，错误 ${outcomes.error}；总尝试 ${reliability.attempts}`,
+  );
+  console.log(
+    `同时通过用例验证的完整输出 ${reliability.verifiedCompleteOutputs}/${reliability.attempts} 次，其中正常完整结算 ${reliability.verifiedCompleteSettlements} 次；预期规则拦截不计完整成功`,
+  );
+  const seconds = (ms: number | null) => (ms === null ? "无样本" : `${(ms / 1000).toFixed(1)}s`);
+  console.log(
+    `全体尝试耗时：P50 ${seconds(reliability.latencyMs.p50)}，P95 ${seconds(reliability.latencyMs.p95)}（含失败及评分耗时）`,
+  );
+  const perOutput = reliability.knownTokensPerVerifiedCompleteOutput;
+  console.log(
+    `每验证成功输出的已知生成 token（含场外问答，不含评分）：${perOutput ? `输入 ${Math.round(perOutput.inputTokens)}，输出 ${Math.round(perOutput.outputTokens)}` : "无验证成功的完整输出，无法计算"}；${reliability.usageUnreportedRuns} 次没有已知用量，未回传的调用用量不计入，实际消耗可能更高`,
+  );
+  console.log(
+    "统计仅覆盖叙事管线，不覆盖 GameService 存档提交、刷新或断点恢复；不等同于首次端到端成功率。",
+  );
 
   if (previous) {
     const worse: string[] = [];

@@ -13,6 +13,7 @@ import {
   type ProseBlock,
   ProseBlockSchema,
 } from "../schemas/character";
+import { completeFinish, isLengthFinish } from "./completion";
 
 /**
  * 角色正文：按名片、主板、本事和别的区块，让辅助模型写外貌、背景故事、性格、说话方式。
@@ -151,10 +152,10 @@ export function buildProsePrompt(request: ProseRequest): LlmMessage[] {
 export type ProseEvent =
   | { readonly type: "text"; readonly text: string }
   | { readonly type: "error"; readonly message: string }
-  /** truncated：模型写超了字数，后面的被截掉 */
+  /** 只有上游自然结束才发 done；truncated 表示超出本地字数上限的部分已截掉。 */
   | { readonly type: "done"; readonly truncated: boolean };
 
-/** 边收边吐模型的文字，超过 room 字就截掉 */
+/** 边收边吐模型的文字，超过 room 字后停止展示；读到自然结束才确认完成。 */
 async function* capped(
   llm: LlmClient,
   params: Parameters<LlmClient["stream"]>[0],
@@ -163,26 +164,51 @@ async function* capped(
 ): AsyncGenerator<ProseEvent> {
   let written = 0;
   let started = false;
+  let hasContent = false;
+  let truncated = false;
+  let finishReason: string | undefined;
   for await (const event of llm.stream(params, signal)) {
     if (event.type === "blocked") {
       yield { type: "error", message: `模型拒绝写这段：${event.reason}` };
       return;
+    }
+    if (event.type === "done") {
+      finishReason = event.finishReason;
+      continue;
     }
     if (event.type !== "text") continue;
     // 开头的空白不要：续写时由调用方接在原文后面
     let piece = started ? event.text : event.text.trimStart();
     if (piece === "") continue;
     started = true;
+    if (piece.trim() !== "") hasContent = true;
     if (written + piece.length > room) {
+      truncated = true;
       piece = piece.slice(0, room - written);
-      if (piece !== "") yield { type: "text", text: piece };
-      yield { type: "done", truncated: true };
-      return;
     }
+    if (piece === "") continue;
     written += piece.length;
     yield { type: "text", text: piece };
   }
-  yield { type: "done", truncated: false };
+  if (signal?.aborted) {
+    yield { type: "error", message: "已停止生成，未采用不完整结果" };
+    return;
+  }
+  if (finishReason === undefined || !completeFinish(finishReason)) {
+    yield {
+      type: "error",
+      message:
+        finishReason !== undefined && isLengthFinish(finishReason)
+          ? "生成达到模型输出上限，内容尚未完整结束，请重试或调整模型配置"
+          : "生成没有正常结束，内容尚未完整返回，请重试",
+    };
+    return;
+  }
+  if (!hasContent) {
+    yield { type: "error", message: "模型没有返回正文，请重试" };
+    return;
+  }
+  yield { type: "done", truncated };
 }
 
 /** 调辅助模型写一个区块，边写边吐；超出字数的部分截掉。模型连接出错由调用方处理 */

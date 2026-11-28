@@ -1932,7 +1932,7 @@ export function StoryScreen() {
                     ? `（已保存：${activeCheckpoint.completedLabels.join("、")}）`
                     : ""}
                 </span>
-                {failure.retryable && (
+                {(failure.retryable || activeCheckpoint) && (
                   <Button onClick={retry}>{activeCheckpoint ? "从断点重试" : "重试"}</Button>
                 )}
                 {activeCheckpoint && (
@@ -1941,6 +1941,13 @@ export function StoryScreen() {
                 <Button onClick={story.dismiss}>知道了</Button>
               </div>
             )}
+
+          {!busy && view.checkpointError && (
+            <div className={styles.notice} data-kind="error" role="alert">
+              <span>{view.checkpointError}</span>
+              <Button onClick={() => void clearCheckpoint()}>丢弃损坏断点</Button>
+            </div>
+          )}
 
           {!busy && !failure && activeCheckpoint && (
             <div className={styles.notice} data-kind="stopped" role="status">
@@ -2421,7 +2428,7 @@ export function StoryScreen() {
             onClose={story.dismiss}
             actions={
               <>
-                {failure.retryable && (
+                {(failure.retryable || activeCheckpoint) && (
                   <Button primary onClick={retry}>
                     {activeCheckpoint ? "从断点重试" : "重试"}
                   </Button>
@@ -2438,7 +2445,10 @@ export function StoryScreen() {
               <p>已保存进度：{activeCheckpoint.completedLabels.join("、")}，不会从头重跑。</p>
             )}
             {!failure.retryable && (
-              <p>这个错误重试也不会好，先看看设置；详细原因在浏览器的开发者工具控制台里。</p>
+              <p>
+                请按上方错误说明检查模型连接与输出设置。
+                {activeCheckpoint ? "调整后可从断点重试，继续完成剩余步骤。" : "调整后再重试。"}
+              </p>
             )}
           </Dialog>
         )}

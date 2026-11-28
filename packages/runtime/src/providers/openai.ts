@@ -7,6 +7,7 @@ import type {
   LlmUsage,
 } from "@cp/core";
 import type { Profile } from "../config";
+import { EmptyReplyError } from "./empty-reply";
 import {
   AbortedError,
   errorDetail,
@@ -16,6 +17,7 @@ import {
   toAbortSignal,
   UpstreamError,
 } from "./http";
+import { markLlmConnected } from "./stream-watchdog";
 
 /** OpenAI 兼容接口（/chat/completions）：OpenAI 本身、New API 一类中转站、Ollama 都走这里 */
 
@@ -30,12 +32,18 @@ const BLOCK_CODES = new Set([
   "content_policy_violation",
   "safety",
   "sensitive_words_detected",
+  "refusal",
 ]);
 
 /** 有的中转站在上游失败时仍回 200，把错误写成正文，例如 `[Upstream Error 500]: {...}` */
 const UPSTREAM_ERROR_TEXT = /^\s*\[Upstream Error (\d{3})\]\s*:?\s*/i;
-/** 攒够这么多字再判断开头是不是错误；正常正文只晚这一点点放出 */
-const HEAD_CHECK = 24;
+const UPSTREAM_ERROR_PREFIX = "[upstream error";
+
+/** 不完整的错误前缀也先扣住；正常正文一旦排除该前缀就立即放出，避免短草稿在断流时丢失。 */
+function possibleUpstreamErrorHead(text: string): boolean {
+  const head = text.trimStart().toLowerCase();
+  return UPSTREAM_ERROR_PREFIX.startsWith(head) || head.startsWith(UPSTREAM_ERROR_PREFIX);
+}
 
 interface ChatChunk {
   readonly choices?: readonly {
@@ -51,6 +59,7 @@ interface ChatChunk {
   readonly usage?: {
     readonly prompt_tokens?: number;
     readonly completion_tokens?: number;
+    readonly completion_tokens_details?: { readonly reasoning_tokens?: number } | null;
     readonly prompt_tokens_details?: { readonly cached_tokens?: number } | null;
     readonly prompt_cache_hit_tokens?: number;
     readonly cache_read_input_tokens?: number;
@@ -67,6 +76,18 @@ function normalizeErrorField(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return "";
+}
+
+function isBlockedErrorEnvelope(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const root = value as Record<string, unknown>;
+  const nested =
+    root.error && typeof root.error === "object"
+      ? (root.error as Record<string, unknown>)
+      : undefined;
+  return [root.code, root.type, root.status, nested?.code, nested?.type, nested?.status].some(
+    (code) => BLOCK_CODES.has(normalizeErrorField(code).toLowerCase()),
+  );
 }
 
 function hostOf(profile: Profile): string | undefined {
@@ -209,6 +230,7 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
       };
       const headers: Record<string, string> = apiKey ? { authorization: `Bearer ${apiKey}` } : {};
       const res = await post(provider, chatCompletionsUrl(profile), headers, body, signal);
+      markLlmConnected(signal);
       if (!res.ok) {
         const detail = await errorDetail(res);
         if (signal?.aborted) throw new AbortedError();
@@ -220,98 +242,159 @@ export function openAiClient(profile: Profile, apiKey: string | undefined): LlmC
         throw statusError(provider, res.status, detail.message);
       }
       if (!res.body) throw new UpstreamError(`${provider} 没有返回内容`, res.status);
+      const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
+      if (contentType && !contentType.includes("text/event-stream")) {
+        if (contentType.includes("json")) {
+          const payload: unknown = await res.json().catch(() => undefined);
+          if (signal?.aborted) throw new AbortedError();
+          if (isBlockedErrorEnvelope(payload)) {
+            yield { type: "blocked", reason: "上游拦截了这段内容" };
+            return;
+          }
+        } else {
+          await res.body.cancel().catch(() => {});
+        }
+        throw new UpstreamError(
+          `${provider} 返回了非流式响应（Content-Type：${contentType.slice(0, 80)}），请检查 baseUrl、模型与中转站的流式接口支持`,
+          res.status,
+        );
+      }
 
       let finishReason = "";
       let usage: LlmUsage | undefined;
-      let finished = false;
       let visible = false;
-      // 开头先攒住，确认不是写成正文的上游错误再放出去；是错误就一直攒到结束再报
+      let hasThought = false;
+      let thinkingTokens: number | undefined;
+      // 只扣住仍可能是上游错误的前缀，正常短正文也及时交给上层保草稿。
       let head = "";
       let headState: "pending" | "story" | "error" = "pending";
-      for await (const event of readSse(provider, res.body, signal)) {
-        if (event.data === "[DONE]") {
-          finished = true;
-          break;
-        }
-        let chunk: ChatChunk;
-        try {
-          chunk = JSON.parse(event.data) as ChatChunk;
-        } catch {
-          throw new UpstreamError(`${provider} 返回了看不懂的数据`, undefined, true);
-        }
-        if (chunk.error) {
-          const code =
-            normalizeErrorField(chunk.error.code) || normalizeErrorField(chunk.error.type);
-          const msg = normalizeErrorField(chunk.error.message);
-          if (code && BLOCK_CODES.has(code.toLowerCase())) {
-            yield { type: "blocked", reason: msg || "上游拦截了这段内容" };
-            return;
+      try {
+        for await (const event of readSse(provider, res.body, signal)) {
+          if (event.data === "[DONE]") {
+            break;
           }
-          const numericCode =
-            typeof chunk.error.code === "number" && Number.isInteger(chunk.error.code)
-              ? chunk.error.code
-              : /^\d{3}$/.test(code)
-                ? Number(code)
-                : undefined;
-          if (numericCode !== undefined && numericCode >= 400 && numericCode <= 599) {
-            throw statusError(provider, numericCode, msg);
+          let chunk: ChatChunk;
+          try {
+            chunk = JSON.parse(event.data) as ChatChunk;
+          } catch {
+            throw new UpstreamError(`${provider} 返回了看不懂的数据`, undefined, true);
           }
-          throw new UpstreamError(
-            `${provider} 生成到一半出错：${msg || code || "未知错误"}`,
-            undefined,
-            true,
-          );
-        }
-        for (const choice of chunk.choices ?? []) {
-          const refusal = choice.delta?.refusal;
-          if (typeof refusal === "string" && refusal.trim() !== "") {
-            yield { type: "blocked", reason: refusal.trim() };
-            return;
+          if (chunk.error) {
+            const code =
+              normalizeErrorField(chunk.error.code) || normalizeErrorField(chunk.error.type);
+            const msg = normalizeErrorField(chunk.error.message);
+            if (code && BLOCK_CODES.has(code.toLowerCase())) {
+              yield { type: "blocked", reason: msg || "上游拦截了这段内容" };
+              return;
+            }
+            const numericCode =
+              typeof chunk.error.code === "number" && Number.isInteger(chunk.error.code)
+                ? chunk.error.code
+                : /^\d{3}$/.test(code)
+                  ? Number(code)
+                  : undefined;
+            if (numericCode !== undefined && numericCode >= 400 && numericCode <= 599) {
+              throw statusError(provider, numericCode, msg);
+            }
+            throw new UpstreamError(
+              `${provider} 生成到一半出错：${msg || code || "未知错误"}`,
+              undefined,
+              true,
+            );
           }
-          const thought =
-            choice.delta?.reasoning_content ?? choice.delta?.reasoning ?? choice.delta?.thinking;
-          if (thought) yield { type: "thought", text: thought };
-          const text = choice.delta?.content;
-          if (text) {
-            if (text.trim() !== "") visible = true;
-            if (headState === "story") {
-              yield { type: "text", text };
-            } else {
-              head += text;
-              if (headState === "pending" && head.trimStart().length >= HEAD_CHECK) {
-                headState = UPSTREAM_ERROR_TEXT.test(head) ? "error" : "story";
-                if (headState === "story") yield { type: "text", text: head };
+          for (const choice of chunk.choices ?? []) {
+            const refusal = choice.delta?.refusal;
+            if (typeof refusal === "string" && refusal.trim() !== "") {
+              yield { type: "blocked", reason: refusal.trim() };
+              return;
+            }
+            if (choice.finish_reason) finishReason = choice.finish_reason;
+            if (finishReason === "content_filter" || finishReason === "refusal") {
+              yield { type: "blocked", reason: "上游在生成途中拦截了这段内容" };
+              return;
+            }
+            const thought =
+              choice.delta?.reasoning_content ?? choice.delta?.reasoning ?? choice.delta?.thinking;
+            if (thought) {
+              if (thought.trim() !== "") hasThought = true;
+              yield { type: "thought", text: thought };
+            }
+            const text = choice.delta?.content;
+            if (text) {
+              if (text.trim() !== "") visible = true;
+              if (headState === "story") {
+                yield { type: "text", text };
+              } else {
+                head += text;
+                if (headState === "pending") {
+                  if (UPSTREAM_ERROR_TEXT.test(head)) headState = "error";
+                  else if (!possibleUpstreamErrorHead(head)) {
+                    headState = "story";
+                    yield { type: "text", text: head };
+                  }
+                }
               }
             }
           }
-          if (choice.finish_reason) finishReason = choice.finish_reason;
+          if (chunk.usage) {
+            thinkingTokens =
+              chunk.usage.completion_tokens_details?.reasoning_tokens ?? thinkingTokens;
+            const cached =
+              chunk.usage.prompt_tokens_details?.cached_tokens ??
+              chunk.usage.prompt_cache_hit_tokens ??
+              chunk.usage.cache_read_input_tokens ??
+              0;
+            const write = chunk.usage.cache_creation_input_tokens ?? 0;
+            usage = {
+              inputTokens: chunk.usage.prompt_tokens ?? 0,
+              outputTokens: chunk.usage.completion_tokens ?? 0,
+              ...(cached > 0 ? { cachedInputTokens: cached } : {}),
+              ...(write > 0 ? { cacheWriteTokens: write } : {}),
+            };
+          }
         }
-        if (chunk.usage) {
-          const cached =
-            chunk.usage.prompt_tokens_details?.cached_tokens ??
-            chunk.usage.prompt_cache_hit_tokens ??
-            chunk.usage.cache_read_input_tokens ??
-            0;
-          const write = chunk.usage.cache_creation_input_tokens ?? 0;
-          usage = {
-            inputTokens: chunk.usage.prompt_tokens ?? 0,
-            outputTokens: chunk.usage.completion_tokens ?? 0,
-            ...(cached > 0 ? { cachedInputTokens: cached } : {}),
-            ...(write > 0 ? { cacheWriteTokens: write } : {}),
-          };
+      } catch (error) {
+        // 只补放已排除错误前缀的正文，随后保留原始异常；取消和疑似错误体都不放出。
+        if (
+          !signal?.aborted &&
+          !(error instanceof AbortedError) &&
+          headState === "pending" &&
+          head.trim() !== "" &&
+          !possibleUpstreamErrorHead(head)
+        ) {
+          yield { type: "text", text: head };
         }
+        throw error;
       }
       if (headState !== "story" && UPSTREAM_ERROR_TEXT.test(head))
         throw textAsError(provider, head);
+      if (headState === "pending" && head.trim() !== "" && possibleUpstreamErrorHead(head)) {
+        throw new UpstreamError(
+          `${provider} 返回了不完整的上游错误提示，未作为正文采用`,
+          undefined,
+          true,
+        );
+      }
       if (headState === "pending" && head !== "") yield { type: "text", text: head };
       if (finishReason === "content_filter" || finishReason === "refusal") {
         yield { type: "blocked", reason: "上游在生成途中拦截了这段内容" };
         return;
       }
-      if (!finished && !finishReason)
-        throw new UpstreamError(`${provider} 的回复没有正常结束`, undefined, true);
-      if (!visible) throw new UpstreamError(`${provider} 没有返回正文，检查模型名和最大输出`);
-      yield { type: "done", finishReason: finishReason || "stop", ...(usage ? { usage } : {}) };
+      if (!visible) {
+        throw new EmptyReplyError(provider, {
+          finishReason,
+          maxOutputTokens: maxTokens,
+          usage,
+          hasThought,
+          thinkingTokens,
+        });
+      }
+      // [DONE] / EOF 只表示传输结束，不能据此补成自然完成；已有正文交上层保草稿。
+      yield {
+        type: "done",
+        finishReason: finishReason || "incomplete",
+        ...(usage ? { usage } : {}),
+      };
     },
   };
 }

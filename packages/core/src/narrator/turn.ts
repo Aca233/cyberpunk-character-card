@@ -53,6 +53,7 @@ import {
   StateSplitter,
 } from "./block";
 import {
+  assertRequestBudget,
   BUDGET_LABELS,
   type BudgetTrace,
   contextBudget,
@@ -63,7 +64,9 @@ import {
   historyTurns,
   MIN_HISTORY,
   memoryTokens,
+  NarratorContextError,
   replyTokenCap,
+  requestInputTokens,
   stepDownHistory,
 } from "./budget";
 import {
@@ -471,20 +474,41 @@ class TurnBuilder {
   /** 调一次模型，收完全部文字 */
   async call(request: LlmRequest): Promise<Reply> {
     this.checkAborted();
+    const output = request.maxOutputTokens ?? this.deps.auxMaxOutputTokens ?? 4_096;
+    request = { ...request, maxOutputTokens: output };
+    const label =
+      request.responseFormat?.name === "judge"
+        ? "① 判断阶段"
+        : request.responseFormat?.name === "repair"
+          ? "格式修复阶段"
+          : request.responseFormat?.name === "summary"
+            ? "场景摘要阶段"
+            : "辅助阶段";
+    assertRequestBudget(
+      request,
+      this.deps.auxContextWindow ?? this.deps.contextWindow ?? DEFAULT_WINDOW,
+      output,
+      label,
+    );
     let text = "";
     let usage: LlmUsage | undefined;
-    let complete = false;
+    let finishReason = "";
     for await (const event of this.deps.llm.stream(request, this.deps.signal)) {
       this.checkAborted();
       if (event.type === "text") text += event.text;
       else if (event.type === "blocked") return { blocked: event.reason };
       else if (event.type === "done") {
         usage = event.usage;
-        complete = completeFinish(event.finishReason);
+        finishReason = event.finishReason;
       }
     }
     this.checkAborted();
-    if (!complete) throw new IncompleteReplyError("模型回复未正常结束，未采用不完整结果");
+    if (!completeFinish(finishReason)) {
+      const detail = isLengthFinish(finishReason)
+        ? `输出达到上限（${usage ? `已用 ${usage.outputTokens} token，` : ""}请求上限 ${output} token，含模型思考），请提高辅助模型的最大输出后重试`
+        : `模型回复未正常结束（结束原因：${finishReason || "未提供"}），未采用不完整结果`;
+      throw new IncompleteReplyError(detail);
+    }
     return { text, usage };
   }
 
@@ -495,6 +519,7 @@ class TurnBuilder {
     } catch (error) {
       this.checkAborted();
       if (error instanceof NarratorAbortedError) throw error;
+      if (error instanceof NarratorContextError) noteOnce(this.notes, error.message);
       return { failed: true };
     }
   }
@@ -1219,8 +1244,14 @@ export async function runNarratorTurn(
       });
     // 整份超出窗口时先撤可选装备参考与低优先级动态世界书条目，再按原顺序裁记忆材料；原文保留 MIN_HISTORY 轮。
     let limit = budget.window - maxOutputTokens;
+    const messagesOf = (p: ReturnType<typeof build>) => {
+      const withWorldbook = resolvedWorldbook
+        ? applyWorldbookDepth(p.messages, resolvedWorldbook.atDepth)
+        : p.messages;
+      return expandedPreset ? applyExpandedPreset(withWorldbook, expandedPreset) : withWorldbook;
+    };
     const totalOf = (p: ReturnType<typeof build>) =>
-      presetTokens + atDepthTokens + p.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
+      requestInputTokens({ purpose: "narrator", messages: messagesOf(p) });
     let prompt = build();
     for (let total = totalOf(prompt); total > limit; total = totalOf(prompt)) {
       if (includeNpcEquipment) {
@@ -1285,12 +1316,7 @@ export async function runNarratorTurn(
         ? { ...lore.trace, section: undefined, note: "整份超出上下文预算，没带" }
         : lore?.trace;
     // 先插入世界书 @D 深度条目，再叠加酒馆预设（保证预设的 head 与 depth:0 破甲位置 100% 不受干扰）
-    const withWorldbook = resolvedWorldbook
-      ? applyWorldbookDepth(prompt.messages, resolvedWorldbook.atDepth)
-      : prompt.messages;
-    const narrateMessages = expandedPreset
-      ? applyExpandedPreset(withWorldbook, expandedPreset)
-      : withWorldbook;
+    const narrateMessages = messagesOf(prompt);
     if (preset) b.notes.push(`写正文套用了酒馆预设「${preset.name}」`);
     if (resolvedWorldbook && resolvedWorldbook.hits.length > 0) {
       const constCount = resolvedWorldbook.hits.filter(
@@ -1337,12 +1363,47 @@ export async function runNarratorTurn(
         ...(sampling.topK !== undefined ? { topK: sampling.topK } : {}),
       },
       presetName: preset?.name,
+      narrationPreset: preset
+        ? {
+            regex: preset.regex.map((regex) => ({ ...regex })),
+            ...(sampling.maxOutputTokens !== undefined
+              ? { maxOutputTokens: sampling.maxOutputTokens }
+              : {}),
+          }
+        : null,
       auxUsage: b.auxUsage,
       repairs: b.repairs,
       repairUsage: b.repairUsage,
       notes: [...b.notes],
       dropped: [...b.dropped],
       flags: [...b.flags],
+    };
+    await saveCheckpoint("prepared", preparedData);
+  }
+
+  if (deps.checkpoint && !deps.checkpoint.narrated) {
+    // 只更新未完成阶段的执行额度；提示词、采样、预设正则沿用断点中的同一次内容尝试。
+    const budget = contextBudget(deps.contextWindow);
+    const presetLimit = preparedData.narrationPreset?.maxOutputTokens;
+    const requested =
+      deps.maxOutputTokens !== undefined && presetLimit !== undefined
+        ? Math.min(deps.maxOutputTokens, presetLimit)
+        : (deps.maxOutputTokens ?? presetLimit ?? budget.parts.reply);
+    const output = Math.max(1, Math.floor(Math.min(requested, replyTokenCap(budget))));
+    const request = { purpose: "narrator" as const, messages: preparedData.narrateMessages };
+    assertRequestBudget(request, budget.window, output, "③ 正文恢复阶段");
+    preparedData = {
+      ...preparedData,
+      maxOutputTokens: output,
+      budgetTrace: {
+        ...preparedData.budgetTrace,
+        window: budget.window,
+        total: requestInputTokens(request),
+        limit: budget.window - output,
+        parts: preparedData.budgetTrace.parts.map((part) =>
+          part.part === "reply" ? { ...part, limit: output } : part,
+        ),
+      },
     };
     await saveCheckpoint("prepared", preparedData);
   }
@@ -1372,7 +1433,7 @@ export async function runNarratorTurn(
     presetName,
   } = preparedData;
   const live: NarratorPlan = { kind: "action", input: preparedData.liveInput };
-  const preset = ooc ? undefined : deps.preset;
+  const preset = preparedData.narrationPreset;
 
   if (sandevistanBoosted && activeBoost) {
     deps.onBoost?.({ id: activeBoost.id, name: activeBoost.name });
@@ -1458,6 +1519,12 @@ export async function runNarratorTurn(
       detail: presetName ? `流式生成（预设「${presetName}」）` : "流式生成剧情",
     });
     try {
+      assertRequestBudget(
+        { purpose: "narrator", messages: narrateMessages },
+        deps.contextWindow ?? DEFAULT_WINDOW,
+        maxOutputTokens,
+        "③ 正文阶段",
+      );
       for await (const event of deps.llm.stream(
         {
           purpose: "narrator",
@@ -1504,7 +1571,6 @@ export async function runNarratorTurn(
       narrativeError = error;
     }
     b.checkAborted();
-    if (narrativeError) throw narrativeError;
     const split = splitter.finish();
     const { rest, block } = split;
     if (rest !== "") emitBodyChunk(rest);
@@ -1520,13 +1586,21 @@ export async function runNarratorTurn(
     const regexCleaned = preset ? applyPresetRegex(rawBody, preset).trim() : rawBody;
     const cleaned = preset ? sanitizePresetNarrative(regexCleaned) : regexCleaned;
     // 正则或标签清理把正文整段清空（例如玩家打开了只该改旧楼层的那类）时保底用原文，不让这一轮白写
-    const wiped = preset !== undefined && cleaned === "" && rawBody.trim() !== "";
+    const wiped = preset !== null && cleaned === "" && rawBody.trim() !== "";
     narrative = wiped ? rawBody : cleaned;
     if (wiped) b.notes.push("预设正则会把整段正文清空，这一轮没套正则，用的是原文");
     else if (preset && narrative !== rawBody.trim())
       b.notes.push("正文按预设正则清理过（思维链、标签等）");
     if (narrative === "") {
+      // 没有可保留的正文时保留原始错误类型（例如超时），不要把所有异常都改成空回复。
+      if (narrativeError) throw narrativeError;
       throw new NarratorEmptyReplyError("模型没有返回正文，可以重试");
+    }
+    if (narrativeError) {
+      narrativeComplete = false;
+      const timedOut = narrativeError instanceof Error && narrativeError.name === "LlmTimeoutError";
+      // 不将上游原始报错直接写进存档，其中可能含请求内容或凭据。
+      narrativeIssue = `正文生成${timedOut ? "超时" : "中断"}，已保存收到的草稿；本轮未推进世界，请检查连接或输出配置后重新生成。`;
     }
     if (block !== null) b.notes.push("正文末尾带了指令块，已经去掉；状态按抽取结算");
 
@@ -1594,13 +1668,16 @@ export async function runNarratorTurn(
         tradePlansText,
       );
       // 只撤可选创作/能力参考，不裁正文、事实、人物边界或完整 ID 基表。
-      // 辅助连接未单独配置时实际回落到正文连接，窗口也按同一连接核算。
+      // runtime 提供实际辅助连接的窗口；离线调用未指定时采用公共默认值。
       const auxWindow = deps.auxContextWindow ?? deps.contextWindow ?? DEFAULT_WINDOW;
-      const auxOutput = deps.auxMaxOutputTokens ?? deps.maxOutputTokens ?? 4_096;
+      // 抽取需要输出事件、人物与记忆等完整 JSON；额度包含模型思考。
+      // 未单独配置时按辅助窗口预留，不能沿用正文连接的上限或固定卡在 4096。
+      const auxOutput =
+        deps.auxMaxOutputTokens ?? Math.max(1, Math.min(16_384, Math.floor(auxWindow / 4)));
       const auxBudget = Math.max(0, auxWindow - auxOutput);
       // 为消息角色与供应商的 JSON 协议包装留余量；不能用输入预算下限突破实际窗口。
       const estimateExtract = (p: ReturnType<typeof buildExtractPrompt>) =>
-        256 + p.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+        requestInputTokens({ purpose: "aux", messages: p.messages });
       if (estimateExtract(extract) > auxBudget) {
         if (needExtractEquipment) {
           extract = buildExtractPrompt(
@@ -1656,7 +1733,7 @@ export async function runNarratorTurn(
         if (error instanceof IncompleteReplyError) {
           throw new NarratorStageError(
             "extract",
-            "④ 抽取记账回复未完整结束（已保存判断与正文，点重试将直接继续记账）",
+            `④ 抽取状态与记账失败：${error.message}（已保存判断与正文，重试将直接继续记账）`,
             true,
             "narrated",
           );

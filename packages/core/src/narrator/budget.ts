@@ -1,3 +1,4 @@
+import type { LlmRequest } from "../kernel/ports";
 import { effectiveTurns, type LogRecord } from "../kernel/turnlog";
 import { TurnInputSchema } from "../schemas/turn";
 import { estimateTokens } from "./prompts/layers";
@@ -56,6 +57,35 @@ const SMALL_WINDOW = 32_000;
 const LARGE_WINDOW = 128_000;
 /** 没拿到方案时按 32K 算 */
 export const DEFAULT_WINDOW = SMALL_WINDOW;
+
+/** 文本请求的保守估算，包括消息外壳和原生 JSON schema；不把图片 base64 当文本估算。 */
+export function requestInputTokens(request: LlmRequest): number {
+  const schema = request.responseFormat?.schema;
+  return (
+    256 +
+    request.messages.reduce((sum, message) => sum + estimateTokens(message.content) + 8, 0) +
+    (schema ? estimateTokens(JSON.stringify(schema)) : 0)
+  );
+}
+
+export class NarratorContextError extends Error {
+  override name = "NarratorContextError";
+}
+
+/** 必需材料放不下时明确停止，不能靠截断世界事实或正文来发送超窗请求。 */
+export function assertRequestBudget(
+  request: LlmRequest,
+  window: number,
+  output: number,
+  label: string,
+): void {
+  const input = requestInputTokens(request);
+  if (input + output > window) {
+    throw new NarratorContextError(
+      `${label}上下文不足：当前窗口 ${window} token，完整输入估算 ${input} token（含协议余量），输出预留 ${output} token，合计至少需要 ${input + output} token。未发送请求、未裁剪必需事实；请提高实际模型窗口配置，或在输入可容纳时调整输出上限后重试。`,
+    );
+  }
+}
 
 /** 原文至少带几轮（规格“最近 3 轮原文”），预算够时往前补，最多 HISTORY_TURNS 轮 */
 export const MIN_HISTORY = 3;

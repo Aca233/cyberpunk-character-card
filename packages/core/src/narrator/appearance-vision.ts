@@ -1,5 +1,6 @@
 import type { AbortSignalLike, LlmClient, LlmMessage, LlmMessageImage } from "../kernel/ports";
 import { PROSE_BLOCK_INFO } from "../schemas/character";
+import { completeFinish, isLengthFinish } from "./completion";
 
 export const APPEARANCE_LOOK_MAX = PROSE_BLOCK_INFO.look.max;
 export const APPEARANCE_HINT_MAX = 200;
@@ -91,20 +92,26 @@ export async function describeAppearanceFromImage(
     }
   }
 
-  if (blockedReason) {
+  if (blockedReason !== null) {
     return { ok: false, error: `模型拦截了识图请求：${blockedReason}` };
+  }
+  if (finishReason === null) {
+    return { ok: false, error: "识图回复未收到完整结束标记，请重试" };
+  }
+  if (isLengthFinish(finishReason)) {
+    return {
+      ok: false,
+      error: "识图输出达到长度上限被截断，请检查模型的最大输出配置后重试",
+    };
+  }
+  if (!completeFinish(finishReason)) {
+    return { ok: false, error: `识图回复未正常结束（${finishReason || "未知原因"}），请重试` };
   }
   const cleaned = cleanLookText(reply);
   if (!cleaned) {
     return {
       ok: false,
       error: "模型没有返回有效的外貌描述，请确认所选模型支持图片识别（Vision）并重试",
-    };
-  }
-  if (["length", "max_tokens"].includes(finishReason?.trim().toLowerCase() ?? "")) {
-    return {
-      ok: false,
-      error: "识图输出达到长度上限被截断，请检查模型的最大输出配置后重试",
     };
   }
   const look =
