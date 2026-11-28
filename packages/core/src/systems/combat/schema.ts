@@ -100,7 +100,7 @@ export type Dead = z.infer<typeof DeadSchema>;
 /** 伤在哪（沿用 health 部位定义） */
 export { BODY_PART_LABELS, type BodyPart, BodyPartSchema };
 
-/** 一处伤：谁、用什么、打在哪；恢复需要时间，处理过的不留疤，未处理的 heavy/lethal 留疤，graze 自然愈合不留疤 */
+/** 一处伤：谁、用什么、打在哪；治疗后仍需恢复，heavy/lethal 愈合留疤，graze 自然愈合不留疤 */
 export const WoundSchema = z.object({
   id: z.string().min(1),
   /** 谁打的：名字，和他属于哪伙人 */
@@ -118,7 +118,7 @@ export const WoundSchema = z.object({
 });
 export type Wound = z.infer<typeof WoundSchema>;
 
-/** 疤：未处理的 heavy/lethal 伤愈合后永久留下；保留伤口来历，认得的人会认出来 */
+/** 疤：heavy/lethal 创伤愈合后永久留下；保留伤口来历，认得的人会认出来 */
 export const ScarSchema = WoundSchema.pick({
   by: true,
   gang: true,
@@ -309,13 +309,13 @@ export const CombatCommandSchema = z
 export type CombatCommand = z.infer<typeof CombatCommandSchema>;
 
 const DAY = 1440;
-/** 伤多久长好（分钟）；治了按这个的一半（暂定，试玩时调） */
+/** 伤势开始恢复后需要多久长好（分钟） */
 export const HEAL_MINUTES: Readonly<Record<Wound["tier"], number>> = {
   graze: 1 * DAY,
   heavy: 4 * DAY,
   lethal: 7 * DAY,
 };
-/** 只有这几档的伤没治就长好会留疤 */
+/** 这些深层创伤愈合后会留疤；普通医疗稳定伤势不等于消疤 */
 export const SCARRING_TIERS: readonly Wound["tier"][] = ["heavy", "lethal"];
 /** 人死后多久掷找不找上门 */
 export const RECKON_MINUTES = 3 * DAY;

@@ -48,6 +48,8 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 社交与说服不按好感数字放水：哪怕熟人深交，触到底线也会讨价还价或拒绝；看【人物】里的诉求、忌讳、人情债与秘密判断对方会怎么接招。
 - 加成的条件（武器、义体、物品、人脉）必须在【当前状态】或【装备/义体】里真实存在；没有就是没有。
 - limb：仅在刀刃、霰弹枪、爆炸、重型机械等真可能当场打断手臂或腿的致命场面写 true；平常不写。
+- condition：只有现实因果已经确认本轮玩家确实倒下失能、濒死或死亡时才写 down/dying/dead；它是实际后果，不是 harm 风险的同义词。失能倒下不等于必死；濒死仍可被现场救治、同伴抢救或有效会籍救援化解。判 dead 必须有具体不可挽回的致命事件或明确失救事实，并核对已经成立的救援条件，不得仅按时间流逝自动判死。原有伤情恶化即使没有新攻击也须给 ruling。没有实际状态变化就不写 condition。
+- npcDeaths：逐个依据人物所处位置、防护、实际致命事件与救援条件裁决，填已确认死亡 NPC 的稳定 id；仅有死亡风险不填。主角安全而同伴独立遭遇致命事件时可以只填同伴，绝不为此抬高主角 harm；主角 harm:lethal 也不表示同伴必死。
 
 【对手行动与人物潜台词】
 - foes：场上有敌对人物、安保、黑客或防备你的人时，用一句话点出他这一轮的真实反应、防守站位或反制算盘（他不是木桩）；没有对手写 null。
@@ -64,7 +66,7 @@ export const JUDGE_STAGE = `【这一步：判断】
 - 自由剧情付费服务（找黑客/技师破译芯片、付费办事、打点贿赂、付定金或尾款、向线人买定制情报）：service 写 favor（情报写 info）、with 写实际在场人物或店铺 id；只要玩家本轮明确支付谈妥的具体金额（例如先付 500 定金或 1000 全款），直接把该整数金额写进 amount（覆盖旧报价单的不同方案，避免 500/1000 来回锁死），不因对方店铺未单列该服务而放弃填写。普通商品、武器、义体与其他固定服务绝不填 amount。
 - 店内超梦用 service:bd-session，成年从业者服务用 service:adult-service；谈妥价格后成交即可，询价、挑片或聊天不算接受。不用 favor/info 代付。
 - 枪匠工坊写 gunsmith（install 从货架直装或用自带件改锁定槽、detach 拆锁定件解锁、convert 智能靶向联锁或精工固锁）、商店 with 与随身武器 weapon；install/detach 写 mod（自带件写 source:backpack），精工固锁写 slot 与 conversion:precision-lock，智能改造写 conversion:smart-link。普通未锁定配件的日常战外装卸在界面上免费做，不填 buy。
-- 义体写 cyberware、医生 with 与 operation（buy 只买下、install 安装、remove 拆卸、repair 维修、repay 还款）；还款不写 cyberware。自带实物写 part；替换写 replace；旧件明确去向写 disposition:keep/sell/scrap，出售也可 tradeIn:true。赊账只认 credit:true 的明确授权。
+- 义体写 cyberware、医生 with 与 operation（buy 只买下、install 安装、remove 拆卸、repair 维修、repay 还款、calibrate 神经校准维护）；还款和校准不写 cyberware。玩家主动要求重度/高压义体神经校准、排异调校或周期维护时用 operation:calibrate 与 with，不用 favor/medical/info 代付，代码统一核对诊所报价并更新维护有效期；已在界面完成或本期仍有效且未临期的校准不再成交。自带实物写 part；替换写 replace；旧件明确去向写 disposition:keep/sell/scrap，出售也可 tradeIn:true。赊账只认 credit:true 的明确授权。
 - 义体预约和分阶段手术写 serviceOrder 与 serviceAction：book 另写型号/医生/手术条件与 scheduledAt；start、complete、resume、cancel 只引用现有订单。book 不付款，start 才交接与付款，complete 完成原订单，不重复收费或重算一段手术时间。取消不代表已经拆下的东西自动装回。只有玩家授权当前服务动作才填写，询问预约或询问术后状态仍写 null。
 - 创伤小组会籍写 trauma:join/renew/upgrade，新办必须写 tier:silver/platinum；续期沿用现有档位，升级只指银卡升白金。仅明确同意办理、续费或升级时填写，询问价格、比较保障、假设、拒绝或尚未同意的推荐写 null。退会和呼叫救援不是购买，buy 写 null；价格与期限由代码核对，不能另写 medical 服务或额外扣款，也不能因角色危险或倒下擅自购买。
 - 仅玩家明确要先到店再交易时，destination 写对应目标地点 id；只是提到异地商店或询价不等于授权出行。已有路线面板出行按当前出行信息理解，不另猜目的地。

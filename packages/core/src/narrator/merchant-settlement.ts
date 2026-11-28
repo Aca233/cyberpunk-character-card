@@ -51,7 +51,7 @@ function purchaseCommand(p: BuyProposal, q: PurchaseQuote): Command {
       reason,
       evidence: reason,
     };
-  if (p.cyberware !== undefined || p.operation === "repay")
+  if (p.cyberware !== undefined || p.operation === "repay" || p.operation === "calibrate")
     return {
       type: "cyberware",
       action: p.operation ?? "install",

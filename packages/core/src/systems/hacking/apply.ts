@@ -639,15 +639,27 @@ export function applyBreach(
     return fail(ruling.reason ?? "目标存在物理气隙隔离或硬化防火墙，无法接入");
   }
   const location = ctx.read<WorldClockState>("world").location ?? null;
-  if (draft.breachedNetworks.some((n) => n.name === command.network && n.location === location)) {
-    return fail(`「${command.network}」已经入侵过了，不用再做一次`);
+  const existing = draft.breachedNetworks.find(
+    (n) => n.name === command.network && n.location === location,
+  );
+  const newGains = [...new Set(command.gains)].filter((gain) => !existing?.gains.includes(gain));
+  if (newGains.length === 0) {
+    return { ok: true, notes: [`「${command.network}」的这些权限已经掌握，无需重复入侵`] };
   }
-  draft.breachedNetworks.push({
-    name: command.network,
-    location,
-    at: ctx.now,
-    gains: [...command.gains],
-  });
+  if (existing) {
+    existing.gains.push(...newGains);
+    existing.at = ctx.now;
+    // 扩权后的网络仍按最近一次成功接入排序，不因其他网络入侵而提前滚出记录。
+    draft.breachedNetworks.splice(draft.breachedNetworks.indexOf(existing), 1);
+    draft.breachedNetworks.push(existing);
+  } else {
+    draft.breachedNetworks.push({
+      name: command.network,
+      location,
+      at: ctx.now,
+      gains: newGains,
+    });
+  }
   if (draft.breachedNetworks.length > BREACH_KEEP) {
     draft.breachedNetworks.splice(0, draft.breachedNetworks.length - BREACH_KEEP);
   }
@@ -660,13 +672,13 @@ export function applyBreach(
   draft.thermal.heat = Math.min(THERMAL_MAX_HEAT, heatBefore + 1);
   draft.thermal.updatedAt = ctx.now;
 
-  const gains = command.gains.map((g) => BREACH_GAIN_LABELS[g]).join("、");
+  const gains = newGains.map((g) => BREACH_GAIN_LABELS[g]).join("、");
   const notes = [
     `入侵协议：${command.network}${command.via ? `（从${command.via}接入）` : ""}，拿下${gains}`,
   ];
   const emit: Command[] = [];
   if (
-    (command.gains.includes("alarms") || command.gains.includes("cameras")) &&
+    (newGains.includes("alarms") || newGains.includes("cameras")) &&
     !ctx.read<CombatState>("combat").active
   ) {
     const alertLoc = resolveAlertLocation(ctx);

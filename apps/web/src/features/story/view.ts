@@ -10,7 +10,10 @@ import { baseWeaponIdOf } from "./art";
 
 /** 剧情界面用到的纯函数：不碰 React，也不发请求 */
 
-export type View = PlayerView & { readonly checkpoint?: TurnCheckpointSummary };
+export type View = PlayerView & {
+  readonly checkpoint?: TurnCheckpointSummary;
+  readonly checkpointError?: string;
+};
 export type Turn = View["turns"][number];
 export type Choice = View["offers"]["choices"][number];
 

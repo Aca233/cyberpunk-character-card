@@ -242,7 +242,7 @@ export function normalizeChangeIds(
     replaceField("to", lookup.npcs, "人物");
   }
   if (type === "combat") replaceNpcRows("foes");
-  if (type === "jobEnd") replaceNpcRows("crewPayouts");
+  if (type === "jobEnd" || type === "jobPayment") replaceNpcRows("crewPayouts");
   if (type === "tie") {
     replaceField("a", lookup.npcs, "人物");
     replaceField("b", lookup.npcs, "人物");

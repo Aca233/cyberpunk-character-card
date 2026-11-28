@@ -1,7 +1,13 @@
 import type { ViewContext } from "../../kernel/system";
 import { NpcStateSchema } from "../npc";
 import { formatGameTime, locationCatalog } from "../world";
-import { fixerBlocked, isOpen, JOB_CREW_STATUS_LABELS, JOB_STATUS_LABELS } from "./apply";
+import {
+  fixerBlocked,
+  hasOutstandingPayment,
+  isOpen,
+  JOB_CREW_STATUS_LABELS,
+  JOB_STATUS_LABELS,
+} from "./apply";
 import { JOB_KIND_LABELS, JobsStateSchema } from "./schema";
 import { factionSide } from "./side";
 
@@ -13,6 +19,8 @@ export function jobsView({ world, data }: ViewContext) {
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const places = locationCatalog(data);
+  const closed = jobs.jobs.filter((j) => !isOpen(j));
+  const recentClosed = closed.slice(-JOBS_CLOSED_SHOWN);
   return {
     fixers: Object.values(jobs.fixers).map((f) => {
       const card = npcs.npcs[f.id];
@@ -38,7 +46,7 @@ export function jobsView({ world, data }: ViewContext) {
     }),
     list: [
       ...jobs.jobs.filter(isOpen),
-      ...jobs.jobs.filter((j) => !isOpen(j)).slice(-JOBS_CLOSED_SHOWN),
+      ...closed.filter((j) => hasOutstandingPayment(j) || recentClosed.includes(j)),
     ].map((j) => ({
       id: j.id,
       title: j.title,
@@ -58,6 +66,10 @@ export function jobsView({ world, data }: ViewContext) {
       open: isOpen(j),
       notes: j.notes,
       paid: j.paid,
+      paymentTotal: j.paymentTotal,
+      paymentHeld: j.paymentHeld,
+      paymentOutstanding:
+        j.paymentTotal === null ? null : Math.max(0, j.paymentTotal - (j.paid ?? 0)),
       summary: j.summary,
       crew: (j.crew ?? []).map((m) => ({
         npc: m.npc,

@@ -22,7 +22,7 @@ export function cyberwareSettlement(q: CyberwareQuote, terms: CyberwareTerms): N
     seller: q.doc,
     kind: "cyberware",
     action: q.action,
-    target: q.id ?? "repay",
+    target: q.id ?? q.action,
     price: q.action === "remove" && q.disposition === "sell" ? q.receive : q.total,
     cash: q.cash,
     credit: q.credit,
@@ -44,6 +44,7 @@ export function serviceWorld(draft: Draft<CyberwareState>, ctx: SystemContext) {
     time: ctx.now,
     slices: {
       cyberware: draft,
+      combat: ctx.read("combat"),
       economy: ctx.read("economy"),
       health: ctx.read("health"),
       world: ctx.read("world"),

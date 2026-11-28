@@ -68,7 +68,13 @@ export function applyEventCommands(
         })),
       );
     } else {
-      const applied = applyMerchantCommands(current, event.commands, ctx, purchases, available);
+      const applied = applyMerchantCommands(
+        current,
+        event.commands,
+        { ...ctx, facts: { ...ctx.facts, settlementEventId: event.id } },
+        purchases,
+        available,
+      );
       results.push(...applied.results);
       if (applied.failure !== undefined) reason = applied.failure;
       else {

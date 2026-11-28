@@ -16,15 +16,28 @@ export function SettlementCard({
   readonly onClose: () => void;
 }) {
   const s = job.settlement;
+  const crewPaid = job.crew.reduce((total, member) => total + (member.paid ?? 0), 0);
+  const playerNet = s?.playerNet ?? (job.paid === null ? null : job.paid - crewPaid);
   const rows: [string, string, "good" | "bad" | undefined][] = [
     [
-      "报酬",
+      "总到账",
       job.paid === null
         ? "—"
         : `${job.paid.toLocaleString("en-US")} 欧元${job.paid !== job.reward ? `（说好的 ${job.reward.toLocaleString("en-US")}）` : ""}`,
       job.paid !== null && job.paid > 0 ? "good" : undefined,
     ],
   ];
+  if (job.crew.some((member) => member.status !== "left"))
+    rows.push(["搭档实付分成", `${crewPaid.toLocaleString("en-US")} 欧元`, undefined]);
+  rows.push([
+    "玩家净到手",
+    playerNet === null ? "—" : `${playerNet.toLocaleString("en-US")} 欧元`,
+    playerNet !== null && playerNet > 0 ? "good" : undefined,
+  ]);
+  if (job.paymentOutstanding !== null && job.paymentOutstanding > 0)
+    rows.push(["待收尾款", `${job.paymentOutstanding.toLocaleString("en-US")} 欧元`, undefined]);
+  if (job.paymentHeld > 0)
+    rows.push(["待结清分账余额", `${job.paymentHeld.toLocaleString("en-US")} 欧元`, undefined]);
   if (s && s.humanity !== null && s.humanity !== 0) {
     rows.push([
       "神经稳态",

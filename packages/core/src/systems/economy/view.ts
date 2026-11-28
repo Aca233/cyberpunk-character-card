@@ -59,6 +59,7 @@ export interface WealthStandingView {
 }
 
 export interface ChromeCareBillView {
+  readonly calibrated: boolean;
   readonly cost: number;
   readonly loadScore: number;
   readonly fbc: boolean;
@@ -147,6 +148,7 @@ export function chromeCareStatus(
   const dueSoon = !overdue && daysLeft <= CHROME_CARE_REMIND_BEFORE_DAYS;
   const cost = fbc || loadScore >= 35 ? CHROME_CARE_EXTREME_COST : CHROME_CARE_HEAVY_COST;
   return {
+    calibrated: (economy.chromeCarePaidUntil ?? 0) > world.time,
     cost,
     loadScore,
     fbc,

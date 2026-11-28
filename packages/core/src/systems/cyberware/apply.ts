@@ -1,6 +1,7 @@
 import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import { checkNarratedPurchase } from "../commerce";
+import { CHROME_CARE_PERIOD_DAYS, type EconomyState } from "../economy";
 import type { WorldClockState } from "../world";
 import { stopBehaviorChip } from "./behavior";
 import { quoteCyberware } from "./quote";
@@ -304,6 +305,25 @@ export function applyCyberware(
   if (!result.ok) return result;
   const q = result.quote;
   if (q.blocked) return { ok: false, reason: q.blocked };
+  if (command.action === "calibrate") {
+    const changed = checkNarratedPurchase(ctx.facts, cyberwareSettlement(q, command));
+    if (changed) return { ok: false, reason: changed };
+    const expected = ctx.facts.tradeQuote as { startsAt?: number } | undefined;
+    if (q.startsAt > ctx.now || (q.startsAt < ctx.now && expected?.startsAt !== q.startsAt))
+      return { ok: false, reason: "须按本轮已确认的时刻完成神经校准，不能提前或倒填服务" };
+    const paidUntil =
+      Math.max(q.endsAt, ctx.read<EconomyState>("economy").chromeCarePaidUntil ?? q.endsAt) +
+      CHROME_CARE_PERIOD_DAYS * 1440;
+    if (command.event) draft.settled.push(command.event);
+    return {
+      ok: true,
+      notes: [`在${q.docName}完成${q.name}（${q.cash} 欧元，维护有效期已更新）`],
+      emit: [
+        { type: "money", delta: -q.cash, reason: `在${q.docName}做${q.name}（14 天周期）` },
+        { type: "economy.payChromeCare", paidUntil },
+      ],
+    };
+  }
   if (command.action === "repay") {
     const changed = checkNarratedPurchase(ctx.facts, cyberwareSettlement(q, command));
     if (changed) return { ok: false, reason: changed };

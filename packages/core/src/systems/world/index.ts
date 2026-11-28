@@ -36,6 +36,8 @@ export const world = defineSystem<
     places: [],
     phasesAwake: 0,
     awakeMinutes: 0,
+    restMinutes: 0,
+    restUntil: null,
     blackLaceDoses: [],
     blackLaceActiveUntil: null,
   }),

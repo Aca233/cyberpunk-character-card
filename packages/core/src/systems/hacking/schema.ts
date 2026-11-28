@@ -251,7 +251,7 @@ export const BreachCommandSchema = z
       .describe("拿到了什么：doors 门禁，cameras 摄像头，turrets 炮塔，data 数据，alarms 警报"),
   })
   .describe(
-    "入侵协议：接进一个网络，开门、关摄像头、拿数据；必须装着网络接入仓，并且前置物理与潜网裁决确认通过了安全接入条件才记下，不扣 RAM",
+    "入侵协议：接进一个网络，开门、关摄像头、拿数据；必须装着网络接入仓，并且前置物理与潜网裁决确认通过了安全接入条件才记下，不扣 RAM。同一地点同一网络扩权沿用原 network，gains 只写本次新拿到的权限；代码合并既有权限，重复权限不再结算",
   );
 export type BreachCommand = z.infer<typeof BreachCommandSchema>;
 

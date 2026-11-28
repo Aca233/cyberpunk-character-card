@@ -72,6 +72,7 @@ export const npcRules: RuleModule<NpcState> = {
 - 人物未卸防前藏着的核心秘密只有你知道，可用于判断对方会不会说漏嘴或顺水推舟，不直接写进玩家可见摘要。
 - 有卡的人能做什么看卡上的体格、装备、义体与伤势：重伤或残缺做不了剧烈动作，没装接入仓的人破不了子网，倒下了什么也做不了。
 - 标了「同行中」的人正跟玩家一起行动：其装备、义体、专长与伤势是现场真实的协同条件，玩家对其下达调度或分工按其实际能力、状态与立场裁决；关系紧张或拿对方当炮灰时对方会拒绝或翻脸。
+- 按每个人自己的防护、位置与已发生后果分别判断生死；只有确认同行者本轮已经遭遇不可挽回的致命后果，才将其人物 id 记入 ruling.npcDeaths。主角的 harm 只写主角风险，不因同伴出事而提高。
 - 死了的人不再出场。`,
   narrate: `- 每轮的【人物】里列着已有人物卡的人：在场的带完整的卡，不在场的只有一行。诉求、底线和秘密是幕后设定，玩家只能知道有实际来源或已揭露的内容。
 - 演人物时照卡上的说话方式和样本写，口吻前后一致；样本只是参考，不照搬原句。对方对你冷热如何看卡上的态度、关系、人情与仇怨，能不能谈成看诉求和底线。
@@ -109,9 +110,9 @@ export const npcRules: RuleModule<NpcState> = {
 - 欠下或结下以后会被讨回来的人情和仇，写一条 ledger（owesYou 对方欠玩家角色、youOwe 玩家角色欠对方、grudge 对方记玩家角色的仇）；还了、报了、放下了，写 ledgerSettle，entry 填卡上「人情和仇」那一条的编号。
 - 死了的人不再出场，也不会发消息。
 - 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。正文里角色得知了有卡的人的一件事（本人说起、别人提到、传闻新闻、扫描），写一条 learn，照角色以为的写，骗人的话照骗的写；卡上已经有的不再写。明确听说或发现此人的死讯时，learn 另写 death:true；普通情报绝不带 death，离屏死亡也不能仅因本轮提到了这个人就公开。
-- 有卡的人实际受了伤写 npcHurt（part 填受伤部位 head / face / chest / belly / left-arm / right-arm / left-leg / right-leg 之一，tier 写 graze / heavy / lethal，reason 写明怎么伤的），得到治疗写 npcHeal；重伤需实际医疗稳定并等待恢复，不因切场自动痊愈，死了另写 npcDeath。已登记在当前交战中的敌人倒下、死亡或逃走时，另写 combat foe，state 分别为 down、dead、fled；仅受伤但仍站着不写 foe。玩家角色实际扫描了有卡的人写 npcScan，不写 combat scan。
+- 有卡的人实际受了伤写 npcHurt（part 填受伤部位 head / face / chest / belly / left-arm / right-arm / left-leg / right-leg 之一，tier 写 graze / heavy / lethal，reason 写明怎么伤的），得到治疗写 npcHeal；重伤需实际医疗稳定并等待恢复，不因切场自动痊愈，死了另写 npcDeath。同行者的死亡须由本轮 npcDeaths 对其人物 id 独立确认；主角自己的 harm 不决定同伴生死。已登记在当前交战中的敌人倒下、死亡或逃走时，另写 combat foe，state 分别为 down、dead、fled；仅受伤但仍站着不写 foe。玩家角色实际扫描了有卡的人写 npcScan，不写 combat scan。
 - 有卡的人拿到或丢了武器、换穿或脱下衣服、收下或递出药剂工具等随身物品写 npcGear，装上或拆掉义体写 npcChrome；玩家角色出钱给同行者买装备、装义体，或现场约好分账/付酬劳，同时写 money 扣钱。商店买卖（含卖给枪店/摊主）由 trade 自动入店库存，不给店主另发 npcGear。
-- 只有在剧情里明确结伴同行（同车转场、护送、一起去下一个地点）时才写 npcCompanion（following:true）；仅在同一个任务现场碰面、交谈、交易或并肩打一仗但之后各走各路的人，绝对不要写 following:true。已经标了「同行中」的人，只要正文里已经分开、告别、留守、交接完毕或玩家独自前往别处，必须写 npcCompanion（following:false）解除同行。同行者只有在场面真正陷入必死绝境（lethal）且确实避无可避时才会死，平时受创写 npcHurt。
+- 只有在剧情里明确结伴同行（同车转场、护送、一起去下一个地点）时才写 npcCompanion（following:true）；仅在同一个任务现场碰面、交谈、交易或并肩打一仗但之后各走各路的人，绝对不要写 following:true。已经标了「同行中」的人，只要正文里已经分开、告别、留守、交接完毕或玩家独自前往别处，必须写 npcCompanion（following:false）解除同行。同行者只有其自身确实遭遇避无可避、不可挽回的致命后果并经 npcDeaths 确认才会死，平时受创写 npcHurt。
 - 有卡的人实际出现神经症状时写 npcHumanity affect（symptomId、symptom、stage、reason），真实缓解写 recover 引用 symptomId；经历和义体本身不自动扣分。玩家只知道已经观察到的表现。`,
 };
 

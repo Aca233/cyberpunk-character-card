@@ -17,7 +17,8 @@ export function healthView({ world }: ViewContext) {
   return {
     ...healthDisplay(health),
     wounds,
-    woundLabel: WOUND_SLOT_LABELS[wounds],
+    woundLabel:
+      health.condition === "up" ? WOUND_SLOT_LABELS[wounds] : CONDITION_LABELS[health.condition],
     painSuppressed: health.painSuppressed ?? false,
     condition: health.condition,
     conditionLabel: CONDITION_LABELS[health.condition],

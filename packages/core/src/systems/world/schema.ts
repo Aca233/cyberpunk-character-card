@@ -113,6 +113,10 @@ export const WorldClockStateSchema = z.object({
   phasesAwake: z.number().int().min(0).default(0),
   /** 距离下一次累计熬夜时段（360 分钟）的零头分钟，避免短时间跨整点误算一整段疲劳 */
   awakeMinutes: z.number().int().min(0).default(0),
+  /** 当前连续休息的分钟数；满六小时才算充分睡眠，清醒活动会中断累计。 */
+  restMinutes: z.number().int().min(0).max(360).default(0),
+  /** 上一段已登记休息的结束时刻；只有紧接这一时刻才能继续累计。 */
+  restUntil: z.number().int().nullable().default(null),
   /** 3.0 最近 7 天服用黑蕾丝（Black Lace）的时间点（分钟） */
   blackLaceDoses: z.array(z.number().int()).default([]),
   /** 3.0 黑蕾丝药效维持截止时间（期间无视伤势减值且肉体 +2） */
@@ -142,7 +146,7 @@ export const WorldCommandSchema = z
     location: z.union([z.string().min(1), NewPlaceSchema]).optional(),
   })
   .describe(
-    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），不能早于现在，没写就是时间没动；location 是换到的地点：【地点】里有的写 id，没有的新地方写 {name, in（城区中文名，必填）, sub?（街区中文名）, note?}，不写坐标",
+    "每轮一条：activity 记这一轮主要做了什么；time 写这一轮结束时是几点（YYYY-MM-DD HH:mm），不能早于现在，没写就是时间没动；rest 也必须记录实际耗时，连续休息满六小时才清除熬夜疲劳，短歇或零耗时不会清空疲劳；location 是换到的地点：【地点】里有的写 id，没有的新地方写 {name, in（城区中文名，必填）, sub?（街区中文名）, note?}，不写坐标",
   );
 export type WorldCommand = z.infer<typeof WorldCommandSchema>;
 

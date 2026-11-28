@@ -175,9 +175,12 @@ export function applyNcpd(
     return { ok: true, notes: [`警情撤掉了：${alert.label}（${command.reason}）`] };
   }
   const location = ctx.read<WorldClockState>("world").location;
-  const here = location === null ? undefined : locationCatalog(ctx.data).get(location);
-  if (here?.district !== alert.district)
-    return fail(`这条警情在${alert.district}，现在不在那里：先过去再处理`);
+  const origin = ctx.facts.actionStartLocation;
+  // 结算可能在本轮移动后执行；允许在现场处理完再离开，不能只凭身处同一城区领赏。
+  if (location !== alert.location && origin !== alert.location) {
+    const place = locationCatalog(ctx.data).get(alert.location)?.name ?? alert.location;
+    return fail(`这条警情在${place}（${alert.district}），本轮没有到场依据：先到现场处理`);
+  }
   const ruling = rulingFact(ctx.facts);
   if (ruling?.kind === "blocked") {
     return fail(ruling.reason ?? "现场局势被阻断，这起警情还没处理完");

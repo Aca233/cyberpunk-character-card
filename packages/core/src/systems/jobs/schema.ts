@@ -78,7 +78,7 @@ export const JobCrewMemberSchema = z.object({
   role: z.string().trim().min(1).max(40).default("搭档"),
   /** 约定分成百分比（0–80；0 表示纯义气帮忙不分账） */
   cutPercent: z.number().int().min(0).max(80).default(0),
-  /** 结单时实际分给该搭档的欧元；未结单为 null */
+  /** 累计实际分给该搭档的欧元；尚未收款分账为 null */
   paid: z.number().int().min(0).nullable().default(null),
   status: JobCrewStatusSchema.default("joined"),
 });
@@ -92,6 +92,14 @@ export const JobSettlementSchema = z.object({
   playerNet: z.number().int().min(0).nullable().optional(),
 });
 export type JobSettlement = z.infer<typeof JobSettlementSchema>;
+
+export const JobReceiptSchema = z.object({
+  receipt: z.string().min(1),
+  at: z.number().int(),
+  paid: z.number().int().min(0),
+  crewPayouts: z.array(z.object({ npc: z.string().min(1), paid: z.number().int().min(0) })),
+  summary: z.string().min(1),
+});
 
 export const JobSchema = z.object({
   id: z.string().min(1),
@@ -127,8 +135,14 @@ export const JobSchema = z.object({
   overdue: z.boolean(),
   /** 超期这件事叙事模型已经在正文里回应过（写了 jobNote） */
   dueHandled: z.boolean().default(false),
-  /** 实际到手的报酬；结束时写 */
+  /** 委托累计实际到账总报酬，尚未结单为 null；玩家净收入见 settlement */
   paid: z.number().int().min(0).nullable(),
+  /** 结单后约定应付的总报酬；与累计实收的差额为待收尾款 */
+  paymentTotal: z.number().int().min(0).nullable().default(null),
+  /** 分期期间因整数分成暂留、尚未进入任何一方钱包的余额；尾款结清时归入玩家净收入 */
+  paymentHeld: z.number().int().min(0).default(0),
+  /** 每笔到账的幂等凭证，completion 为结单当时的到账 */
+  receipts: z.array(JobReceiptSchema).default([]),
   summary: z.string().nullable(),
   /** 接单时的人性，结算时算这一单的人性变化 */
   humanityAtAccept: z.number().int().nullable().default(null),
@@ -220,16 +234,57 @@ export const JobEndSchema = z
     outcome: JobOutcomeSchema,
     /** 实际已经收到的总欧元；未到账写 0，不因完成任务自动付款；若有入伙搭档，代码自动按约定分成扣减后将净额入玩家钱包 */
     paid: z.number().int().min(0).max(100_000).default(0),
+    paymentTotal: z
+      .number()
+      .int()
+      .min(0)
+      .max(100_000)
+      .optional()
+      .describe(
+        "结单后雇主最终应付总额，含已到款和待收尾款；完成时省略则按说好的报酬与实收较大者，放弃/失败/背叛时省略则按实收。明确少付、加价或免款时填写",
+      ),
     /** 可选：仅当正文里玩家故意克扣、改账或另行约定实付给搭档的数额时填写；省略则自动按约定分成比例足额分账 */
     crewPayouts: z.array(JobCrewPayoutSchema).max(6).optional(),
     summary: z.string().min(1),
   })
   .describe(
-    "委托结束：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；paid 记本单实际到账总报酬，未收款写 0；有入伙搭档时代码自动按约定分成% 结算玩家净到手，若玩家故意少给或黑吃黑再写 crewPayouts，代码自动给对方记欠账；summary 一句话总评",
+    "委托结束，只写一次结果：clean 干净完成，flawed 带瑕疵完成，abandoned 提前告知放弃，failed 失败，betrayed 背叛雇主；paid 记结单当时实际到账总报酬，未收款写 0；paymentTotal 为最终应付总报酬，后续到账另写 jobPayment；有搭档时代码自动分账，故意少给才写 crewPayouts；summary 一句话总评",
   );
 export type JobEnd = z.infer<typeof JobEndSchema>;
 
-export type JobCommand = JobOffer | JobAccept | JobNote | JobCrew | JobEnd;
+export const JobPaymentSchema = z
+  .object({
+    type: z.literal("jobPayment"),
+    id: ExistingJobIdSchema,
+    receipt: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .describe(
+        "这笔实际到账的唯一凭证 id；重提同一笔钱必须复用同一 id，不同分期用不同 id；completion 保留给结单到账",
+      ),
+    paid: z.number().int().min(1).max(100_000).describe("本次新增到账总额，不是累计实收"),
+    paymentTotal: z
+      .number()
+      .int()
+      .min(0)
+      .max(100_000)
+      .optional()
+      .describe("仅雇主与玩家明确重新约定总报酬时填写，不低于累计实收"),
+    crewPayouts: z
+      .array(JobCrewPayoutSchema)
+      .max(6)
+      .optional()
+      .describe("仅故意克扣或另有明确分账时填写本次实付搭档数额；省略按本次新增应得分成自动分账"),
+    summary: z.string().min(1).describe("本次到账的实际来源与缘由"),
+  })
+  .describe(
+    "已结束委托的延迟付款、分期或尾款：只记录本次真实到账，按唯一 receipt 防重复；不改变原委托结局，不另写 money 或 loot",
+  );
+export type JobPayment = z.infer<typeof JobPaymentSchema>;
+
+export type JobCommand = JobOffer | JobAccept | JobNote | JobCrew | JobEnd | JobPayment;
 
 /** 只能由代码发出：开档时写入中间人 */
 export const SeedFixerSchema = z.object({

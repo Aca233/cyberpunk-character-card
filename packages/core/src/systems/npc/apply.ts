@@ -668,7 +668,7 @@ export function applyNpc(
     case "npcDeath": {
       if (npc.following) {
         const names = [npc.name, ...(npc.alias === undefined ? [] : [npc.alias])];
-        const blocked = memberDeathBlocked(facts, names);
+        const blocked = memberDeathBlocked(facts, [npc.id], names);
         if (blocked) return { ok: false, reason: blocked };
       }
       npc.alive = false;

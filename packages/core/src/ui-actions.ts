@@ -12,6 +12,7 @@ const NARRATED_UI_ACTION_TYPES: ReadonlySet<string> = new Set([
   "removeCyberware",
   "repairCyberware",
   "repayRipperdoc",
+  "payChromeCare",
   "deckLoad",
   "equipItem",
   "unequipItem",
@@ -63,9 +64,12 @@ export function summarizeUiAction(record: ActionRecord): string | null {
   );
   const picked = primary.length > 0 ? primary : rawNotes;
 
-  // 义体诊所操作：如果只有“神经系统装上XX”而钱在 money 备注里，补上诊所与金额信息
+  // 义体诊所操作：钱只在 money 备注里时，补上诊所与实际金额信息
   if (
-    (type === "buyCyberware" || type === "removeCyberware" || type === "repairCyberware") &&
+    (type === "buyCyberware" ||
+      type === "removeCyberware" ||
+      type === "repairCyberware" ||
+      type === "payChromeCare") &&
     picked.every((n) => !n.includes("欧元"))
   ) {
     const moneyNote = rawNotes.find((n) => RAW_MONEY_NOTE.test(n));

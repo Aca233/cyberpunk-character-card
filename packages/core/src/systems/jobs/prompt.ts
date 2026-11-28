@@ -3,6 +3,7 @@ import { formatGameTime } from "../world";
 import {
   type FixerCard,
   fixerBlocked,
+  hasOutstandingPayment,
   isOpen,
   JOB_CREW_STATUS_LABELS,
   JOB_STATUS_LABELS,
@@ -24,7 +25,7 @@ export const JOB_RISK_LABELS: Readonly<Record<number, string>> = {
 export const jobsRules: RuleModule<JobsState> = {
   id: "jobs",
   title: "委托",
-  commands: ["jobOffer", "jobAccept", "jobNote", "jobCrew", "jobEnd"],
+  commands: ["jobOffer", "jobAccept", "jobNote", "jobCrew", "jobEnd", "jobPayment"],
   when: () => true,
   judge: `- 没有强制的阶段：踩点、找情报、谈判、换路线、放弃、背叛雇主都按意图处理。准备充分、计划聪明就真的能绕开硬碰硬、把局势拆开解决。
 - 委托里的危险与对手火力，按委托分量、雇主/目标势力与现场物理准备实际裁决。
@@ -44,7 +45,9 @@ export const jobsRules: RuleModule<JobsState> = {
 - 玩家在私信或对话里答应接单时写 jobAccept 才算接下；如果玩家在正文里直接明确拒绝某单待接委托，可写 jobEnd(outcome: "abandoned") 了结它；如果玩家没点接单就直接去把待接委托办完了，也可写 jobAccept 或直接 jobEnd 结算。
 - 有实质进展、玩家选了某条路、转折被揭开时写 jobNote（待接与进行中委托都可以写）。
 - 玩家拉已结识搭档一起干某单委托并谈妥分工/分成% 时写 jobCrew(action: "join", id, npc, role, cutPercent)；搭档中途退出或阵亡离队写 jobCrew(action: "leave", id, npc)。
-- 这单在正文里了结时写 jobEnd，结局按实际发生的事定。paid 写这单实际到账的总报酬，没有到款写 0；有入伙搭档时代码会自动按约定分成% 结算玩家净到手，不必再额外发 money 扣分成。仅当正文里玩家故意克扣少给或黑吃黑时，才填写 crewPayouts 写明实际分给搭档的数额，代码会自动在对应 NPC 账本记欠账（youOwe）与共同记忆。
+- 这单在正文里了结时只写一次 jobEnd，结局按实际发生的事定。paid 只写结单当时实际到账的总报酬，没有到款写 0；paymentTotal 记含已到款和待收尾款的最终应付总额，完成时省略按说好的报酬，失败/放弃/背叛时省略按实收；明确少付、加价或免款才改它。完成与付款分开，未收款不代表没有尾款。
+- 已结束委托之后实际收到延期款、分期或尾款，写 jobPayment(id, receipt, paid, summary)：paid 是本次新增到账额，不是累计实收；每笔付款用独立 receipt，同一笔钱重提须复用同一凭证，不能再发 jobEnd 或另发 money/loot。已明确重新约定总价时才填写 paymentTotal；没有实际收到钱不能提前记账。
+- 有搭档时每笔到账会自动按累计实收的新增应得分成结算玩家净收入，不必额外扣钱；分期整数分成产生的少量余额会保留至下笔分配，全部结清后余额归入玩家。仅当正文明确玩家故意克扣少给时才填写 crewPayouts，写本次实际分给搭档的数额，代码会给对方记欠账（youOwe）与共同记忆；雇主没付款不算玩家克扣。
 - 失败和坏选择要有真实的后果，但不写脱离局势的空降惩罚；被放走的人、被得罪的雇主以后可能回来。`,
 };
 
@@ -142,10 +145,23 @@ export function jobsSection(
       lines.push(...offeredJobs.map((j) => jobLine(j, state)));
     }
   }
-  for (const j of state.jobs.filter((job) => !isOpen(job)).slice(-CLOSED_LISTED)) {
+  const closed = state.jobs.filter((job) => !isOpen(job));
+  const outstanding = closed.filter(hasOutstandingPayment);
+  const recentClosed = closed.slice(-CLOSED_LISTED);
+  for (const j of closed.filter((job) => outstanding.includes(job) || recentClosed.includes(job))) {
+    const payment =
+      j.paymentTotal === null
+        ? ""
+        : `；约定应付 ${j.paymentTotal} 欧元，累计实收 ${j.paid ?? 0} 欧元，待收 ${Math.max(0, j.paymentTotal - (j.paid ?? 0))} 欧元`;
     lines.push(
-      `- 已结束：${j.title}［${j.id}］${JOB_STATUS_LABELS[j.status]}${j.summary ? `——${j.summary}` : ""}`,
+      `- 已结束：${j.title}［${j.id}］${JOB_STATUS_LABELS[j.status]}${j.summary ? `——${j.summary}` : ""}${payment}`,
     );
+    if (j.receipts.length > 0)
+      lines.push(
+        `  已登记到账凭证：${j.receipts.map((r) => `${r.receipt}（${r.paid} 欧元，${r.summary}）`).join("；")}`,
+      );
+    if (j.paymentHeld > 0)
+      lines.push(`  待结清分账余额：${j.paymentHeld} 欧元（已到账，尚未分入玩家或搭档的钱包）`);
   }
   return lines.join("\n");
 }

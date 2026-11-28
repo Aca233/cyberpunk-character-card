@@ -18,6 +18,7 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
   for (const c of commands) {
     switch (c.type) {
       case "damage":
+      case "healthCondition":
         kinds.add("injury");
         break;
       case "money":

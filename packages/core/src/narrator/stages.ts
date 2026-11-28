@@ -42,7 +42,10 @@ export const BuyProposalSchema = z
       .optional()
       .describe("仅玩家明确先前往某处再成交时写目标地点 id；不能为了交易擅自补出行"),
     offer: z.string().min(1).optional().describe("沿用已谈妥报价时写报价 id"),
-    operation: z.enum(["buy", "install", "remove", "repair", "repay"]).optional(),
+    operation: z
+      .enum(["buy", "install", "remove", "repair", "repay", "calibrate"])
+      .optional()
+      .describe("义体操作；calibrate 为神经校准维护，只指定 with 医生，不填 cyberware 或 service"),
     part: z
       .string()
       .min(1)
@@ -103,17 +106,25 @@ export const BuyProposalSchema = z
     (b) =>
       [b.item, b.service, b.cyberware, b.gunsmith, b.trauma].filter((v) => v !== undefined)
         .length ===
-      (b.operation === "repay" || (b.serviceAction && b.serviceAction !== "book") ? 0 : 1),
+      (b.operation === "repay" ||
+      b.operation === "calibrate" ||
+      (b.serviceAction && b.serviceAction !== "book")
+        ? 0
+        : 1),
     {
       message:
-        "item、service、cyberware、gunsmith、trauma 写一个；还款只写 operation:repay 与 with",
+        "item、service、cyberware、gunsmith、trauma 写一个；义体还款或神经校准只写 operation:repay/calibrate 与 with",
     },
   )
   .refine((b) => b.action !== "sell" || b.item !== undefined, {
     message: "action:sell 仅用于普通物品；义体拆卸写 operation:remove",
   })
   .refine(
-    (b) => b.operation === undefined || b.operation === "repay" || b.cyberware !== undefined,
+    (b) =>
+      b.operation === undefined ||
+      b.operation === "repay" ||
+      b.operation === "calibrate" ||
+      b.cyberware !== undefined,
     { message: "buy、install、remove、repair 需要指定 cyberware" },
   )
   .refine((b) => b.gunsmith === undefined || b.weapon !== undefined, {
@@ -157,6 +168,18 @@ export const JudgeRulingSchema = z.object({
     .enum(["none", "graze", "heavy", "lethal"])
     .describe(
       "玩家角色本轮客观面临的最高身体伤害风险：none 无伤，graze 擦伤磕碰，heavy 重击/中枪，lethal 致命绝境",
+    ),
+  condition: z
+    .enum(["down", "dying", "dead"])
+    .optional()
+    .describe(
+      "仅在明确因果确认本轮发生玩家生命状态后果时填写：down 失能倒下但可稳定救治，dying 可抢救的濒死，dead 无救援化解且已确定的死亡。dying/dead 需要 harm:lethal；仅有风险或时间经过不代表死亡。无变化不写",
+    ),
+  npcDeaths: z
+    .array(z.string().min(1))
+    .optional()
+    .describe(
+      "本轮依据各自处境、明确致命事件和救援条件确认死亡的 NPC 稳定 id；与主角 harm 独立。只受伤、可能阵亡、威胁或假设不列入，无则省略",
     ),
   limb: z
     .boolean()
@@ -222,7 +245,7 @@ export const JudgeDocSchema = z.object({
     .boolean()
     .describe("玩家跳出角色在场外提问（问规则、问可行性、问现状），不是让角色行动时写 true"),
   ruling: JudgeRulingSchema.nullable().describe(
-    "平时日常对话、吃喝赶路、普通观察写 null；只有发生物理碰撞、潜入越界、黑客入侵、武装冲突或违背常识阻断时才给定性裁决",
+    "平时日常对话、吃喝赶路、普通观察写 null；发生物理碰撞、潜入越界、黑客入侵、武装冲突、违背常识阻断，或现有伤情造成失能/濒死/死亡等实际后果时给定性裁决",
   ),
   counterHack: CounterHackRulingSchema.nullable()
     .optional()
@@ -313,7 +336,13 @@ export function rulingText(ruling: JudgeRuling): string {
     ruling.harm === "none"
       ? "（无身体创伤）"
       : `（可能身体受损档位：${ruling.harm}${ruling.limb ? "，存在断肢风险" : ""}）`;
-  return `${lead}${harm}：${ruling.outcome}（依据：${ruling.reason}）。按现实因果照写，不提数值和规则词。`;
+  const condition = ruling.condition
+    ? `玩家实际生命状态后果：${{ down: "倒下失能", dying: "濒死待救", dead: "已确定死亡" }[ruling.condition]}。`
+    : "";
+  const npcDeaths = ruling.npcDeaths?.length
+    ? `独立确认死亡的人物：${ruling.npcDeaths.join("、")}，按各自致命事件落笔。`
+    : "";
+  return `${lead}${harm}：${ruling.outcome}（依据：${ruling.reason}）。${condition}${npcDeaths}按现实因果照写，不提数值和规则词。`;
 }
 
 export function counterHackText(counterHack: CounterHackRuling): string {
@@ -395,7 +424,7 @@ export function purchaseQuote(
       quoteKey: JSON.stringify(["cyberware.service", result.settlement, buy.destination]),
     };
   }
-  if (buy.cyberware !== undefined || buy.operation === "repay") {
+  if (buy.cyberware !== undefined || buy.operation === "repay" || buy.operation === "calibrate") {
     if (!buy.with) return { ok: false, reason: "义体交易需要明确医生" };
     const result = quoteCyberware(world, data, {
       action: buy.operation ?? "install",
@@ -440,7 +469,7 @@ export function purchaseQuote(
         q.stockRevision,
         q.debtDue,
       ]),
-      detail: `${q.docName} ${q.name}：${q.action === "remove" && q.disposition === "sell" ? `经玩家明确授权拆卸回收，玩家所得 ${q.receive} 欧元` : `应付 ${q.total} 欧元，本次现金 ${q.cash}${q.credit ? `、赊欠 ${q.credit}` : ""}`}${q.replaces ? `；已授权旧件 ${q.replaces.name} 去向 ${q.disposition}` : ""}${q.part ? `；自带实物 ${q.part}` : ""}${q.offer ? `；报价 ${q.offer}` : ""}；服务人员 ${q.provider}；起止 ${q.startsAt}—${q.endsAt}，正文使用此时刻，不能再次累加耗时`,
+      detail: `${q.docName} ${q.name}：${q.action === "remove" && q.disposition === "sell" ? `经玩家明确授权拆卸回收，玩家所得 ${q.receive} 欧元` : `应付 ${q.total} 欧元，本次现金 ${q.cash}${q.credit ? `、赊欠 ${q.credit}` : ""}`}${q.replaces ? `；已授权旧件 ${q.replaces.name} 去向 ${q.disposition}` : ""}${q.part ? `；自带实物 ${q.part}` : ""}${q.offer ? `；报价 ${q.offer}` : ""}；服务人员 ${q.provider}；起止 ${q.startsAt}—${q.endsAt}，正文使用此时刻，不能再次累加耗时${q.action === "calibrate" ? "；完成后统一扣款并续期 14 天神经维护，不另记 favor/medical/trade 或重复校准" : ""}`,
       settlement: cyberwareSettlement(q, {
         action: q.action,
         doc: q.doc,

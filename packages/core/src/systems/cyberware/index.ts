@@ -51,6 +51,7 @@ export const cyberware = defineSystem<
   id: "cyberware",
   dependsOn: [
     "economy",
+    "combat",
     "humanity",
     "character",
     "world",

@@ -192,6 +192,7 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   dive: "潜网行动",
   npcHack: "快速破解",
   damage: "伤害",
+  healthCondition: "生命状态",
   "health.limb": "断肢",
   "health.die": "死亡",
   trauma: "创伤小组服务",
@@ -215,6 +216,7 @@ const KEY_ITEMS: Readonly<Record<string, string>> = {
   loot: "零钱",
   item: "物品",
   jobEnd: "委托结局",
+  jobPayment: "委托到账",
   "phone.receive": "收到的消息",
   "phone.reply": "回复的消息",
 };

@@ -1,7 +1,16 @@
 import { defineSystem } from "../../kernel/system";
 import type { NpcState } from "../npc";
 import { jobsActions } from "./actions";
-import { acceptJob, crewJob, endJob, noteJob, offerJob, seedFixer, tickJobs } from "./apply";
+import {
+  acceptJob,
+  crewJob,
+  endJob,
+  noteJob,
+  offerJob,
+  payJob,
+  seedFixer,
+  tickJobs,
+} from "./apply";
 import { jobsEvents } from "./events";
 import { jobsObjectives } from "./objectives";
 import { jobsRules } from "./prompt";
@@ -12,12 +21,13 @@ import {
   JobEndSchema,
   JobNoteSchema,
   JobOfferSchema,
+  JobPaymentSchema,
   type JobsState,
   JobsStateSchema,
   type SeedFixer,
   SeedFixerSchema,
 } from "./schema";
-import { jobsSections } from "./sections";
+import { jobsSections, jobsStatus } from "./sections";
 import { factionSide } from "./side";
 import { jobsView } from "./view";
 
@@ -34,6 +44,7 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
     jobNote: JobNoteSchema,
     jobCrew: JobCrewSchema,
     jobEnd: JobEndSchema,
+    jobPayment: JobPaymentSchema,
   },
   internal: { "jobs.seedFixer": SeedFixerSchema },
   apply(draft, command, ctx) {
@@ -74,12 +85,15 @@ export const jobs = defineSystem<JobsState, JobCommand, SeedFixer>({
       }
       case "jobEnd":
         return endJob(draft, command, ctx.now);
+      case "jobPayment":
+        return payJob(draft, command, ctx.now);
     }
   },
   tick: (draft, span) => tickJobs(draft, span),
   rules: [jobsRules],
   actions: jobsActions,
   sections: jobsSections,
+  status: jobsStatus,
   objectives: jobsObjectives,
   events: jobsEvents,
   view: { key: "jobs", project: jobsView },

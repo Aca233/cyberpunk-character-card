@@ -32,6 +32,13 @@ export function jobsEvents({ before, after }: EventContext): readonly SystemEven
             : `委托${JOB_STATUS_LABELS[job.status]}：${job.title}`,
         tone: good ? "good" : "bad",
       });
+    } else if ((job.paid ?? 0) > (old.paid ?? 0)) {
+      result.push({
+        source: "jobs",
+        icon: "questUpdate",
+        text: `委托到账：${job.title}（${(job.paid ?? 0) - (old.paid ?? 0)} 欧元）`,
+        tone: "good",
+      });
     }
   }
   return result;

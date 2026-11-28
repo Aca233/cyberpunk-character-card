@@ -1,5 +1,5 @@
 import type { ViewContext } from "../../kernel/system";
-import { RARITY_LABELS } from "../economy";
+import { chromeCareStatus, RARITY_LABELS } from "../economy";
 import { HealthStateSchema } from "../health";
 import { shopMood } from "../inventory";
 import { formatGameTime, merchantAt, WorldClockStateSchema } from "../world";
@@ -46,12 +46,22 @@ export function ripperdocView({ world, data }: ViewContext) {
   const mood = shopMood(world, data, doc);
   const moodFactor = mood?.factor ?? 1;
   const moodLock = clinicMoodLock(mood);
+  const care = chromeCareStatus(world, data);
+  const careQuote = care
+    ? quoteCyberware(world, data, { action: "calibrate", doc: doc.id })
+    : undefined;
   return {
     id: doc.id,
     name: doc.name,
     keeperNpc: doc.keeperNpc ?? null,
     note: doc.note,
     blackMarket: doc.blackMarket,
+    chromeCare: care
+      ? {
+          cost: careQuote?.ok ? careQuote.quote.total : care.cost,
+          blocked: careQuote?.ok ? careQuote.quote.blocked : (careQuote?.reason ?? null),
+        }
+      : null,
     mood: mood
       ? {
           faction: mood.faction,

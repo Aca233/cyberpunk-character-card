@@ -1,10 +1,24 @@
-import type { SystemSection } from "../../kernel/system";
+import type { SystemSection, SystemStatus } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
 import { NpcStateSchema, relationBrief } from "../npc";
 import { formatGameTime, WorldClockStateSchema } from "../world";
 import { jobsSection } from "./prompt";
 import { JobsStateSchema } from "./schema";
 import { factionSide } from "./side";
+import type { jobsView } from "./view";
+
+export const jobsStatus: readonly SystemStatus[] = [
+  {
+    order: 51,
+    lines: ({ views }) =>
+      (views.jobs as ReturnType<typeof jobsView>).list
+        .filter((job) => job.paymentHeld > 0)
+        .map(
+          (job) =>
+            `委托分账暂存：${job.title} ${job.paymentHeld} 欧元（已到账，尚未分入钱包；下笔分配，尾款结清后余款归玩家）`,
+        ),
+  },
+];
 
 export interface DueEvent {
   readonly kind: "deadline" | "job";

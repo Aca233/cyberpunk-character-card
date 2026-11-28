@@ -10,6 +10,7 @@ import type {
   JobNote,
   JobOffer,
   JobOutcome,
+  JobPayment,
   JobStatus,
   JobsState,
   SeedFixer,
@@ -46,6 +47,10 @@ export function fixerBlocked(attitude: string | undefined): boolean {
 
 export function isOpen(job: Pick<Job, "status">): boolean {
   return job.status === "offered" || job.status === "active";
+}
+
+export function hasOutstandingPayment(job: Pick<Job, "paid" | "paymentTotal">): boolean {
+  return job.paymentTotal !== null && (job.paid ?? 0) < job.paymentTotal;
 }
 
 export function seedFixer(draft: Draft<JobsState>, command: SeedFixer): ApplyOutcome {
@@ -123,6 +128,9 @@ export function offerJob(
     overdue: false,
     dueHandled: false,
     paid: null,
+    paymentTotal: null,
+    paymentHeld: 0,
+    receipts: [],
     summary: null,
     humanityAtAccept: null,
     crew: [],
@@ -233,61 +241,85 @@ export function crewJob(
   };
 }
 
-/** 记录约定结果和实际到款：有入伙搭档时按约定分成自动扣减并入账玩家净到手，故意克扣则自动在原 npc 账本记欠账。 */
-export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): ApplyOutcome {
-  const job = find(draft, command.id);
-  if (!job) return fail(`没有委托 ${command.id}`);
-  if (job.status !== "offered" && job.status !== "active") {
-    return fail(
-      `委托 ${job.title} 现在是「${JOB_STATUS_LABELS[job.status]}」，已经结束，不能再重复结算`,
-    );
+/** 单笔到账只分配本次新增应得分成，累计舍入与一次性付款保持一致。 */
+function recordPayment(
+  job: Draft<Job>,
+  command: Omit<JobPayment, "type" | "id">,
+  now: number,
+): ApplyOutcome {
+  const duplicate = job.receipts.find((r) => r.receipt === command.receipt);
+  if (duplicate) {
+    if (
+      duplicate.paid !== command.paid ||
+      (command.crewPayouts ?? []).some(
+        (p) => duplicate.crewPayouts.find((recorded) => recorded.npc === p.npc)?.paid !== p.paid,
+      )
+    )
+      return fail(`到账凭证 ${command.receipt} 已登记，不能用同一凭证改写金额或分账`);
+    return { ok: true, notes: [`委托「${job.title}」这笔到账已经登记，未重复收款`] };
   }
-  const label = JOB_OUTCOME_LABELS[command.outcome];
-  const paid = command.paid ?? 0;
-  const notes = [`委托${label}：${job.title}`];
+  const paid = command.paid;
+  const previousPaid = job.paid ?? 0;
+  const cumulativePaid = previousPaid + paid;
+  const paymentTotal = command.paymentTotal ?? job.paymentTotal ?? cumulativePaid;
+  if (paymentTotal < cumulativePaid)
+    return fail(
+      `本单累计到账将为 ${cumulativePaid} 欧元，超过约定总报酬 ${paymentTotal} 欧元；若确实另有加价，明确填写新的 paymentTotal`,
+    );
+  const notes = [`委托到账：${job.title}，本次 ${paid} 欧元（${command.summary}）`];
   const emit: Command[] = [];
   const overrides = new Map((command.crewPayouts ?? []).map((p) => [p.npc, p.paid] as const));
   if (overrides.size !== (command.crewPayouts?.length ?? 0))
     return fail("同一搭档不能重复登记实付分成");
-  const joined = (job.crew ?? []).filter((member) => member.status === "joined");
+  const joined = job.crew.filter((member) => member.status !== "left");
   if ([...overrides.keys()].some((npc) => !joined.some((member) => member.npc === npc)))
     return fail("实付分成只能指定本单仍在小队中的搭档");
   const plannedCrewPaid = joined.reduce(
     (total, member) =>
-      total + (overrides.get(member.npc) ?? Math.floor((paid * member.cutPercent) / 100)),
+      total +
+      (overrides.get(member.npc) ??
+        Math.floor((cumulativePaid * member.cutPercent) / 100) -
+          Math.floor((previousPaid * member.cutPercent) / 100)),
     0,
   );
-  if (plannedCrewPaid > paid)
-    return fail(`搭档实付分成合计 ${plannedCrewPaid} 欧元，超过本单实际到账 ${paid} 欧元`);
+  const totalCut = joined.reduce((sum, member) => sum + member.cutPercent, 0);
+  const expectedCrewTotal = joined.reduce(
+    (sum, member) => sum + Math.floor((cumulativePaid * member.cutPercent) / 100),
+    0,
+  );
+  const held =
+    cumulativePaid < paymentTotal
+      ? cumulativePaid - expectedCrewTotal - Math.floor((cumulativePaid * (100 - totalCut)) / 100)
+      : 0;
+  const distributable = paid + job.paymentHeld - held;
+  if (plannedCrewPaid > distributable)
+    return fail(`搭档实付分成合计 ${plannedCrewPaid} 欧元，超过本次可分配的 ${distributable} 欧元`);
 
-  // 待接委托也允许直接办完或推掉，但所有分账条件成立后才写入结单状态。
-  if (job.status === "offered" && command.outcome !== "abandoned")
-    job.acceptedAt = job.acceptedAt ?? now;
-  job.status = command.outcome;
-  job.closedAt = now;
-  job.paid = paid;
-  job.summary = command.summary;
+  job.paid = cumulativePaid;
+  job.paymentTotal = paymentTotal;
+  job.paymentHeld = held;
 
   let totalCrewPaid = 0;
   const splitParts: string[] = [];
-  for (const member of job.crew ?? []) {
-    if (member.status !== "joined") continue;
-    const expected = Math.floor((paid * member.cutPercent) / 100);
+  const crewPayouts: { npc: string; paid: number }[] = [];
+  for (const member of joined) {
+    const cumulativeExpected = Math.floor((cumulativePaid * member.cutPercent) / 100);
+    const expected = cumulativeExpected - Math.floor((previousPaid * member.cutPercent) / 100);
     const hasOverride = overrides.has(member.npc);
     const actual = hasOverride ? (overrides.get(member.npc) ?? 0) : paid > 0 ? expected : 0;
-    member.paid = actual;
+    if (paid > 0) member.paid = (member.paid ?? 0) + actual;
     totalCrewPaid += actual;
+    crewPayouts.push({ npc: member.npc, paid: actual });
 
     if (paid > 0 && actual < expected) {
       const owe = expected - actual;
-      member.status = "shorted";
       splitParts.push(`${member.name}实分 ${actual} €（少给 ${owe} €）`);
       emit.push(
         {
           type: "ledger",
           id: member.npc,
           kind: "youOwe",
-          text: `委托「${job.title}」约定分成 ${expected} 欧元，实付 ${actual} 欧元（尚欠 ${owe} 欧元）`.slice(
+          text: `委托「${job.title}」第 ${job.receipts.length + 1} 笔到账应分 ${expected} 欧元，实付 ${actual} 欧元（尚欠 ${owe} 欧元）`.slice(
             0,
             120,
           ),
@@ -299,28 +331,88 @@ export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): A
         },
       );
     } else {
-      member.status = "paid";
       if (actual > 0) splitParts.push(`${member.name} ${actual} €（${member.cutPercent}%）`);
     }
+    if ((member.paid ?? 0) < cumulativeExpected) member.status = "shorted";
+    else if (hasOutstandingPayment(job)) member.status = "joined";
+    else member.status = "paid";
   }
 
-  const playerNet = paid - totalCrewPaid;
+  const playerNet = distributable - totalCrewPaid;
   if (playerNet > 0) {
     const moneyReason =
       totalCrewPaid > 0
         ? `委托净报酬：${job.title}（总 ${paid} €，搭档分成 ${totalCrewPaid} €）`
         : `委托报酬：${job.title}`;
-    emit.push({ type: "money", delta: playerNet, reason: moneyReason, event: `job:${job.id}` });
+    emit.push({
+      type: "money",
+      delta: playerNet,
+      reason: moneyReason,
+      event: `job-payment:${JSON.stringify([job.id, command.receipt])}`,
+    });
   }
   if (splitParts.length > 0) {
     notes.push(`小队分账：${splitParts.join("、")}；玩家净到手 ${playerNet} 欧元`);
   }
 
   job.settlement = {
-    humanity: null,
-    playerNet,
+    humanity: job.settlement?.humanity ?? null,
+    playerNet: (job.settlement?.playerNet ?? 0) + playerNet,
   };
+  job.receipts.push({
+    receipt: command.receipt,
+    at: now,
+    paid,
+    crewPayouts,
+    summary: command.summary,
+  });
+  if (hasOutstandingPayment(job)) notes.push(`委托待收尾款：${paymentTotal - cumulativePaid} 欧元`);
   return { ok: true, notes, emit };
+}
+
+/** 结果只关闭一次，收款与分账独立记账；尚未到账不代表搭档已经结清。 */
+export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): ApplyOutcome {
+  const job = find(draft, command.id);
+  if (!job) return fail(`没有委托 ${command.id}`);
+  if (!isOpen(job))
+    return fail(`委托 ${job.title} 已经结束，后续到账请写 jobPayment，不能重复结单`);
+  const paid = command.paid ?? 0;
+  const paymentTotal =
+    command.paymentTotal ??
+    (command.outcome === "clean" || command.outcome === "flawed"
+      ? Math.max(job.reward, paid)
+      : paid);
+  const result = recordPayment(
+    job,
+    {
+      receipt: "completion",
+      paid,
+      paymentTotal,
+      crewPayouts: command.crewPayouts,
+      summary: command.summary,
+    },
+    now,
+  );
+  if (!result.ok) return result;
+  if (job.status === "offered" && command.outcome !== "abandoned")
+    job.acceptedAt = job.acceptedAt ?? now;
+  job.status = command.outcome;
+  job.closedAt = now;
+  job.summary = command.summary;
+  return {
+    ...result,
+    notes: [`委托${JOB_OUTCOME_LABELS[command.outcome]}：${job.title}`, ...(result.notes ?? [])],
+  };
+}
+
+export function payJob(draft: Draft<JobsState>, command: JobPayment, now: number): ApplyOutcome {
+  const job = find(draft, command.id);
+  if (!job) return fail(`没有委托 ${command.id}`);
+  if (isOpen(job) || job.status === "expired")
+    return fail(`委托 ${job.title} 尚未结单，结单当时到账写 jobEnd`);
+  if (command.receipt === "completion")
+    return fail("completion 为结单到账的保留凭证，后续每笔到账请使用独立 receipt");
+  return recordPayment(job, command, now);
 }
 
 /** 时间推进只记自然逾期；是否有人接走、雇主如何回应必须有实际事件。 */

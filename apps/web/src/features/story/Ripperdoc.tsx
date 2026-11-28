@@ -110,6 +110,8 @@ export function Ripperdoc({
   const targetCompanion = companions.find((n) => n.id === installForNpcId) ?? null;
 
   const eddies = view.money.eddies;
+  const chromeCareCost = doc.chromeCare?.cost ?? view.money.chromeCare?.cost ?? 0;
+  const chromeCareLock = doc.chromeCare?.blocked ?? null;
   const brokenCount = view.cyberware.filter((c) => c.broken).length;
   const neuralRisk = view.humanity.stage !== "stable" && !view.humanity.suppressed;
 
@@ -659,24 +661,29 @@ export function Ripperdoc({
                   {view.money.chromeCare.label}：
                   {view.money.chromeCare.overdue
                     ? "已逾期，高压义体接口易排异发抖"
-                    : `距下次校准还有 ${view.money.chromeCare.daysLeft} 天`}
-                  （诊所参考价 <b>{money(view.money.chromeCare.cost)}</b> 欧元，校准后稳固 14 天）
+                    : view.money.chromeCare.calibrated
+                      ? `已校准，距下次校准还有 ${view.money.chromeCare.daysLeft} 天`
+                      : `尚未校准，距本期维护到期还有 ${view.money.chromeCare.daysLeft} 天`}
+                  （诊所报价 <b>{money(chromeCareCost)}</b> 欧元，校准后稳固 14 天）
                 </span>
                 <Button
                   small
                   primary={view.money.chromeCare.overdue || view.money.chromeCare.dueSoon}
                   disabled={
                     !onPayChromeCare ||
+                    !doc.chromeCare ||
                     working ||
-                    Boolean(doc.mood?.lock) ||
-                    eddies < view.money.chromeCare.cost
+                    Boolean(chromeCareLock) ||
+                    eddies < chromeCareCost
                   }
-                  reason={
-                    doc.mood?.lock ?? (eddies < view.money.chromeCare.cost ? "欧元不够" : undefined)
-                  }
+                  reason={chromeCareLock ?? (eddies < chromeCareCost ? "欧元不够" : undefined)}
                   onClick={() => onPayChromeCare && void run(onPayChromeCare)}
                 >
-                  {working ? "校准中…" : "上椅校准"}
+                  {working
+                    ? "校准中…"
+                    : view.money.chromeCare.calibrated && !view.money.chromeCare.dueSoon
+                      ? "已校准"
+                      : "上椅校准"}
                 </Button>
               </div>
             )}

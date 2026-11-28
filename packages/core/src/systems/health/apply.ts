@@ -10,6 +10,7 @@ import {
   type Condition,
   type DamageCommand,
   type HealCommand,
+  type HealthConditionCommand,
   type HealthInternal,
   type HealthState,
   type Injury,
@@ -66,12 +67,22 @@ function damageRulingError(
   draft: Health,
   tier: DamageTier,
   ruling: ReturnType<typeof rulingFact>,
+  origin: string | null,
 ): string | null {
   if (!ruling) return null;
   if (ruling.harm === "none") return "现场裁决未确认受伤，不能登记伤势";
-  if (draft.damagedBy === ruling.id) return "这一轮已经登记过伤害";
+  if (origin && draft.injuries.some((injury) => injury.origin === origin))
+    return "这个事件的同一处伤已经登记";
   const rank = { graze: 0, heavy: 1, lethal: 2 };
   return rank[tier] > rank[ruling.harm] ? "伤势超出现场裁决确认的范围" : null;
+}
+
+function injuryOrigin(ctx: SystemContext, part: BodyPart | null, cause: string): string | null {
+  const ruling = rulingFact(ctx.facts);
+  if (!ruling) return null;
+  const event =
+    typeof ctx.facts.settlementEventId === "string" ? ctx.facts.settlementEventId : null;
+  return JSON.stringify([ruling.id, event, part, cause.trim()]);
 }
 
 function recordInjury(
@@ -83,6 +94,7 @@ function recordInjury(
     now: number;
     source?: "injury" | "combat";
     id?: string;
+    origin: string | null;
   },
 ): Injury {
   const id = entry.id ?? `injury-${draft.nextInjuryId++}`;
@@ -95,9 +107,13 @@ function recordInjury(
     healsAt: entry.tier === "graze" ? entry.now + DAY : null,
     treated: false,
     source: entry.source ?? "injury",
+    origin: entry.origin,
   };
   draft.injuries.push(injury);
-  if (entry.tier === "lethal") draft.condition = "dying";
+  if (entry.tier === "lethal") {
+    draft.condition = "dying";
+    draft.stabilizedBy = null;
+  }
   return injury;
 }
 
@@ -109,14 +125,14 @@ export function applyDamage(
 ): ApplyOutcome {
   if (draft.condition === "dead") return fail("角色已经死亡");
   const ruling = rulingFact(ctx.facts);
-  const rulingError = damageRulingError(draft, command.tier, ruling);
+  const part = command.part ?? command.limb ?? null;
+  const origin = injuryOrigin(ctx, part, command.reason);
+  const rulingError = damageRulingError(draft, command.tier, ruling, origin);
   if (rulingError) return fail(rulingError);
   if (command.limb && (command.tier !== "lethal" || ruling?.limb !== true)) {
     return fail("断肢需要裁决已确认的直接断肢危险和致命损伤");
   }
-  const part = command.part ?? command.limb ?? null;
-  recordInjury(draft, { part, tier: command.tier, cause: command.reason, now: ctx.now });
-  if (ruling) draft.damagedBy = ruling.id;
+  recordInjury(draft, { part, tier: command.tier, cause: command.reason, now: ctx.now, origin });
   const notes = [
     `${part ? BODY_PART_LABELS[part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`,
   ];
@@ -169,7 +185,8 @@ export function applyHit(
   if (command.injuryId && draft.injuries.some((i) => i.id === command.injuryId))
     return fail("这处伤已经登记");
   const ruling = command.source === "injury" ? undefined : rulingFact(ctx.facts);
-  const rulingError = damageRulingError(draft, command.tier, ruling);
+  const origin = ruling ? injuryOrigin(ctx, command.part ?? null, command.reason) : null;
+  const rulingError = damageRulingError(draft, command.tier, ruling, origin);
   if (rulingError) return fail(rulingError);
   recordInjury(draft, {
     part: command.part ?? null,
@@ -177,20 +194,51 @@ export function applyHit(
     cause: command.reason,
     now: ctx.now,
     source: command.source ?? "combat",
+    origin,
     ...(command.injuryId ? { id: command.injuryId } : {}),
   });
-  if (ruling) draft.damagedBy = ruling.id;
   return ok(
     `${command.part ? BODY_PART_LABELS[command.part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`,
   );
 }
-export function treatInjury(draft: Health, id: string, now: number): ApplyOutcome {
+export function applyCondition(
+  draft: Health,
+  command: HealthConditionCommand,
+  ctx: SystemContext,
+): ApplyOutcome {
+  if (draft.condition === "dead") return fail("角色已经死亡");
+  const ruling = rulingFact(ctx.facts);
+  if (!ruling || ruling.condition !== command.condition)
+    return fail("现场裁决未确认这一生命状态后果，不能登记倒下、濒死或死亡");
+  if (draft.stabilizedBy === ruling.id)
+    return fail("本轮已经稳定生命体征，不能复用获救前的旧裁决登记失能或死亡");
+  if (command.condition !== "down" && ruling.harm !== "lethal")
+    return fail("濒死或死亡需要现场裁决确认的致命后果");
+  if (command.condition === "down" && draft.condition === "dying")
+    return fail("角色仍在濒死，必须实际获救或接受医疗稳定，不能改记为普通倒下");
+  if (draft.condition === command.condition) return ok();
+  if (command.condition === "dead") return die(draft, command.reason);
+  draft.condition = command.condition;
+  return ok(`角色${CONDITION_LABELS[command.condition]}：${command.reason}`);
+}
+export function treatInjury(
+  draft: Health,
+  id: string,
+  now: number,
+  rulingId?: string,
+): ApplyOutcome {
   const injury = draft.injuries.find((i) => i.id === id);
   if (!injury) return fail(`找不到伤处 ${id}`);
   injury.treated = true;
   injury.healsAt ??= now + INJURY_HEAL_MINUTES[injury.tier];
-  if (draft.condition === "dying" && !draft.injuries.some((i) => i.tier === "lethal" && !i.treated))
+  if (
+    injury.tier === "lethal" &&
+    draft.condition === "dying" &&
+    !draft.injuries.some((i) => i.tier === "lethal" && !i.treated)
+  ) {
     draft.condition = "up";
+    draft.stabilizedBy = rulingId ?? null;
+  }
   return ok(`已处理${injury.part ? BODY_PART_LABELS[injury.part] : "伤口"}，创口仍需恢复`);
 }
 export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContext): ApplyOutcome {
@@ -209,18 +257,24 @@ export function applyHeal(draft: Health, command: HealCommand, ctx: SystemContex
     };
   }
   if (command.source === "ripperdoc") {
-    for (const injury of draft.injuries) treatInjury(draft, injury.id, ctx.now);
-    if (draft.condition === "down") draft.condition = "up";
+    const wasDisabled = draft.condition !== "up";
+    const rulingId = rulingFact(ctx.facts)?.id;
+    for (const injury of draft.injuries) treatInjury(draft, injury.id, ctx.now, rulingId);
+    if (wasDisabled) {
+      draft.condition = "up";
+      draft.stabilizedBy = rulingId ?? null;
+    }
     return ok("医生完成清创和稳定处理，伤口进入恢复期；断肢和损坏义体仍需专门处理");
   }
   return ok("休整为恢复提供条件；现存伤口按恢复时间愈合，重伤仍需救治");
 }
-export function revive(draft: Health, now: number): ApplyOutcome {
+export function revive(draft: Health, now: number, rulingId?: string): ApplyOutcome {
   if (draft.condition !== "dying" && draft.condition !== "down")
     return fail(`角色${CONDITION_LABELS[draft.condition]}，不需要救治`);
   for (const injury of draft.injuries)
-    if (injury.tier === "lethal") treatInjury(draft, injury.id, now);
+    if (injury.tier === "lethal") treatInjury(draft, injury.id, now, rulingId);
   draft.condition = "up";
+  draft.stabilizedBy = rulingId ?? null;
   return ok("救援稳定了生命体征，具体伤势仍在恢复中");
 }
 export function die(draft: Health, reason: string): ApplyOutcome {

@@ -427,7 +427,7 @@ export function wound(draft: Combat, command: CombatCommand, ctx: SystemContext)
   };
 }
 
-/** 处理一处伤：缩短恢复时间、不留疤；医疗费与治疗由内核连锁事务一起结算，失败一起回滚 */
+/** 处理一处伤：稳定创口并开始恢复；医疗费与治疗由内核连锁事务一起结算，失败一起回滚 */
 export function treat(draft: Combat, target: string | undefined, ctx: SystemContext): ApplyOutcome {
   const w = draft.wounds.find((x) => x.id === target);
   if (!w) return fail(`没有 ${target} 这处伤`);
@@ -436,7 +436,9 @@ export function treat(draft: Combat, target: string | undefined, ctx: SystemCont
   w.healsAt ??= ctx.now + HEAL_MINUTES[w.tier];
   return {
     ok: true,
-    notes: [`${BODY_PART_LABELS[w.part]}的伤处理过了，不会留疤`],
+    notes: [
+      `${BODY_PART_LABELS[w.part]}的伤处理过了，进入恢复期${SCARRING_TIERS.includes(w.tier) ? "；深层创伤愈合后仍会留疤" : ""}`,
+    ],
     emit: [
       { type: "health.treat", id: w.id },
       {
@@ -615,7 +617,7 @@ function hop(r: Combat["rumors"][number], districts: readonly string[], at_: num
   r.nextAt = at_ + RUMOR_HOP_MINUTES;
 }
 
-/** 时间推进：伤长好（没治的重伤留疤）、死者那边掷找不找上门、流言往外传、录像到期出事 */
+/** 时间推进：伤长好（深层创伤留疤）、死者那边掷找不找上门、流言往外传、录像到期出事 */
 export function tickCombat(draft: Combat, span: TimeSpan, ctx: SystemContext): void {
   const now = span.to;
   const injuries = ctx.read<{
@@ -623,17 +625,14 @@ export function tickCombat(draft: Combat, span: TimeSpan, ctx: SystemContext): v
   }>("health").injuries;
   for (const w of [...draft.wounds]) {
     const injury = injuries?.find((i) => i.id === w.id);
-    // health 先结算时间；一次跳过整个恢复期时，已愈合的镜像记录可能已被移除。
-    if (injuries !== undefined && !injury) {
-      draft.wounds.splice(draft.wounds.indexOf(w), 1);
-      continue;
-    }
+    // health 先结算时间并移除已愈合伤势；即使一次跨过整个恢复期，也要保留创口的长期后果。
+    const recovered = injuries !== undefined && !injury;
     if (injury) {
       w.healsAt = injury.healsAt;
       w.treated = injury.treated;
     }
-    if (w.healsAt === null || w.healsAt > now) continue;
-    if (!w.treated && SCARRING_TIERS.includes(w.tier)) {
+    if (!recovered && (w.healsAt === null || w.healsAt > now)) continue;
+    if (SCARRING_TIERS.includes(w.tier)) {
       draft.scars.push({
         by: w.by,
         gang: w.gang,

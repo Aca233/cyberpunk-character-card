@@ -62,6 +62,8 @@ export const InjurySchema = z.object({
   healsAt: z.number().int().nullable().default(null),
   treated: z.boolean().default(false),
   source: z.enum(["injury", "combat"]).default("injury"),
+  /** 裁决、事件、部位与致伤来源组成的稳定身份；同一伤不能随指令顺序重复登记 */
+  origin: z.string().min(1).nullable().optional(),
 });
 export type Injury = z.infer<typeof InjurySchema>;
 
@@ -99,8 +101,8 @@ export const HealthStateSchema = z.object({
   /** 药物是否正在抑制疼痛；不代表创口愈合 */
   painSuppressed: z.boolean().default(false),
   painSuppressedUntil: z.number().int().nullable().default(null),
-  /** 最近一次已登记伤害的裁决 id，避免重复登记同一事件 */
-  damagedBy: z.string().nullable(),
+  /** 本轮已通过医疗或救援稳定过生命体征，旧裁决不得再次使其失能或死亡 */
+  stabilizedBy: z.string().min(1).nullable().default(null),
   /** 具体伤势档案（部位、原因、愈合期）；战斗伤口由 combat.wounds 单独留档 */
   injuries: z.array(InjurySchema).default([]),
   /** 断了还没装义肢的部位 */
@@ -138,7 +140,19 @@ export const HealCommandSchema = z
   );
 export type HealCommand = z.infer<typeof HealCommandSchema>;
 
-/** 只能由代码发出：建档和成长改上限、救治倒下或濒死的角色、判定死亡 */
+/** 身体失能和死亡是独立事实，不把所有重伤强行等同于倒下。 */
+export const HealthConditionCommandSchema = z
+  .object({
+    type: z.literal("healthCondition"),
+    condition: z.enum(["down", "dying", "dead"]),
+    reason: z.string().trim().min(1),
+  })
+  .describe(
+    "实际生命状态：down 已失去行动能力但未濒死，dying 已濒死需抢救，dead 已实际死亡；必须与现场裁决明确确认的 condition 一致，dying/dead 还须 lethal。只记正文已发生的后果，不把致命风险、昏迷、时间流逝或救援尚未抵达当成死亡；伤口仍须 damage/combat wound 登记，获救用医疗/救援指令",
+  );
+export type HealthConditionCommand = z.infer<typeof HealthConditionCommandSchema>;
+
+/** 只能由代码发出：救治倒下或濒死的角色、内部判定死亡 */
 export const HealthInternalSchemas = {
   "health.revive": z.object({ type: z.literal("health.revive") }),
   "health.die": z.object({ type: z.literal("health.die"), reason: z.string().min(1) }),

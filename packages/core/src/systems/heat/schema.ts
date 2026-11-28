@@ -87,6 +87,8 @@ export const HeatStateSchema = z.object({
   districtDay: z.number().int().nullable(),
   /** 上次因为躲在自己的安全屋多降一星是第几个游戏日；旧存档没有 */
   hideoutDay: z.number().int().nullable().default(null),
+  /** 当前连续躲藏的起点；离开安全屋或暴露后重新累计。 */
+  hideoutSince: z.number().int().nullable().default(null),
   recent: z.array(HeatEventSchema).max(RECENT_EVENTS),
   /** 警方播报用独立递增编号，旧记录滚出列表不改变剩余消息的 id */
   nextNotice: z.number().int().min(1).default(1),

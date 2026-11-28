@@ -1094,7 +1094,7 @@ export const ClinicStateSchema = z.object({
 export type ClinicState = z.infer<typeof ClinicStateSchema>;
 
 export const CyberwareTermsSchema = z.object({
-  action: z.enum(["buy", "install", "remove", "repair", "repay"]),
+  action: z.enum(["buy", "install", "remove", "repair", "repay", "calibrate"]),
   doc: z.string().min(1).max(100),
   id: z.string().min(1).optional(),
   part: z
@@ -1195,7 +1195,7 @@ export const CyberwareCommandSchema = CyberwareTermsSchema.extend({
 })
   .strict()
   .describe(
-    "义体交易：buy 只买下实物；install 购买并安装或以 part 指定自带件；remove 按 disposition 拆下保留/出售/报废；repair 维修；repay 还款。简单服务完成时按共同起止时刻推进时间；复杂手术走 cyberware.service。旧件处置必须明确，不自动出售；成交不另写 money/trade。",
+    "义体交易：buy 只买下实物；install 购买并安装或以 part 指定自带件；remove 按 disposition 拆下保留/出售/报废；repair 维修；repay 还款；calibrate 神经校准维护（只写 doc，不写 id，统一扣款并更新维护有效期）。简单服务完成时按共同起止时刻推进时间；复杂手术走 cyberware.service。旧件处置必须明确，不自动出售；成交不另写 money/trade。",
   );
 export type CyberwareCommand = z.infer<typeof CyberwareCommandSchema>;
 

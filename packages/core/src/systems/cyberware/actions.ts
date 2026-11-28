@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { type Command, defineAction } from "../../kernel/system";
 import type { WorldState } from "../../kernel/world";
-import { CHROME_CARE_PERIOD_DAYS, chromeCareStatus, EconomyStateSchema } from "../economy";
+import { EconomyStateSchema } from "../economy";
 import { shopMood } from "../inventory";
 import { merchantAt, WorldClockStateSchema } from "../world";
 import { cyberwareCatalog, ripperdocList, ripperdocShelf } from "./apply";
@@ -50,7 +50,8 @@ type RipperdocAction =
   | z.infer<typeof BuyCyberwareActionSchema>
   | z.infer<typeof RemoveCyberwareActionSchema>
   | z.infer<typeof RepayRipperdocActionSchema>
-  | z.infer<typeof RepairCyberwareActionSchema>;
+  | z.infer<typeof RepairCyberwareActionSchema>
+  | z.infer<typeof PayChromeCareActionSchema>;
 
 const CompanionChromeProbeSchema = z
   .object({
@@ -161,6 +162,13 @@ function ripperdocCommands(
       id: action.id,
       reason: "玩家选择按显示报价维修",
     };
+  } else if (action.type === "payChromeCare") {
+    command = {
+      type: "cyberware",
+      action: "calibrate",
+      doc: action.doc,
+      reason: "玩家选择按显示报价做义体神经校准维护",
+    };
   } else {
     command = { type: "cyberware", action: "repay", doc: action.doc, reason: "玩家选择还清欠款" };
   }
@@ -169,7 +177,7 @@ function ripperdocCommands(
   if (result.quote.blocked) return result.quote.blocked;
   return [command];
 }
-/** 义体医生的操作：买、卸、还账、修；统一由操作入口结算 */
+/** 义体医生的操作：买、卸、还账、修与校准；统一由操作入口结算 */
 export const cyberwareActions = {
   buyCyberware: defineAction({
     schema: BuyCyberwareActionSchema,
@@ -189,34 +197,6 @@ export const cyberwareActions = {
   }),
   payChromeCare: defineAction({
     schema: PayChromeCareActionSchema,
-    commands: (action, { world, data }) => {
-      const combat = (world.slices.combat as { active?: unknown } | undefined)?.active;
-      if (combat) return "交火中没法做义体神经校准，先脱战";
-      const state = CyberwareStateSchema.parse(world.slices.cyberware);
-      const doc = ripperdocList(data, state).find((d) => d.id === action.doc);
-      if (!doc) return `没有叫 ${action.doc} 的义体医生`;
-      const location = WorldClockStateSchema.parse(world.slices.world).location;
-      if (location === null || !merchantAt(data, doc.id, doc.location, location)) {
-        return `须亲身前往${doc.name}诊所，才能做神经校准维护`;
-      }
-      const mood = shopMood(world, data, doc);
-      const lock = clinicMoodLock(mood);
-      if (lock) return lock;
-      const care = chromeCareStatus(world, data);
-      if (!care) return "当前神经承载未达重度门槛，暂不需要定期神经校准";
-      const cost = Math.max(
-        500,
-        Math.round((care.cost * doc.priceFactor * (mood?.factor ?? 1)) / 100) * 100,
-      );
-      const eddies = EconomyStateSchema.parse(world.slices.economy).eddies;
-      if (eddies < cost) {
-        return `欧元不够：在${doc.name}做${care.label}需要 ${cost.toLocaleString("en-US")} 欧元`;
-      }
-      const nextPaidUntil = Math.max(world.time, care.dueAt) + CHROME_CARE_PERIOD_DAYS * 1440;
-      return [
-        { type: "money", delta: -cost, reason: `在${doc.name}做${care.label}（14 天周期）` },
-        { type: "economy.payChromeCare", paidUntil: nextPaidUntil },
-      ];
-    },
+    commands: (action, { world, data }) => ripperdocCommands(world, action, data),
   }),
 };

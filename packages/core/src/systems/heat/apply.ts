@@ -349,6 +349,7 @@ function remember(draft: Draft<HeatState>, entry: HeatState["recent"][number]): 
 function seen(draft: Draft<HeatState>, now: number): void {
   draft.lastSeenAt = now;
   draft.decayedAt = now;
+  draft.hideoutSince = null;
 }
 
 /** 显示的星级真的涨了才记一条警方播报；封顶或只攒了半星不记 */
@@ -525,7 +526,7 @@ export function applyHeat(
   };
 }
 
-/** 在自己的安全屋里一口气躲够这么久（分钟），多降一星（本作改编） */
+/** 在自己的安全屋里连续躲够这么久（分钟），多降一星（本作改编） */
 export const HIDEOUT_MINUTES = 6 * 60;
 
 /**
@@ -536,21 +537,28 @@ export function tickHeat(
   draft: Draft<HeatState>,
   span: TimeSpan,
   district: string | null,
-  hideout = false,
+  hideout?: boolean,
 ): void {
-  if (draft.stars > 0 && draft.decayedAt !== null) {
-    const days = Math.floor((span.to - draft.decayedAt) / HEAT_DECAY_MINUTES);
-    if (days > 0) {
-      draft.stars = Math.max(0, draft.stars - days);
-      draft.decayedAt += days * HEAT_DECAY_MINUTES;
-    }
-  }
-  if (hideout && draft.stars > 0 && span.to - span.from >= HIDEOUT_MINUTES) {
-    const day = Math.floor(span.to / HEAT_DECAY_MINUTES);
-    if (draft.hideoutDay !== day) {
-      draft.stars = Math.max(0, draft.stars - 1);
-      draft.hideoutDay = day;
-    }
+  if (hideout === true) draft.hideoutSince ??= span.from;
+  else if (hideout === false) draft.hideoutSince = null;
+  // 按实际生效时间依次结算自然衰减与躲藏；跨日长推进和多轮短推进使用同一条时间线。
+  while (draft.stars > 0) {
+    const naturalAt =
+      draft.decayedAt === null ? Number.POSITIVE_INFINITY : draft.decayedAt + HEAT_DECAY_MINUTES;
+    const hideoutAt =
+      draft.hideoutSince === null
+        ? Number.POSITIVE_INFINITY
+        : Math.max(
+            draft.hideoutSince + HIDEOUT_MINUTES,
+            draft.hideoutDay === null
+              ? Number.NEGATIVE_INFINITY
+              : (draft.hideoutDay + 1) * HEAT_DECAY_MINUTES,
+          );
+    const next = Math.min(naturalAt, hideoutAt);
+    if (next > span.to) break;
+    draft.stars = Math.max(0, draft.stars - 1);
+    if (naturalAt <= hideoutAt) draft.decayedAt = naturalAt;
+    else draft.hideoutDay = Math.floor(hideoutAt / HEAT_DECAY_MINUTES);
   }
   if (district === null) return;
   if (draft.district !== null && district !== draft.district && draft.stars > 0) {

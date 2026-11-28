@@ -16,9 +16,14 @@ export const economyStatus: readonly SystemStatus[] = [
       const lines = [
         `欧元：${m.eddies.toLocaleString("en-US")}（${m.wealth.label}——${m.wealth.summary}${assetTail}）`,
       ];
-      if (m.chromeCare && (m.chromeCare.overdue || m.chromeCare.dueSoon)) {
+      if (m.chromeCare) {
+        const careStatus = m.chromeCare.overdue
+          ? "已逾期未校准（高压义体易发耳鸣、手抖与排异反应，须回义体医生诊所校准）"
+          : m.chromeCare.calibrated
+            ? `已校准，维护有效期还剩 ${m.chromeCare.daysLeft} 天（本次维护已结算，不得重复收费）`
+            : `尚未校准，本期维护将在 ${m.chromeCare.daysLeft} 天内到期`;
         lines.push(
-          `义体神经维护：${m.chromeCare.label}${m.chromeCare.overdue ? "已逾期未校准（高压义体易发耳鸣、手抖与排异反应，须回义体医生诊所校准）" : `将在 ${m.chromeCare.daysLeft} 天内到期`}，诊所参考价 ${m.chromeCare.cost.toLocaleString("en-US")} 欧元`,
+          `义体神经维护：${m.chromeCare.label}，${careStatus}，诊所参考价 ${m.chromeCare.cost.toLocaleString("en-US")} 欧元`,
         );
       }
       return lines;

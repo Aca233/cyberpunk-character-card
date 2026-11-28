@@ -27,9 +27,13 @@ export const healthStatus: readonly SystemStatus[] = [
             : "（剧痛严重拖累发力与反应，需打医疗针或找医生缝合）"
           : h.wounds === 3
             ? "（濒危重伤，任何激烈动作都会加剧伤势、随时失能）"
-            : h.wounds === 4
-              ? "（濒死失血休克，已失去正常行动能力，急需创伤小组或紧急抢救）"
-              : "";
+            : h.condition === "dead"
+              ? "（已经死亡，无法行动或接受救援复活）"
+              : h.condition === "down"
+                ? "（已倒下、失去正常行动能力，尚未濒死，需要他人救助）"
+                : h.condition === "dying"
+                  ? "（濒死，已失去正常行动能力，急需创伤小组或紧急抢救）"
+                  : "";
       const out: string[] = [];
       if (h.injuries.length > 0) {
         const items = h.injuries.map((inj) => {
@@ -48,7 +52,8 @@ export const healthStatus: readonly SystemStatus[] = [
           `具体伤势：${items.join("；")}${h.condition !== "up" ? `；状态：${h.conditionLabel}` : ""}${painNote}`,
         );
       } else {
-        const label = WOUND_STATUS_NAMES[h.wounds] ?? "体征平稳";
+        const label =
+          h.condition === "up" ? (WOUND_STATUS_NAMES[h.wounds] ?? "体征平稳") : h.conditionLabel;
         out.push(`身体伤势：${label}，${h.conditionLabel}${painNote}`);
       }
       return out;

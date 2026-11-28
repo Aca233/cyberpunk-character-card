@@ -18,6 +18,8 @@ const MINUTES_PER_DAY = 1440;
 export const MINUTES_PER_PHASE = 360;
 /** 连续多少个相位不睡觉时提示疲劳；不扣属性点。 */
 export const FATIGUE_PHASE_THRESHOLD = 4;
+/** 连续休息六小时算充分睡眠；短歇不消除连续熬夜记录。 */
+export const FULL_REST_MINUTES = MINUTES_PER_PHASE;
 
 export type Period = "dawn" | "day" | "dusk" | "night";
 
@@ -160,10 +162,21 @@ export function applyWorld(
 
   // 3.0 相位与疲劳推进：按实际清醒耗时累计（每满 1 相位 = 6 小时计 1 步），避免 20:55→21:05 这类 10 分钟跨边界误加一整段熬夜疲劳
   const deltaMinutes = Math.max(0, target - now);
+  let rested = false;
   if (command.activity === "rest") {
-    draft.phasesAwake = 0;
-    draft.awakeMinutes = 0;
+    // 地点改变或其他入口推进过时钟（如醒着私聊），不能接上此前未完成的睡眠。
+    const previousRest =
+      draft.location === beforeLocation && draft.restUntil === now ? draft.restMinutes : 0;
+    draft.restMinutes = Math.min(FULL_REST_MINUTES, (previousRest ?? 0) + deltaMinutes);
+    draft.restUntil = target;
+    if (deltaMinutes > 0 && draft.restMinutes >= FULL_REST_MINUTES) {
+      draft.phasesAwake = 0;
+      draft.awakeMinutes = 0;
+      rested = true;
+    }
   } else if (deltaMinutes > 0) {
+    draft.restMinutes = 0;
+    draft.restUntil = null;
     const beforeFatigued = isFatigued(draft);
     const totalAwake = (draft.awakeMinutes ?? 0) + deltaMinutes;
     const gained = Math.floor(totalAwake / MINUTES_PER_PHASE);
@@ -174,6 +187,9 @@ export function applyWorld(
         notes.push("连续多个时段未睡眠，身体疲劳：眼皮发沉、发力与反应发滞");
       }
     }
+  } else {
+    draft.restMinutes = 0;
+    draft.restUntil = null;
   }
 
   if (target > now) {
@@ -183,7 +199,7 @@ export function applyWorld(
     );
   }
   notes.push(...dueNotes(draft, now, target));
-  const signals = command.activity === "rest" ? ["rest"] : [];
+  const signals = rested ? ["rest"] : [];
   if (draft.location !== beforeLocation) {
     // 玩家换到新地点时开启新场起点，避免前一个地点的非同行人物在模型未标 sceneEnd 时滞留在场
     draft.sceneStartedAt = target;
@@ -228,17 +244,30 @@ export function applyWorldRest(
 ): ApplyOutcome {
   const notes: string[] = [];
   if (command.mode === "reset") {
-    draft.phasesAwake = 0;
-    draft.awakeMinutes = 0;
-    notes.push(`${command.reason}：睡了一觉，熬夜疲劳散去`);
+    const previousRest = draft.restUntil === now ? draft.restMinutes : 0;
+    draft.restMinutes = Math.min(FULL_REST_MINUTES, previousRest + command.minutes);
+    draft.restUntil = now + command.minutes;
+    if (command.minutes > 0 && draft.restMinutes >= FULL_REST_MINUTES) {
+      draft.phasesAwake = 0;
+      draft.awakeMinutes = 0;
+      notes.push(`${command.reason}：睡了一觉，熬夜疲劳散去`);
+    }
   } else if (command.mode === "relief") {
+    draft.restMinutes = 0;
+    draft.restUntil = null;
     if (draft.phasesAwake > 0) {
       draft.phasesAwake = Math.max(0, draft.phasesAwake - 1);
       notes.push(`${command.reason}：精神与体力稍有缓和`);
     }
+  } else {
+    draft.restMinutes = 0;
+    draft.restUntil = null;
   }
   const target = now + command.minutes;
-  const signals = command.mode === "reset" ? ["rest"] : [];
+  const signals =
+    command.mode === "reset" && command.minutes > 0 && draft.restMinutes >= FULL_REST_MINUTES
+      ? ["rest"]
+      : [];
   if (target > now) {
     return { ok: true, notes, advanceTo: target, signals };
   }

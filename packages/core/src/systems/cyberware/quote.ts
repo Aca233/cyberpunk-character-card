@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { WorldState } from "../../kernel/world";
 import { agreedQuote } from "../commerce";
-import { EconomyStateSchema, MONEY_CAP } from "../economy";
+import { chromeCareStatus, EconomyStateSchema, MONEY_CAP } from "../economy";
 import { HealthStateSchema } from "../health";
 import { type ShopMood, shopMood } from "../inventory";
 import { merchantAt, WorldClockStateSchema } from "../world";
@@ -127,18 +127,21 @@ export function quoteCyberware(
   if (!provider.ok) return provider;
   const startsAt = request.startAt ?? world.time;
   const duration =
-    request.action === "buy" || request.action === "repay" ? 0 : doc.serviceMinutes[request.action];
+    request.action === "buy" || request.action === "repay" || request.action === "calibrate"
+      ? 0
+      : doc.serviceMinutes[request.action];
   const endsAt = startsAt + duration;
-  if (duration && !clinic.equipment.includes("surgery"))
+  const needsChair = duration > 0 || request.action === "calibrate";
+  if (needsChair && !clinic.equipment.includes("surgery"))
     return { ok: false, reason: "诊所缺少可用手术设备" };
   if (
-    duration &&
+    needsChair &&
     Object.values(state.services).some(
       (service) =>
         service.id !== options.service &&
         ["booked", "active"].includes(service.status) &&
         service.provider === provider.id &&
-        service.scheduledAt < endsAt &&
+        (duration ? service.scheduledAt < endsAt : service.scheduledAt <= startsAt) &&
         service.endsAt > startsAt,
     )
   )
@@ -197,6 +200,50 @@ export function quoteCyberware(
   const moodLockReason = clinicMoodLock(mood);
   if (moodLockReason) return { ok: false, reason: moodLockReason };
   const moodFactor = mood?.factor ?? 1;
+  if (request.action === "calibrate") {
+    if ((world.slices.combat as { active?: unknown } | undefined)?.active)
+      return { ok: false, reason: "交火中没法做义体神经校准，先脱战" };
+    if (
+      request.id ||
+      request.part ||
+      request.replace ||
+      request.tradeIn ||
+      request.credit ||
+      request.disposition ||
+      request.offer
+    )
+      return { ok: false, reason: "神经校准维护只需指定医生，不接受商品、换件、赊账或改价条件" };
+    const care = chromeCareStatus(world, data);
+    if (!care) return { ok: false, reason: "当前神经承载未达重度门槛，暂不需要定期神经校准" };
+    const cost = Math.max(500, Math.round((care.cost * doc.priceFactor * moodFactor) / 100) * 100);
+    return {
+      ok: true,
+      quote: {
+        ...common,
+        action: "calibrate",
+        doc: doc.id,
+        docName: doc.name,
+        provider: provider.name,
+        name: care.label,
+        price: cost,
+        tradeIn: 0,
+        total: cost,
+        cash: cost,
+        credit: 0,
+        receive: 0,
+        replaces: null,
+        offer: null,
+        blocked:
+          care.calibrated && !care.dueSoon
+            ? `本期已完成神经校准，维护有效期还剩 ${care.daysLeft} 天，无需重复付费`
+            : cost > MONEY_CAP
+              ? `本次校准报价超过单笔 ${MONEY_CAP} 欧元的结算范围`
+              : eddies < cost
+                ? `欧元不够：在${doc.name}做${care.label}需要 ${cost.toLocaleString("en-US")} 欧元`
+                : null,
+      },
+    };
+  }
   const catalog = cyberwareCatalog(data);
   const owned = request.part ? state.parts[request.part] : undefined;
   const def = catalog.get(request.id ?? owned?.model ?? "");

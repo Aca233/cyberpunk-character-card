@@ -50,6 +50,7 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       district: null,
       districtDay: null,
       hideoutDay: null,
+      hideoutSince: null,
       recent: [],
       nextNotice: 1,
       notices: [],
@@ -65,13 +66,18 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
       return applyEvent(draft, command, district, ctx.now, ctx.data);
     },
     on: {
+      "world.arrived": (draft) => {
+        draft.hideoutSince = null;
+      },
       "trade.fine": (draft) => {
         applyRelief(draft, { type: "heat.relief", reason: "缴纳罚款" });
       },
     },
     tick(draft, span, ctx) {
       const district = districtOf(ctx.read<WorldClockState>("world").location, ctx.data);
-      // 证据按实际入库时间结算；中间只衰减，安全屋和换区仍按完整跨度结算一次。
+      // 私聊等直接推钟入口可能没有此事实；缺省只延续已确认且尚未离开/暴露的躲藏。
+      const hideout = typeof ctx.facts.hideout === "boolean" ? ctx.facts.hideout : undefined;
+      // 证据按实际入库时间结算；躲藏也按相同的连续时间线推进。
       let from = span.from;
       // combat 先结算录像；只处理本次时间跨度内入库的证据，后续推进不重复涨星
       const evidence = ctx
@@ -89,15 +95,16 @@ export const heat = defineSystem<HeatState, EventCommand | HeatCommand | BountyC
         arrivals.set(f.firedAt, (arrivals.get(f.firedAt) ?? 0) + 1);
       }
       for (const [at, count] of [...arrivals].sort(([a], [b]) => a - b)) {
-        tickHeat(draft, { from, to: at }, null);
+        tickHeat(draft, { from, to: at }, null, hideout);
         from = at;
         const before = shownStars(draft.stars);
         draft.stars = Math.min(HEAT_MAX, draft.stars + count * EVIDENCE_STARS);
         draft.lastSeenAt = at;
         draft.decayedAt = at;
+        if (draft.hideoutSince !== null) draft.hideoutSince = at;
         noticeRise(draft, before, shownStars(draft.stars), at);
       }
-      tickHeat(draft, span, district, ctx.facts.hideout === true);
+      tickHeat(draft, { from, to: span.to }, district, hideout);
     },
     rules: [eventRules, heatRules],
     threats: heatThreats,

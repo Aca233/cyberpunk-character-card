@@ -37,7 +37,7 @@ export const combatRules: RuleModule<CombatState> = {
 - 打完了发 combat end：witnesses 写看见的人数，cameras 写有没有摄像头，truth 用一句话写真实发生了什么。有人看见时代码起流言、定录像在谁手里。
 - 从倒下或死了的人身上捡东西发 combat loot（target、item，只能是【当前状态】里他身上有的 id）。物品由代码放进背包，同一次拾取不另发 item gain。
 - 已有人物的随身物以人物卡为准，开打不会重新生成。未拾取的物件留在原地，换场或下一次冲突不清空；只能在它所在地点拾取。桌上的工具等环境物件照常发 item gain，必须说明真实来源。
-- 找人处理一处伤发 combat treat（target 写伤口 id），代码按街头诊所价目扣一次医疗费，余额不足则治疗和扣款都不生效；同一处伤重复处理不再收费。处理后仍需恢复时间，不是立刻痊愈。同一次伤口治疗不另发 trade service medical，避免重复扣钱。
+- 找人处理一处伤发 combat treat（target 写伤口 id），代码按街头诊所价目扣一次医疗费，余额不足则治疗和扣款都不生效；同一处伤重复处理不再收费。处理后仍需恢复时间，不是立刻痊愈；重创、致命伤愈合后仍留下伤疤，普通医疗不消除深层伤痕。同一次伤口治疗不另发 trade service medical，避免重复扣钱。
 - 压下流言发 combat rumor（target、how silenced）；收买传话的人写 how bought，钱由代码扣。
 - 录像追回、毁掉、付钱买下发 combat footage（target，how 写 recovered、destroyed、paid）。
 - 找上门的人在正文里出场了发 combat avenger（target 写死者 id，how came）；事情了结了写 how settled。`,

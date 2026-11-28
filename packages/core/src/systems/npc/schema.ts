@@ -583,7 +583,9 @@ export const NpcDeathSchema = z
     id: ExistingNpcIdSchema,
     reason: z.string().trim().min(1).max(NPC_NOTE_CHARS),
   })
-  .describe("人物死亡；死了的人不会再出场");
+  .describe(
+    "人物实际死亡；死了的人不会再出场。同行者需本轮独立目标裁决 npcDeaths 包含此人物 id，不能用玩家角色的 harm 代替",
+  );
 export type NpcDeath = z.infer<typeof NpcDeathSchema>;
 
 export const DoingSchema = z
