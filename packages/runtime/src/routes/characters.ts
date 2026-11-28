@@ -36,7 +36,7 @@ import type { CharacterStore } from "../characters";
 import { AbortedError, UpstreamError } from "../providers/http";
 import { randomHex } from "../random";
 import type { WorkshopStore } from "../workshop";
-import { workshopRuntime } from "../workshop-content";
+import { requiredPackIds, workshopRuntime } from "../workshop-content";
 
 async function readCard(c: Context, workshop?: WorkshopStore) {
   let raw: unknown;
@@ -48,8 +48,9 @@ async function readCard(c: Context, workshop?: WorkshopStore) {
   const parsed = CharacterCardSchema.safeParse(raw);
   if (parsed.success) {
     if (!parsed.data.board) return { ok: true as const, card: parsed.data };
+    const required = requiredPackIds(parsed.data.board);
     const packs = ((await workshop?.list()) ?? [])
-      .filter((entry) => entry.enabled)
+      .filter((entry) => entry.enabled || required.has(entry.pack.id))
       .map((entry) => entry.pack);
     const runtime = workshopRuntime(packs);
     // 按内容表重算开局义体快照并校验部位容量，再检查角色卡结构。
@@ -124,6 +125,7 @@ function mapCyberwareOffer(def: (typeof cyberware)[number], packId: string | und
     ...(def.defenses ? { defenses: def.defenses } : {}),
     ...(def.art ? { art: def.art } : {}),
     ...(def.customImage ? { customImage: def.customImage } : {}),
+    ...(def.worldSpawn !== undefined ? { worldSpawn: def.worldSpawn } : {}),
     ...(exclusiveGroup ? { exclusiveGroup } : {}),
     ability: def.ability,
     ...(packId ? { custom: true, packId } : {}),

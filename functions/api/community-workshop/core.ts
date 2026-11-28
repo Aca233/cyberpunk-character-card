@@ -368,6 +368,7 @@ function validateUploadPayload(
     "chipContents",
   ] as const;
   const seenGlobal = new Set<string>();
+  const localNpcIds = new Set<string>();
   for (const group of uniqueGroups) {
     const list = arrays[group] ?? [];
     for (const item of list) {
@@ -381,7 +382,20 @@ function validateUploadPayload(
         return { ok: false, error: `内容包内存在重复条目 id：${item.id}` };
       }
       seenGlobal.add(item.id);
+      if (group === "npcs") localNpcIds.add(item.id);
     }
+  }
+
+  const seedNpcs: string[] = [];
+  for (const [index, value] of (arrays.seedNpcs ?? []).entries()) {
+    const id = typeof value === "string" ? value.trim() : "";
+    if (!id || id.length > 33 || !PACK_ID_RE.test(id)) {
+      return { ok: false, error: `seedNpcs[${index}] 人物 id 格式不合法` };
+    }
+    if (!localNpcIds.has(id)) {
+      return { ok: false, error: `seedNpcs[${index}] 没有这个包内人物：${id}` };
+    }
+    seedNpcs.push(id);
   }
 
   for (const cw of arrays.cyberware ?? []) {
@@ -408,7 +422,7 @@ function validateUploadPayload(
   const chipContentsCount = (arrays.chipContents ?? []).length;
   const listingsCount =
     (arrays.shopListings ?? []).length + (arrays.ripperdocListings ?? []).length;
-  const seedNpcsCount = (arrays.seedNpcs ?? []).length;
+  const seedNpcsCount = seedNpcs.length;
 
   const entryCount =
     charactersCount +
@@ -437,7 +451,7 @@ function validateUploadPayload(
     modules: arrays.modules ?? [],
     acquaintances: arrays.acquaintances ?? [],
     npcs: arrays.npcs ?? [],
-    seedNpcs: arrays.seedNpcs ?? [],
+    seedNpcs,
     items: itemsList,
     cyberware: arrays.cyberware ?? [],
     braindances: arrays.braindances ?? [],

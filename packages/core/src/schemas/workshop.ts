@@ -259,12 +259,14 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
   const npcIds = new Set(pack.npcs.map((item) => item.id));
   const workIds = new Set(pack.braindances.map((item) => item.id));
   const contentIds = new Set(pack.chipContents.map((item) => item.id));
+  const moduleIds = new Set(pack.modules.map((item) => item.id));
   const itemId = (id: string) => (itemIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const modId = (id: string) => (modIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const chromeId = (id: string) => (cyberwareIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const npcId = (id: string) => (npcIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const workId = (id: string) => (workIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const chipId = (id: string) => (contentIds.has(id) ? workshopEntityId(pack.id, id) : id);
+  const moduleId = (id: string) => (moduleIds.has(id) ? workshopEntityId(pack.id, id) : id);
   const acquaintanceIsCatalogNpc = (entry: WorkshopPack["acquaintances"][number]) =>
     npcIds.has(entry.id) ||
     (!entry.custom && !entry.id.startsWith("custom-") && !entry.id.startsWith("wk-"));
@@ -282,8 +284,121 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
     ...pack.chipContents.map((item) => item.id),
   ]);
   const relatedId = (id: string) => (allLocalIds.has(id) ? workshopEntityId(pack.id, id) : id);
+  const mapItem = (entry: WorkshopPack["items"][number]) => ({
+    ...entry,
+    id: itemId(entry.id),
+    ...(entry.chipContentId ? { chipContentId: chipId(entry.chipContentId) } : {}),
+    ...(entry.preInstalledMods
+      ? {
+          preInstalledMods: Object.fromEntries(
+            Object.entries(entry.preInstalledMods).map(([slot, id]) => [slot, modId(id)]),
+          ),
+        }
+      : {}),
+  });
+  const mapCyberware = (entry: WorkshopPack["cyberware"][number]) => ({
+    ...entry,
+    id: chromeId(entry.id),
+    ...(cyberwareIds.has(entry.id) && entry.variantGroup
+      ? { variantGroup: workshopEntityId(pack.id, entry.variantGroup) }
+      : {}),
+  });
+  const mapNpc = (entry: WorkshopPack["npcs"][number]) => ({
+    ...entry,
+    id: npcId(entry.id),
+    ...(npcIds.has(entry.id) ? { canon: false } : {}),
+    ...(entry.body
+      ? {
+          body: {
+            ...entry.body,
+            gear: entry.body.gear.map(itemId),
+            cyberware: entry.body.cyberware.map(chromeId),
+            ...(entry.body.itemDefs ? { itemDefs: entry.body.itemDefs.map(mapItem) } : {}),
+            ...(entry.body.cyberwareDefs
+              ? { cyberwareDefs: entry.body.cyberwareDefs.map(mapCyberware) }
+              : {}),
+          },
+        }
+      : {}),
+  });
+  const mapModule = (entry: WorkshopPack["modules"][number]) => ({
+    ...entry,
+    id: moduleId(entry.id),
+    ...(moduleIds.has(entry.id) ? { custom: true, packId: pack.id, author: pack.author } : {}),
+  });
 
   return {
+    characters: pack.characters.map((card) => {
+      const board = card.board;
+      const modulePeople = new Map<string, string>();
+      if (board) {
+        for (const entry of [
+          ...(board.origin ? [board.origin] : []),
+          ...board.pasts,
+          ...board.skills,
+          ...board.flaws,
+        ]) {
+          if (!moduleIds.has(entry.id)) continue;
+          entry.people.forEach((_, index) => {
+            modulePeople.set(
+              `board-${entry.id}-${index + 1}`,
+              `board-${moduleId(entry.id)}-${index + 1}`,
+            );
+          });
+        }
+      }
+      return {
+        ...card,
+        ...(card.replacesNpcId ? { replacesNpcId: npcId(card.replacesNpcId) } : {}),
+        ...(board
+          ? {
+              board: {
+                ...board,
+                origin: board.origin ? mapModule(board.origin) : null,
+                pasts: board.pasts.map(mapModule),
+                skills: board.skills.map(mapModule),
+                flaws: board.flaws.map(mapModule),
+                cyberware: board.cyberware.map((entry) => {
+                  const def = pack.cyberware.find((item) => item.id === entry.id);
+                  return def
+                    ? {
+                        ...entry,
+                        ...def,
+                        id: chromeId(entry.id),
+                        custom: true,
+                        packId: pack.id,
+                      }
+                    : entry;
+                }),
+                acquaintances: board.acquaintances.map((entry) => {
+                  const source = pack.acquaintances.find((item) => item.id === entry.id);
+                  const catalogNpc =
+                    npcIds.has(entry.id) || (source && acquaintanceIsCatalogNpc(source));
+                  return {
+                    ...entry,
+                    id:
+                      modulePeople.get(entry.id) ??
+                      (source ? acquaintanceId(source) : npcId(entry.id)),
+                    ...(catalogNpc
+                      ? { custom: false, catalogNpc: true, packId: pack.id }
+                      : source
+                        ? { custom: true, catalogNpc: false, packId: pack.id }
+                        : {}),
+                  };
+                }),
+                customNpcs: board.customNpcs.map(mapNpc),
+                npcOverrides: board.npcOverrides.map(mapNpc),
+                kit: {
+                  ...board.kit,
+                  weapons: board.kit.weapons.map(itemId),
+                  items: board.kit.items.map((entry) => ({ ...entry, id: itemId(entry.id) })),
+                  customItems: board.kit.customItems.map(mapItem),
+                },
+              },
+            }
+          : {}),
+      };
+    }),
     modules: pack.modules.map((entry) => ({
       ...entry,
       id: workshopEntityId(pack.id, entry.id),
@@ -298,40 +413,10 @@ export function namespaceWorkshopPack(pack: WorkshopPack) {
       packId: pack.id,
       catalogNpc: acquaintanceIsCatalogNpc(entry),
     })),
-    npcs: pack.npcs.map((entry) => ({
-      ...entry,
-      id: workshopEntityId(pack.id, entry.id),
-      canon: false,
-      ...(entry.body
-        ? {
-            body: {
-              ...entry.body,
-              gear: entry.body.gear.map(itemId),
-              cyberware: entry.body.cyberware.map(chromeId),
-            },
-          }
-        : {}),
-    })),
+    npcs: pack.npcs.map(mapNpc),
     seedNpcs: pack.seedNpcs.map(npcId),
-    items: pack.items.map((entry) => ({
-      ...entry,
-      id: workshopEntityId(pack.id, entry.id),
-      ...(entry.chipContentId ? { chipContentId: chipId(entry.chipContentId) } : {}),
-      ...(entry.preInstalledMods
-        ? {
-            preInstalledMods: Object.fromEntries(
-              Object.entries(entry.preInstalledMods).map(([slot, id]) => [slot, modId(id)]),
-            ),
-          }
-        : {}),
-    })),
-    cyberware: pack.cyberware.map((entry) => ({
-      ...entry,
-      id: workshopEntityId(pack.id, entry.id),
-      ...(entry.variantGroup
-        ? { variantGroup: workshopEntityId(pack.id, entry.variantGroup) }
-        : {}),
-    })),
+    items: pack.items.map(mapItem),
+    cyberware: pack.cyberware.map(mapCyberware),
     braindances: pack.braindances.map((entry) => ({
       ...entry,
       id: workshopEntityId(pack.id, entry.id),

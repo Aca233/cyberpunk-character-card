@@ -1,9 +1,9 @@
 import {
-  type CharacterCard,
   type CommunityWorkshopSummary,
   cyberwareRules,
   type InstalledWorkshopPack,
   InstalledWorkshopPackSchema,
+  namespaceWorkshopPack,
   type WorkshopPack,
 } from "@cp/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -501,7 +501,18 @@ export function WorkshopScreen() {
   });
 
   const importCharacterCard = useMutation({
-    mutationFn: async (card: CharacterCard) => api.createCharacter(card),
+    mutationFn: async ({ pack, index }: { pack: WorkshopPack; index: number }) => {
+      const local = (await api.workshopPackages()).find((entry) => entry.pack.id === pack.id);
+      if (!local) {
+        throw new Error("请先订阅并安装此内容包，再导入其中的角色卡");
+      }
+      if (JSON.stringify(local.pack) !== JSON.stringify(pack)) {
+        throw new Error("本地内容包与当前详情不同，请先更新到本地后再导入角色卡");
+      }
+      const card = namespaceWorkshopPack(pack).characters[index];
+      if (!card) throw new Error("内容包里没有这张角色卡");
+      return api.createCharacter(card);
+    },
     onSuccess: async (entry) => {
       setNotice({
         tone: "ok",
@@ -1360,7 +1371,7 @@ export function WorkshopScreen() {
                   <div className={styles.charCardsBox}>
                     <strong>收录角色卡 ({pack.characters.length})</strong>
                     <ul className={styles.charCardList}>
-                      {pack.characters.map((card) => (
+                      {pack.characters.map((card, index) => (
                         <li
                           key={`${card.name}-${card.alias}-${card.origin}`}
                           className={styles.charCardItem}
@@ -1374,7 +1385,7 @@ export function WorkshopScreen() {
                             small
                             primary
                             disabled={busy}
-                            onClick={() => importCharacterCard.mutate(card)}
+                            onClick={() => importCharacterCard.mutate({ pack, index })}
                           >
                             导入到角色档案
                           </Button>
