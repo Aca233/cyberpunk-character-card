@@ -424,6 +424,7 @@ export interface BoardCyberwareOption {
   readonly customImage?: string;
   readonly custom?: boolean;
   readonly packId?: string;
+  readonly worldSpawn?: boolean;
   readonly checks?: readonly string[];
   readonly attributes?: Readonly<Record<string, number>>;
   readonly ability: string;

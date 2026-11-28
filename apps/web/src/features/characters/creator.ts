@@ -833,6 +833,7 @@ export function mergeCreatorCatalog(
       ...(item.customImage ? { customImage: item.customImage } : {}),
       custom: true,
       packId: item.packId ?? "local",
+      ...(item.worldSpawn !== undefined ? { worldSpawn: item.worldSpawn } : {}),
       ability: item.ability || item.summary || "自定义义体模块",
     };
     if (!seenChrome.has(item.id)) {
@@ -957,7 +958,7 @@ export function exportLocalWorkshopPack(
             ...(c.carryBonus !== undefined ? { carryBonus: c.carryBonus } : {}),
             ...(c.defenses ? { defenses: c.defenses } : {}),
             ...(c.art ? { art: c.art } : {}),
-            ...(c.worldSpawn ? { worldSpawn: true } : {}),
+            ...(c.worldSpawn !== undefined ? { worldSpawn: c.worldSpawn } : {}),
           },
         ]
       : [],

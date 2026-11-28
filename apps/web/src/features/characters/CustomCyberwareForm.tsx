@@ -143,7 +143,9 @@ export function CustomCyberwareForm({
   const [ability, setAbility] = useState(() => initial?.ability ?? initial?.summary ?? "");
   const [rarity, setRarity] = useState<economyRules.Rarity>(() => initial?.rarity ?? "rare");
   // 「登场」开关：默认登场——查尔斯·巴克斯的地下诊所有售、可能被 NPC 装着；关掉则只随卡面与开局义体存在
-  const [worldSpawn, setWorldSpawn] = useState(() => initial?.worldSpawn ?? true);
+  const [worldSpawn, setWorldSpawn] = useState(() =>
+    initial ? initial.worldSpawn === true : true,
+  );
   const [loadCost, setLoadCost] = useState<number>(() =>
     initial ? initial.humanityCost : defaultLoadForCategory(initialCategory),
   );
@@ -219,7 +221,7 @@ export function CustomCyberwareForm({
     slot,
     category,
     rarity,
-    ...(worldSpawn ? {} : { worldSpawn: false }),
+    worldSpawn,
     humanityCost: effectiveLoad,
     ability: ability.trim() || "自定义义体模块",
     ...(isArmor ? { armor: true } : {}),

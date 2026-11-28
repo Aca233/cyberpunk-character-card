@@ -2005,6 +2005,7 @@ export function CyberwareShelf({
       ...(parsedRarity.success ? { rarity: parsedRarity.data } : {}),
       ...(o.custom ? { custom: true } : {}),
       ...(o.packId ? { packId: o.packId } : {}),
+      ...(o.worldSpawn !== undefined ? { worldSpawn: o.worldSpawn } : {}),
       ...(o.custom && o.ability ? { ability: o.ability } : {}),
       ...(o.custom && o.armor ? { armor: true } : {}),
       ...(o.custom && o.accelerator ? { accelerator: true } : {}),
@@ -2056,6 +2057,7 @@ export function CyberwareShelf({
       ...(o.exclusiveGroup ? { exclusiveGroup: o.exclusiveGroup } : {}),
       custom: true,
       packId: o.packId ?? "local",
+      ...(o.worldSpawn !== undefined ? { worldSpawn: o.worldSpawn } : {}),
     };
   };
 
@@ -2222,13 +2224,14 @@ export function CyberwareShelf({
                     <button
                       type="button"
                       className={styles.equippedSyncBtn}
-                      title="改为左右双臂同款（按 100% 承载计）"
+                      title={`将${item.name}改为左右双臂同款（按 100% 承载计，会替换另一侧已装义体）`}
+                      aria-label={`将${item.name}改为双臂同款`}
                       onClick={() => {
                         const def = offerMap.get(item.id);
                         if (def) equipOffer(def, "both");
                       }}
                     >
-                      双臂同款
+                      改为双臂
                     </button>
                   )}
                   <button

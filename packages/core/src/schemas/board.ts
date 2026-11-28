@@ -624,6 +624,7 @@ export function normalizeBoard(
     }
     const group = cyberwareExclusiveGroup(def);
     const category: CyberwareCategoryId = cyberwareCategoryOf(def);
+    const worldSpawn = item.worldSpawn ?? def.worldSpawn;
     placed.push(probe);
     cyberware.push({
       id: def.id,
@@ -649,11 +650,11 @@ export function normalizeBoard(
         ? { customImage: item.customImage ?? def.customImage }
         : {}),
       ...(item.armSide && group === "armMount" ? { armSide: item.armSide } : {}),
+      ...(worldSpawn !== undefined ? { worldSpawn } : {}),
       ...(item.custom
         ? {
             custom: true,
             ...(item.packId ? { packId: item.packId } : {}),
-            ...(item.worldSpawn ? { worldSpawn: true } : {}),
           }
         : {}),
     });
@@ -708,7 +709,7 @@ export function customCyberwareDefs(
       ...(item.defenses ? { defenses: item.defenses } : {}),
       ...(item.art ? { art: item.art } : {}),
       ...(item.customImage ? { customImage: item.customImage } : {}),
-      ...(item.worldSpawn ? { worldSpawn: true } : {}),
+      ...(item.worldSpawn !== undefined ? { worldSpawn: item.worldSpawn } : {}),
     });
   }
   return out;
