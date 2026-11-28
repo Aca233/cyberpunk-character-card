@@ -106,6 +106,39 @@ function nameTaken(state: Draft<NpcState>, name: string, alias?: string): Npc | 
   });
 }
 
+/**
+ * 建卡撞上的卡是不是同一个人（全名或外号有一边对得上）。
+ * 模型常给原作/旧识的已知名字重新建卡：id 与名字都对得上时就是同一个人，按出场记，不另建卡。
+ */
+function samePerson(
+  existing: Npc,
+  card: { readonly name: string; readonly alias?: string | undefined },
+): boolean {
+  const own = [existing.name, ...(existing.alias === undefined ? [] : [existing.alias])];
+  const theirs = [card.name, ...(card.alias === undefined ? [] : [card.alias])];
+  return own.some((a) => theirs.some((b) => sameName(a, b)));
+}
+
+/** 已有人物卡的人出场：记成见过、记下现在在哪（meet 与「建卡撞上同一张卡」共用） */
+function markMet(
+  npc: Draft<Npc>,
+  location: string | undefined,
+  now: number,
+  data: Readonly<Record<string, unknown>>,
+  currentLocation: string | null,
+): readonly string[] {
+  const notes = npc.met ? [] : [`认识了 ${npc.name}`];
+  npc.met = true;
+  npc.lastSeenAt = now;
+  if (location !== undefined) {
+    npc.location = resolvePlace(location, data);
+  } else if (currentLocation !== null) {
+    npc.location = currentLocation;
+  }
+  npc.lastKnownLocation = npc.location;
+  return notes;
+}
+
 export function seedNpc(
   draft: Draft<NpcState>,
   command: SeedNpc,
@@ -275,14 +308,34 @@ export function applyNpc(
 ): ApplyOutcome {
   if (command.type === "npc") {
     const { type: _type, location, home, body, faction, ...card } = command;
-    if (draft.npcs[card.id]) {
-      return { ok: false, reason: `已经有 id 为 ${card.id} 的人物卡，见到这个人用 meet` };
+    // 给已经有卡的人重新建卡：同一个人就按出场（meet）记，不让整场事件与收场一起回滚
+    const existing = draft.npcs[card.id];
+    if (existing) {
+      if (samePerson(existing, card)) {
+        const met = markMet(existing, location, now, data, currentLocation);
+        return {
+          ok: true,
+          notes: [...met, `${existing.name} 已有卡（${existing.id}），这条建卡按出场记入`],
+        };
+      }
+      return {
+        ok: false,
+        reason: `id ${card.id} 已经被「${existing.name}」的人物卡占用；给这个人换一个小写英文或拼音 id`,
+      };
     }
     const taken = nameTaken(draft, card.name, card.alias);
     if (taken) {
+      // 名字对得上就是同一个人：记到已有那张卡上，不另建
+      if (sameName(taken.name, card.name)) {
+        const met = markMet(taken, location, now, data, currentLocation);
+        return {
+          ok: true,
+          notes: [...met, `「${taken.name}」已有卡（${taken.id}），这条建卡按出场记入，不另建卡`],
+        };
+      }
       return {
         ok: false,
-        reason: `已经有叫「${taken.name}」的人物（${taken.id}）；是同一个人就用 meet，不是就换个名字`,
+        reason: `已经有叫「${taken.name}」的人物（${taken.id}）；不是同一个人就换个名字`,
       };
     }
     const notes = [`新人物：${card.name}`];
@@ -477,16 +530,7 @@ export function applyNpc(
         : { ok: true, notes };
     }
     case "meet": {
-      const notes = npc.met ? [] : [`认识了 ${npc.name}`];
-      npc.met = true;
-      npc.lastSeenAt = now;
-      if (command.location !== undefined) {
-        npc.location = resolvePlace(command.location, data);
-      } else if (currentLocation !== null) {
-        npc.location = currentLocation;
-      }
-      npc.lastKnownLocation = npc.location;
-      return { ok: true, notes };
+      return { ok: true, notes: markMet(npc, command.location, now, data, currentLocation) };
     }
     case "memory": {
       if (!npc.met && command.source !== "phone") {

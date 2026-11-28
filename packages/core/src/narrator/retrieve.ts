@@ -3,7 +3,7 @@ import type { WorldState } from "../kernel/world";
 import { TurnInputSchema } from "../schemas/turn";
 import { CityStateSchema } from "../systems/city";
 import { type Importance, MemoryStateSchema, memoryRecords, recapScenes } from "../systems/memory";
-import { type Npc, NpcStateSchema } from "../systems/npc";
+import { type Npc, NpcStateSchema, npcNamesOf } from "../systems/npc";
 import { withSavedPlaces } from "../systems/world/places";
 import { locationCatalog, WorldClockStateSchema } from "../systems/world/schema";
 import { presentNpcs } from "./offscreen";
@@ -44,8 +44,7 @@ function oneLine(text: string, max: number): string {
 
 /** 一个人在正文里可能被叫的名字：全名、名字的每一段（朱迪·阿尔瓦雷兹 → 朱迪、阿尔瓦雷兹）、外号 */
 export function namesOf(n: Npc): string[] {
-  const parts = n.name.split(/[·・\s]/);
-  return [...new Set([n.name, ...parts, n.alias ?? ""])].filter((s) => [...s].length >= 2);
+  return npcNamesOf(n);
 }
 
 /** 正文里提到了哪些有卡人物 */
