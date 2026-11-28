@@ -6,6 +6,7 @@ import {
   boardIssues,
   type CharacterCard,
   CharacterCardSchema,
+  customCyberwareDefs,
   cyberwareRules,
   inventoryRules,
   type Loadout,
@@ -682,6 +683,87 @@ export function removeLocalNpcOverride(id: string): npcRules.NpcCard[] {
   return next;
 }
 
+/**
+ * 把 NPC 卡身体引用到的本地自建武器/物品与义体定义嵌进卡面（body.itemDefs / body.cyberwareDefs）：
+ * 人物卡只靠 id 引用装备，自建定义本来存在本地缓存里，开新档的服务端看不到；
+ * 内嵌快照后改写过装备的原作/自建人物脱离本地缓存也能自包含进档、重放与分享。
+ */
+export function embedNpcBodyDefs(card: npcRules.NpcCard): npcRules.NpcCard {
+  const body = card.body;
+  if (!body) return card;
+  const gear = new Set(body.gear);
+  const chrome = new Set(body.cyberware);
+  // 本地库里的现行定义优先于卡面上已有的快照（改过的定义跟最新版本走），卸掉的 id 顺手清掉
+  const itemMap = new Map<string, inventoryRules.ItemDef>();
+  for (const def of body.itemDefs ?? []) {
+    if (gear.has(def.id)) itemMap.set(def.id, def);
+  }
+  for (const def of loadLocalCustomItems()) {
+    if (gear.has(def.id)) itemMap.set(def.id, def);
+  }
+  const chromeMap = new Map<string, cyberwareRules.CyberwareDef>();
+  for (const def of body.cyberwareDefs ?? []) {
+    if (chrome.has(def.id)) chromeMap.set(def.id, def);
+  }
+  const chromeSnapshots = loadLocalCustomCyberware().filter((snap) => chrome.has(snap.id));
+  for (const def of customCyberwareDefs(chromeSnapshots)) {
+    chromeMap.set(def.id, def);
+  }
+  const itemDefs = [...itemMap.values()];
+  const cyberwareDefs = [...chromeMap.values()];
+  const sameDefs =
+    JSON.stringify(body.itemDefs ?? null) ===
+      JSON.stringify(itemDefs.length > 0 ? itemDefs : null) &&
+    JSON.stringify(body.cyberwareDefs ?? null) ===
+      JSON.stringify(cyberwareDefs.length > 0 ? cyberwareDefs : null);
+  if (sameDefs) return card;
+  return {
+    ...card,
+    body: {
+      gear: body.gear,
+      cyberware: body.cyberware,
+      ...(body.symptoms ? { symptoms: body.symptoms } : {}),
+      ...(itemDefs.length > 0 ? { itemDefs } : {}),
+      ...(cyberwareDefs.length > 0 ? { cyberwareDefs } : {}),
+    },
+  };
+}
+
+/** 角色主板上挂着的覆写/自建人物卡统一补齐内嵌装备定义；没有需要改的卡时原样返回 */
+export function embedBoardNpcDefs(board: Board): Board {
+  const npcOverrides = (board.npcOverrides ?? []).map(embedNpcBodyDefs);
+  const customNpcs = (board.customNpcs ?? []).map(embedNpcBodyDefs);
+  const changed =
+    npcOverrides.some((c, i) => c !== (board.npcOverrides ?? [])[i]) ||
+    customNpcs.some((c, i) => c !== (board.customNpcs ?? [])[i]);
+  return changed ? { ...board, npcOverrides, customNpcs } : board;
+}
+
+/**
+ * 开新档前把本地人物库（自建人物 + 原作覆写）里引用到自建装备/义体的卡面补齐内嵌定义快照并写回；
+ * 返回最新列表直接用于建卡请求，顺带自愈这次改动之前存的旧卡。
+ */
+export function backfillLocalNpcCards(): {
+  readonly customNpcs: npcRules.NpcCard[];
+  readonly npcOverrides: npcRules.NpcCard[];
+} {
+  const sync = (
+    load: () => npcRules.NpcCard[],
+    save: (card: npcRules.NpcCard) => void,
+  ): npcRules.NpcCard[] => {
+    const out = load().map((card) => {
+      const embedded = embedNpcBodyDefs(card);
+      if (embedded !== card) save(embedded);
+      return embedded;
+    });
+    return out;
+  };
+  return {
+    customNpcs: sync(loadLocalCustomNpcs, saveLocalCustomNpc),
+    npcOverrides: sync(loadLocalNpcOverrides, saveLocalNpcOverride),
+  };
+}
+
 /** 将官方目录与本地自定义池 / 创意工坊模组包按 id 去重合并 */
 export function mergeCreatorCatalog(
   base: BoardData,
@@ -875,11 +957,12 @@ export function exportLocalWorkshopPack(
             ...(c.carryBonus !== undefined ? { carryBonus: c.carryBonus } : {}),
             ...(c.defenses ? { defenses: c.defenses } : {}),
             ...(c.art ? { art: c.art } : {}),
+            ...(c.worldSpawn ? { worldSpawn: true } : {}),
           },
         ]
       : [],
   );
-  const localNpcs = loadLocalCustomNpcs();
+  const localNpcs = loadLocalCustomNpcs().map(embedNpcBodyDefs);
   return WorkshopPackSchema.parse({
     id: `wk-local-${Date.now().toString(36)}`,
     title,

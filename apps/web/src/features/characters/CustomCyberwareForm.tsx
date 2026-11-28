@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ActionButton } from "../../ui/ActionButton";
 import { Button } from "../../ui/Button";
 import { CellFrame, FrameBox } from "../../ui/FrameBox";
+import { ToggleCheck } from "../../ui/ToggleCheck";
 import { fallbackCyberwareArtFor } from "../story/art";
 import type { CyberSlot } from "../story/CyberDoll";
 import styles from "./characters.module.css";
@@ -141,6 +142,8 @@ export function CustomCyberwareForm({
   const [name, setName] = useState(() => initial?.name ?? "");
   const [ability, setAbility] = useState(() => initial?.ability ?? initial?.summary ?? "");
   const [rarity, setRarity] = useState<economyRules.Rarity>(() => initial?.rarity ?? "rare");
+  // 「登场」开关：默认登场——查尔斯·巴克斯的地下诊所有售、可能被 NPC 装着；关掉则只随卡面与开局义体存在
+  const [worldSpawn, setWorldSpawn] = useState(() => initial?.worldSpawn ?? true);
   const [loadCost, setLoadCost] = useState<number>(() =>
     initial ? initial.humanityCost : defaultLoadForCategory(initialCategory),
   );
@@ -216,6 +219,7 @@ export function CustomCyberwareForm({
     slot,
     category,
     rarity,
+    ...(worldSpawn ? {} : { worldSpawn: false }),
     humanityCost: effectiveLoad,
     ability: ability.trim() || "自定义义体模块",
     ...(isArmor ? { armor: true } : {}),
@@ -293,7 +297,7 @@ export function CustomCyberwareForm({
         </label>
       </div>
 
-      {/* 第二行：稀有度 + 神经承载 */}
+      {/* 第二行：稀有度 + 神经承载 + 登场开关 */}
       <div className={styles.field}>
         <span>稀有度品级</span>
         <fieldset className={styles.shelfFilter} aria-label="自创义体稀有度">
@@ -310,6 +314,16 @@ export function CustomCyberwareForm({
             </button>
           ))}
         </fieldset>
+      </div>
+
+      <div className={styles.toggleRow}>
+        <ToggleCheck checked={worldSpawn} aria-label="登场：夜之城流通" onChange={setWorldSpawn} />
+        <span>
+          登场：夜之城流通
+          <small>
+            ——黑市义体医生处有售（按稀有度计黑市价）、可能被 NPC 装着；关掉则只随卡面与开局义体存在
+          </small>
+        </span>
       </div>
 
       <div className={styles.field}>

@@ -1,10 +1,16 @@
 import { z } from "zod";
-// biome-ignore lint/style/noRestrictedImports: cyberware 入口经 health/inventory 反向加载人物 schema，固定设备结构需避开入口初始化循环。
-import { BehaviorChipStateSchema, BehaviorChipTermsSchema } from "../cyberware/schema";
+import {
+  BehaviorChipStateSchema,
+  BehaviorChipTermsSchema,
+  CyberwareDefSchema,
+  // biome-ignore lint/style/noRestrictedImports: cyberware 入口经 health/inventory 反向加载人物 schema，固定设备结构需避开入口初始化循环。
+} from "../cyberware/schema";
 import { DamageTierSchema } from "../dice";
 // biome-ignore lint/style/noRestrictedImports: health 入口经 inventory 反向加载本文件；定义结构时只读取独立 schema，避免初始化循环。
 import { BodyPartSchema, ConditionSchema, InjurySchema } from "../health/schema";
 import { NeuralSymptomSchema } from "../humanity";
+// biome-ignore lint/style/noRestrictedImports: inventory 入口经 health 反向加载人物 schema，定义结构时只读取独立 schema，避免初始化循环。
+import { ItemDefSchema } from "../inventory/schema";
 
 /** 人物卡上「不属于任何势力」的写法，档案里显示「无」（用户 2026-10-31："没有就填无"） */
 export const NO_FACTION = "none";
@@ -138,6 +144,13 @@ export const NpcBodyCardSchema = z
         "按夜之城常态及人物身份、生计与财力推演的义体表 id：大多数新人物常配 1–3 件贴合身份的基础或常见义体并按用途错开部位；只有正文明确无植入、排斥义体或极端拮据者才留空",
       ),
     symptoms: z.array(NeuralSymptomSchema.omit({ at: true })).optional(),
+    /**
+     * gear 里指向的自建武器/物品定义快照：改写过装备的人物卡自包含，
+     * 脱离本地缓存与官方目录也能进新档、重放与分享；只放 gear 实际引用的定义
+     */
+    itemDefs: z.array(ItemDefSchema).max(NPC_GEAR_MAX).optional(),
+    /** cyberware 里指向的自建义体定义快照：同上，只放 cyberware 实际引用的定义 */
+    cyberwareDefs: z.array(CyberwareDefSchema).max(NPC_CHROME_MAX).optional(),
   })
   .superRefine((b, ctx) => {
     if (new Set(b.gear).size !== b.gear.length)

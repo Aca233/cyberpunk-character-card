@@ -326,6 +326,8 @@ export const StartCyberwareSchema = z.object({
     .optional(),
   custom: z.boolean().optional(),
   packId: z.string().trim().max(60).optional(),
+  /** 「登场」开关：进档后黑市义体医生有售、可能被 NPC 装着；不写则只随卡面与开局义体登场 */
+  worldSpawn: z.boolean().optional(),
 });
 export type StartCyberware = z.infer<typeof StartCyberwareSchema>;
 
@@ -647,11 +649,26 @@ export function normalizeBoard(
         ? { customImage: item.customImage ?? def.customImage }
         : {}),
       ...(item.armSide && group === "armMount" ? { armSide: item.armSide } : {}),
-      ...(item.custom ? { custom: true, ...(item.packId ? { packId: item.packId } : {}) } : {}),
+      ...(item.custom
+        ? {
+            custom: true,
+            ...(item.packId ? { packId: item.packId } : {}),
+            ...(item.worldSpawn ? { worldSpawn: true } : {}),
+          }
+        : {}),
     });
   }
   return { ok: true, board: { ...board, cyberware } };
 }
+
+/** 流通自建义体的黑市参考价（义体表参考价按稀有度区间的常见档位） */
+const CUSTOM_CHROME_PRICES: Readonly<Record<Rarity, number>> = {
+  common: 3000,
+  uncommon: 8000,
+  rare: 18000,
+  epic: 35000,
+  legendary: 80000,
+};
 
 /** 将主板中的自包含自定义义体快照转成运行时 CyberwareDef（已存在于目录的按目录为准） */
 export function customCyberwareDefs(
@@ -666,12 +683,14 @@ export function customCyberwareDefs(
     if (!/^[a-z0-9-]+$/.test(item.id)) continue;
     seen.add(item.id);
     const humanityCost = item.category === "lifestyle" ? 0 : item.humanityCost;
+    const rarity = item.rarity ?? "rare";
     out.push({
       id: item.id,
       name: item.name,
       slot: item.slot,
-      rarity: item.rarity ?? "rare",
-      price: 0,
+      rarity,
+      // 流通的自建义体按稀有度给个黑市参考价，避免在诊所白送；只随卡面登场的保持无价
+      price: item.worldSpawn ? CUSTOM_CHROME_PRICES[rarity] : 0,
       humanityCost,
       ability: item.ability || item.summary || "自定义义体模块",
       armor: Boolean(item.armor),
@@ -689,6 +708,7 @@ export function customCyberwareDefs(
       ...(item.defenses ? { defenses: item.defenses } : {}),
       ...(item.art ? { art: item.art } : {}),
       ...(item.customImage ? { customImage: item.customImage } : {}),
+      ...(item.worldSpawn ? { worldSpawn: true } : {}),
     });
   }
   return out;

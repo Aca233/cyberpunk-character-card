@@ -252,6 +252,8 @@ export class GameService {
       meta.workshopPacks ?? [],
       meta.board?.customCyberware,
       meta.board?.kit?.customItems,
+      // 进档的覆写/自建人物卡：身体里内嵌的自建装备与义体定义一并进目录
+      [...(meta.board?.npcOverrides ?? []), ...(meta.board?.people ?? [])],
     );
   }
 
@@ -343,7 +345,18 @@ export class GameService {
         npcOverrides: [...mergedOverridesMap.values()].slice(0, NPC_OVERRIDES_MAX),
       };
     })();
-    const runtime = workshopRuntime(workshopPacks, start?.customCyberware, start?.kit?.customItems);
+    const runtime = workshopRuntime(
+      workshopPacks,
+      start?.customCyberware,
+      start?.kit?.customItems,
+      [
+        // 全局与角色卡的覆写/自建人物卡都会进档：收集内嵌的自建装备与义体定义
+        ...globalOverrides,
+        ...globalCustomNpcs,
+        ...(start?.npcOverrides ?? []),
+        ...(start?.people ?? []),
+      ],
+    );
     const matchInput = loadoutText(entry.card);
     const cardStart = entry.card.board?.startLocation;
     const startLocation =

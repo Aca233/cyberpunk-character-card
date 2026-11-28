@@ -14,6 +14,7 @@ import {
   customItemDefs,
   type inventoryRules,
   namespaceWorkshopPack,
+  type npcRules,
   type StartCyberware,
   type WorkshopCatalogIndex,
   type WorkshopPack,
@@ -74,11 +75,13 @@ function withRipperdocListings(
   });
 }
 
-/** 每份新存档基于自己冻结的内容包快照建立运行时目录（并注入角色自包含自定义义体与自建武器/物品）。 */
+/** 每份新存档基于自己冻结的内容包快照建立运行时目录（并注入角色自包含自定义义体、自建武器/物品与 NPC 卡面内嵌的自建装备定义）。 */
 export function workshopRuntime(
   packs: readonly WorkshopPack[],
   extraCyberware?: readonly StartCyberware[],
   extraItems?: readonly inventoryRules.ItemDef[],
+  /** 建档时写进世界的 NPC 卡面（覆写卡、自建人物、模块带出的人）：身体里内嵌的自建装备/义体定义随卡面进目录 */
+  extraNpcCards: readonly { body?: npcRules.NpcBodyCard | undefined }[] = [],
 ) {
   const expanded = packs.map(namespaceWorkshopPack);
   const modules = expanded.flatMap((pack) => pack.modules);
@@ -92,10 +95,45 @@ export function workshopRuntime(
   const existingCwIds = new Set([...cyberware, ...packCyberware].map((c) => c.id));
   const snapshotCyberware = customCyberwareDefs(extraCyberware, existingCwIds);
   const customCyberware = [...packCyberware, ...snapshotCyberware];
+  // NPC 卡面内嵌的自建武器/物品与义体定义（改写过装备的原作/自建人物）：已存在于目录的按目录为准
+  const npcCards = [...customNpcs, ...extraNpcCards];
+  const seenItemIds = new Set(customItems.map((i) => i.id));
+  for (const id of existingItemIds) seenItemIds.add(id);
+  for (const def of npcCards.flatMap((c) => c.body?.itemDefs ?? [])) {
+    if (seenItemIds.has(def.id) || !/^[a-z0-9-]+$/.test(def.id)) continue;
+    seenItemIds.add(def.id);
+    customItems.push(def);
+  }
+  const seenCwIds = new Set(customCyberware.map((c) => c.id));
+  for (const id of existingCwIds) seenCwIds.add(id);
+  for (const def of npcCards.flatMap((c) => c.body?.cyberwareDefs ?? [])) {
+    if (seenCwIds.has(def.id)) continue;
+    seenCwIds.add(def.id);
+    customCyberware.push(def);
+  }
   const customBraindances = expanded.flatMap((pack) => pack.braindances);
   const customChipContents = expanded.flatMap((pack) => pack.chipContents);
   const shopListings = expanded.flatMap((pack) => pack.shopListings);
   const ripperdocListings = expanded.flatMap((pack) => pack.ripperdocListings);
+  // 「登场」的自建/工坊条目：黑市渠道流通——武器与军规件上歌舞伎黑市武器摊，
+  // 杂货/衣物/补给上日本町商店街，自建义体上查尔斯·巴克斯的地下诊所（不问来路、价低不保修）。
+  // 包作者显式排过上架位置的条目不再重复塞。
+  const packListedItems = new Set(shopListings.map((entry) => entry.item));
+  for (const item of customItems) {
+    if (!item.worldSpawn || item.iconic || item.untradable || packListedItems.has(item.id)) {
+      continue;
+    }
+    const shop =
+      item.kind === "weapon" || item.kind === "grenade" || item.kind === "mod"
+        ? "kabuki-arms"
+        : "japantown-arcade";
+    shopListings.push({ shop, item: item.id, stock: 2 });
+  }
+  const packListedChrome = new Set(ripperdocListings.map((entry) => entry.cyberware));
+  for (const def of customCyberware) {
+    if (!def.worldSpawn || def.iconic || packListedChrome.has(def.id)) continue;
+    ripperdocListings.push({ ripperdoc: "charles-bucks", cyberware: def.id, stock: 2 });
+  }
   const seededNpcIds = expanded.flatMap((pack) => pack.seedNpcs);
   const mergedShops = withListings(
     shops,

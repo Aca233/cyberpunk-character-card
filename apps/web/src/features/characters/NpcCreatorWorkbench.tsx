@@ -7,6 +7,7 @@ import { Asset, cssUrl } from "../../ui/Asset";
 import { Button } from "../../ui/Button";
 import { FrameBox } from "../../ui/FrameBox";
 import { portraitOf } from "../story/art";
+import { embedNpcBodyDefs } from "./creator";
 import { NpcGearPanel, type NpcLoadoutTab } from "./NpcGearPanel";
 import wb from "./workbench.module.css";
 
@@ -352,7 +353,8 @@ export function NpcCreatorWorkbench({
       setError(first ? `${first.path.join(".") || "人物卡"}：${first.message}` : "人物卡校验失败");
       return;
     }
-    onSave(parsed.data);
+    // 装备/义体里引用到的本地自建定义随卡面内嵌，开新档时服务端按快照进目录
+    onSave(embedNpcBodyDefs(parsed.data));
   };
 
   const goToStep = (step: NpcStepId) => {

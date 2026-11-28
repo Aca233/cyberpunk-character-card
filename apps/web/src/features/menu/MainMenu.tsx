@@ -17,7 +17,9 @@ import { MenuItem } from "../../ui/MenuItem";
 import { ITEM_CELL_SLICE, Panel } from "../../ui/Panel";
 import { useCardTilt } from "../../ui/useCardTilt";
 import {
+  backfillLocalNpcCards,
   defaultStartLocationFor,
+  embedBoardNpcDefs,
   loadLocalCustomNpcs,
   loadLocalNpcOverrides,
   subscribeLocalCustomNpcs,
@@ -1466,9 +1468,17 @@ function NewSave({ onCreated }: { onCreated: (id: string) => void }) {
   const startSpot = startAnchor(startLocation);
   const defaultSpot = startAnchor(defaultLocation);
   const create = useMutation({
-    mutationFn: () => {
-      const globalOverrides = loadLocalNpcOverrides();
-      const globalCustomNpcs = loadLocalCustomNpcs();
+    mutationFn: async () => {
+      // 本地人物库里改写过装备的卡先补齐内嵌自建定义快照并写回，开新档才找得到这些 id
+      const { npcOverrides: globalOverrides, customNpcs: globalCustomNpcs } =
+        backfillLocalNpcCards();
+      if (selected?.card.board) {
+        const fixedBoard = embedBoardNpcDefs(selected.card.board);
+        if (fixedBoard !== selected.card.board) {
+          await api.updateCharacter(selected.id, { ...selected.card, board: fixedBoard });
+          await client.invalidateQueries({ queryKey: ["characters"] });
+        }
+      }
       return api.createSave({
         title: title.trim(),
         characterId,

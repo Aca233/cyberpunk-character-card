@@ -58,6 +58,8 @@ export function CustomItemForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [rarity, setRarity] = useState<economyRules.Rarity>(initial?.rarity ?? "rare");
   const [iconic, setIconic] = useState(Boolean(initial?.iconic));
+  // 「登场」开关：默认登场——黑市摊位/商店街有售、可能被 NPC 持有；关掉则只随卡面与行装存在
+  const [worldSpawn, setWorldSpawn] = useState(initial?.worldSpawn ?? true);
   const [price, setPrice] = useState<number>(
     initial?.price ?? DEFAULT_PRICE_BY_RARITY[initial?.rarity ?? "rare"],
   );
@@ -137,6 +139,7 @@ export function CustomItemForm({
       kind,
       rarity,
       iconic,
+      ...(worldSpawn ? {} : { worldSpawn: false }),
       price: Math.max(0, Math.round(price)),
       ...(ability.trim() ? { ability: ability.trim().slice(0, 240) } : {}),
       ...(art ? { art } : {}),
@@ -260,6 +263,17 @@ export function CustomItemForm({
         <div className={styles.toggleRow}>
           <ToggleCheck checked={iconic} aria-label="标记为不朽" onChange={setIconic} />
           <span>不朽（Iconic）</span>
+        </div>
+        <div className={styles.toggleRow}>
+          <ToggleCheck
+            checked={worldSpawn}
+            aria-label="登场：夜之城流通"
+            onChange={setWorldSpawn}
+          />
+          <span>
+            登场：夜之城流通
+            <small>——黑市摊位/商店街有售、可能被 NPC 持有；关掉则只随卡面与行装存在</small>
+          </span>
         </div>
       </div>
 

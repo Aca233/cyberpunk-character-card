@@ -180,6 +180,11 @@ export const ItemDefSchema = z
     healPercent: z.number().int().min(1).max(100).optional(),
     /** 不朽物品（原作的 Iconic）：只能从剧情获得 */
     iconic: z.boolean().default(false),
+    /**
+     * 自建/工坊条目的「登场」开关（像三国志自建武将）：进入存档目录后黑市摊位/商店街有售、
+     * 可能被 NPC 持有；不写则只随卡面、开局行装与剧情登场
+     */
+    worldSpawn: z.boolean().optional(),
     /** 非市售证件/专属物件（如公司工牌、NCPD 警徽）：不在常规商铺上架，只能由开局出身、剧情或人物取得 */
     untradable: z.boolean().optional(),
     price: z.number().int().min(0).optional(),

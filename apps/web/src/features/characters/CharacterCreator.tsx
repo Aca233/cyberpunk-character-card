@@ -45,6 +45,7 @@ import {
   TraitPicker,
 } from "./CreatorSteps";
 import {
+  backfillLocalNpcCards,
   boardLoadProfile,
   type CheckTarget,
   CREATOR_STEPS,
@@ -52,6 +53,7 @@ import {
   clearDraft,
   creatorChecks,
   defaultStartLocationFor,
+  embedBoardNpcDefs,
   emptyBoard,
   inherentCyberware,
   LOCAL_CYBERWARE_EVENT,
@@ -60,8 +62,6 @@ import {
   loadLocalCustomCyberware,
   loadLocalCustomItems,
   loadLocalCustomModules,
-  loadLocalCustomNpcs,
-  loadLocalNpcOverrides,
   mergeCreatorCatalog,
   ORIGIN_ECOSYSTEM_LABELS,
   originDefaultLoadout,
@@ -294,14 +294,20 @@ export function CharacterCreator({
 
   const launchMutation = useMutation({
     mutationFn: async () => {
+      // 主板上挂着的人物卡与本地人物库统一补齐内嵌自建装备定义快照，开新档才解析得到这些 id
+      const fixedBoard = embedBoardNpcDefs(board);
       const targetCard: CharacterCard = {
         ...card,
-        board,
+        board: fixedBoard,
       };
-      const savedEntry =
-        isSample && !dirty && characterId ? { id: characterId } : await onSave(targetCard);
-      const globalOverrides = loadLocalNpcOverrides();
-      const globalCustomNpcs = loadLocalCustomNpcs();
+      const skipSave = isSample && !dirty && Boolean(characterId);
+      const savedEntry = skipSave && characterId ? { id: characterId } : await onSave(targetCard);
+      if (skipSave && fixedBoard !== board && savedEntry.id) {
+        // 旧存的卡没走保存流程时，把补齐了内嵌定义的主板单独写回去
+        await api.updateCharacter(savedEntry.id, targetCard);
+      }
+      const { npcOverrides: globalOverrides, customNpcs: globalCustomNpcs } =
+        backfillLocalNpcCards();
       const save = await api.createSave({
         characterId: savedEntry.id,
         title: saveTitle.trim() || `${card.name.trim()}的夜之城传奇`,
@@ -504,7 +510,8 @@ export function CharacterCreator({
   const handleSave = async () => {
     setLocalSaveError(null);
     try {
-      await onSave({ ...card, board });
+      // 主板上挂着的人物卡一并补齐内嵌自建装备定义快照
+      await onSave({ ...card, board: embedBoardNpcDefs(board) });
     } catch (err) {
       setLocalSaveError(err instanceof Error ? err.message : "保存角色失败，请重试");
     }

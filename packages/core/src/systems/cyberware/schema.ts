@@ -976,6 +976,11 @@ export const CyberwareDefSchema = z.object({
   accelerator: z.boolean().default(false),
   /** 不朽义体（原作的 Iconic）；稀有标签不替代真实货源与交易意愿 */
   iconic: z.boolean().default(false),
+  /**
+   * 自建/工坊义体的「登场」开关（像三国志自建武将）：进入存档目录后黑市义体医生有售、
+   * 可能被 NPC 装着；不写则只随卡面与开局义体登场
+   */
+  worldSpawn: z.boolean().optional(),
   /** 物理互斥组（不写时由 cyberwareExclusiveGroup 按分类与部位特征兜底推断） */
   exclusiveGroup: ExclusiveGroupSchema.optional(),
   /** v2 显式归类（核心主位 / 4 功能扩展区 / 外观生活） */
