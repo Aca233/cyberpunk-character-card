@@ -224,6 +224,8 @@ export interface SectionContext {
   readonly world: WorldState;
   readonly data: Readonly<Record<string, unknown>> | undefined;
   readonly input: { readonly text: string };
+  /** 人物检索用文本；抽取时可包含定稿正文，不改变其他系统看到的玩家输入。 */
+  readonly npcMentionText?: string | undefined;
   readonly stage?: SectionStage | undefined;
 }
 

@@ -151,7 +151,15 @@ export function buildExtractPrompt(
   const jobTemplates = jobTemplatesForExtract(data, `${plan.input.text}\n${narrative}`);
   const content = userMessage({
     modules: dynamicModulesText,
-    scene: situation(world, records, view, plan, { ...extras, opening }, "extract"),
+    scene: situation(
+      world,
+      records,
+      view,
+      plan,
+      { ...extras, opening },
+      "extract",
+      `${plan.input.text}\n${narrative}`,
+    ),
     input: `【玩家输入】\n${formatInput(plan.input)}`,
     after: [
       jobTemplates,

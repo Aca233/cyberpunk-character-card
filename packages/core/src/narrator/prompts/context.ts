@@ -709,11 +709,12 @@ export function situation(
   plan: NarratorPlan,
   extras: PromptExtras,
   stage: SectionStage = "narrate",
+  npcMentionText?: string,
 ): string[] {
   const input = plan.kind === "action" ? { text: plan.input.text } : { text: "" };
   const parts = [
     `【当前状态】\n${stateSummary(world, records, extras.data)}`,
-    ...registry.sections({ world, data: extras.data, input, stage }),
+    ...registry.sections({ world, data: extras.data, input, stage, npcMentionText }),
   ];
   const uiActions = plan.input.mode === "ooc" ? undefined : uiActionsSection(records, stage);
   if (uiActions) parts.push(uiActions);

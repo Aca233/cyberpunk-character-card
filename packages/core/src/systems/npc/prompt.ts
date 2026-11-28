@@ -149,6 +149,8 @@ export interface Stage {
   readonly data?: Readonly<Record<string, unknown>> | undefined;
   readonly now?: number | undefined;
   readonly input?: string | undefined;
+  /** 补列已有卡人物时检索的文本；未提供时只检索玩家输入。 */
+  readonly mentionText?: string | undefined;
   /** 当前提示词阶段；非 extract 时不输出指令名 */
   readonly stage?: "judge" | "narrate" | "extract" | undefined;
   /**
@@ -403,10 +405,10 @@ export function castSection(state: NpcState, stage: Stage): string {
     .filter((n) => !onStage(n, stage) && !localIds.has(n.id))
     .sort((a, b) => (b.lastSeenAt ?? -1) - (a.lastSeenAt ?? -1))
     .slice(0, OFFSTAGE_LISTED);
-  // 输入里点到的人一律列出来：卡池很大时不在场的人会被截断，不列出来模型就会给已有卡的人另建一张卡，
+  // 输入或定稿正文里点到的人补列出来：卡池很大时不在场的人会被截断，漏列会让模型给已有卡的人另建卡，
   // 建卡撞 id 让整场事件连坐回滚（用户 2026-11-28："事件 jackie-holo-call 未生效：已经有 id 为 jackie 的人物卡"）
   const listed = new Set([...here, ...locals, ...away].map((n) => n.id));
-  const pointed = mentionedNpcs(stage.input ?? "", all)
+  const pointed = mentionedNpcs(stage.mentionText ?? stage.input ?? "", all)
     .filter((n) => !listed.has(n.id))
     .slice(0, POINTED_LISTED);
   const line = (n: Npc) => oneLine(n, stage);

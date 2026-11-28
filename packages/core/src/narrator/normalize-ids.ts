@@ -25,19 +25,13 @@ function buildNameIndex(
   entries: readonly { id: string; aliases?: readonly string[] }[],
 ): NameIndex {
   const ids = new Set<string>();
-  const counts = new Map<string, number>();
-  const candidate = new Map<string, string>();
+  const candidate = new Map<string, string | null>();
   const register = (key: string, id: string) => {
     const trimmed = key.trim();
     if (!trimmed) return;
     const lowered = trimmed.toLowerCase();
-    const prev = candidate.get(lowered);
-    if (prev !== undefined && prev !== id) {
-      counts.set(lowered, (counts.get(lowered) ?? 1) + 1);
-      return;
-    }
-    candidate.set(lowered, id);
-    counts.set(lowered, 1);
+    if (!candidate.has(lowered)) candidate.set(lowered, id);
+    else if (candidate.get(lowered) !== id) candidate.set(lowered, null);
   };
 
   for (const entry of entries) {
@@ -48,7 +42,7 @@ function buildNameIndex(
 
   const exactToId = new Map<string, string>();
   for (const [lowered, id] of candidate) {
-    if (counts.get(lowered) === 1) exactToId.set(lowered, id);
+    if (id !== null) exactToId.set(lowered, id);
   }
   return { ids, exactToId };
 }
@@ -66,12 +60,24 @@ export function buildIdLookup(
   data: Readonly<Record<string, unknown>> = {},
   plannedChanges: readonly unknown[] = [],
 ): IdLookup {
-  const npcEntries: { id: string; aliases?: string[] }[] = [];
-  for (const npc of Object.values(NpcStateSchema.parse(world.slices.npc).npcs)) {
-    npcEntries.push({
-      id: npc.id,
-      aliases: [npc.name, ...(npc.alias ? [npc.alias] : [])],
-    });
+  const knownNpcs = Object.values(NpcStateSchema.parse(world.slices.npc).npcs).map((npc) => ({
+    id: npc.id,
+    name: npc.name,
+    alias: npc.alias,
+  }));
+  const npcEntries = knownNpcs.map((npc) => ({
+    id: npc.id,
+    aliases: [npc.name, ...(npc.alias ? [npc.alias] : [])],
+  }));
+  const plannedNames = new Map<string, Set<string>>();
+  for (const item of plannedChanges) {
+    if (typeof item !== "object" || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    if (rec.type !== "npc" || typeof rec.id !== "string" || typeof rec.name !== "string") continue;
+    const id = rec.id.trim();
+    const names = plannedNames.get(id) ?? new Set<string>();
+    names.add(rec.name.trim().toLowerCase());
+    plannedNames.set(id, names);
   }
   const newItemIds = new Set<string>();
   const newLocationIds = new Set<string>();
@@ -79,10 +85,35 @@ export function buildIdLookup(
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
     if (rec.type === "npc" && typeof rec.id === "string" && rec.id.trim()) {
+      const id = rec.id.trim();
       const aliases: string[] = [];
       if (typeof rec.name === "string" && rec.name.trim()) aliases.push(rec.name.trim());
       if (typeof rec.alias === "string" && rec.alias.trim()) aliases.push(rec.alias.trim());
-      npcEntries.push({ id: rec.id.trim(), aliases });
+      // 与 applyNpc 的同名兜底一致：只有全名唯一相同、且 id 没被占用时才合并。
+      // 临时新 id 只作本轮别名，建卡和后续引用都归到原卡，不能再登记为真实新卡。
+      const same = knownNpcs.filter(
+        (npc) =>
+          typeof rec.name === "string" &&
+          npc.name.trim().toLowerCase() === rec.name.trim().toLowerCase(),
+      );
+      const canonical =
+        !knownNpcs.some((npc) => npc.id === id) &&
+        plannedNames.get(id)?.size === 1 &&
+        same.length === 1
+          ? (same[0]?.id ?? id)
+          : id;
+      npcEntries.push({ id: canonical, aliases: canonical === id ? aliases : [id, ...aliases] });
+      if (
+        canonical === id &&
+        !knownNpcs.some((npc) => npc.id === id) &&
+        typeof rec.name === "string"
+      ) {
+        knownNpcs.push({
+          id,
+          name: rec.name,
+          alias: typeof rec.alias === "string" ? rec.alias : undefined,
+        });
+      }
     } else if (
       rec.type === "item" &&
       typeof rec.id === "string" &&
@@ -157,6 +188,7 @@ export const EXISTING_NPC_ID_COMMANDS = new Set([
 export function normalizeChangeIds(
   raw: unknown,
   lookup: IdLookup,
+  normalizeNpcCreationId = true,
 ): { readonly value: unknown; readonly notes: readonly string[] } {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return { value: raw, notes: [] };
@@ -176,10 +208,41 @@ export function normalizeChangeIds(
     next[field] = mapped;
     notes.push(`已将 ${type}.${field}「${before}」归一为${label} id ${mapped}`);
   };
+  const replaceNpcRows = (field: string) => {
+    const rows = src[field];
+    if (!Array.isArray(rows)) return;
+    let changed = false;
+    const mapped = rows.map((row: unknown) => {
+      if (typeof row !== "object" || row === null || Array.isArray(row)) return row;
+      const value = row as Record<string, unknown>;
+      const id = resolveUnique(value.npc, lookup.npcs);
+      if (!id) return row;
+      changed = true;
+      notes.push(`已将 ${type}.${field}.npc「${String(value.npc)}」归一为人物 id ${id}`);
+      return { ...value, npc: id };
+    });
+    if (changed) {
+      if (!next) next = { ...src };
+      next[field] = mapped;
+    }
+  };
 
-  if (EXISTING_NPC_ID_COMMANDS.has(type)) {
+  if (
+    (type === "npc" && normalizeNpcCreationId) ||
+    type === "phoneContact" ||
+    EXISTING_NPC_ID_COMMANDS.has(type)
+  ) {
     replaceField("id", lookup.npcs, "人物");
   }
+  replaceField("npc", lookup.npcs, "人物");
+  if (type === "jobOffer") replaceField("fixer", lookup.npcs, "人物");
+  if (type === "trade" || type.startsWith("commerce.")) replaceField("seller", lookup.npcs, "人物");
+  if (type.startsWith("phone.")) {
+    replaceField("from", lookup.npcs, "人物");
+    replaceField("to", lookup.npcs, "人物");
+  }
+  if (type === "combat") replaceNpcRows("foes");
+  if (type === "jobEnd") replaceNpcRows("crewPayouts");
   if (type === "tie") {
     replaceField("a", lookup.npcs, "人物");
     replaceField("b", lookup.npcs, "人物");
@@ -227,6 +290,26 @@ export function normalizeChangeIds(
   }
 
   return { value: next ?? raw, notes };
+}
+
+/** 场景摘要与事实锚点也沿用同一规范人物 id，避免建卡合并后把记忆当作未知人物丢弃。 */
+export function normalizeMemoryNpcIds(raw: unknown, lookup: IdLookup): unknown {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+  const src = raw as Record<string, unknown>;
+  let next: Record<string, unknown> | undefined;
+  if (Array.isArray(src.people)) {
+    const people = src.people.map((id: unknown) => resolveUnique(id, lookup.npcs) ?? id);
+    if (people.some((id, index) => id !== (src.people as unknown[])[index])) {
+      next = { ...src, people: [...new Set(people)] };
+    }
+  }
+  if (Array.isArray(src.anchors)) {
+    const anchors = src.anchors.map((anchor: unknown) => normalizeMemoryNpcIds(anchor, lookup));
+    if (anchors.some((anchor, index) => anchor !== (src.anchors as unknown[])[index])) {
+      next = { ...(next ?? src), anchors };
+    }
+  }
+  return next ?? raw;
 }
 
 export interface IdRuleIssue {

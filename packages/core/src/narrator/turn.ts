@@ -80,7 +80,12 @@ import { readEventPlan } from "./event-plan";
 import { applyEventCommands, type SettlementEvent } from "./event-settlement";
 import { type LoreSource, type LoreTrace, lookupLore } from "./lore";
 import { preparePurchases } from "./merchant-settlement";
-import { buildIdLookup, findIdRuleIssues, normalizeChangeIds } from "./normalize-ids";
+import {
+  buildIdLookup,
+  findIdRuleIssues,
+  normalizeChangeIds,
+  normalizeMemoryNpcIds,
+} from "./normalize-ids";
 import {
   MacroOffscreenDocSchema,
   nextRetrySeq,
@@ -1697,7 +1702,7 @@ export async function runNarratorTurn(
     const owner = new Map(eventPlan.events.flatMap((e) => e.entries.map((entry) => [entry, e.id])));
 
     // 先做唯一精确名称 -> id 的确定性归一（绝不猜模糊匹配），再逐条 Zod 校验与批量格式修复。
-    const idLookup = buildIdLookup(world, deps.data ?? {}, eventPlan.changes);
+    let idLookup = buildIdLookup(world, deps.data ?? {}, eventPlan.changes);
     const extractEntries: ValidationEntry[] = [];
     const rawChangeTypes = new Map<string, string>();
     for (const [i, item] of eventPlan.changes.entries()) {
@@ -1717,7 +1722,8 @@ export async function runNarratorTurn(
       }
       const proposal = registry.normalizeProposal(item);
       if (proposal.note !== undefined) noteOnce(b.notes, proposal.note);
-      const idNorm = normalizeChangeIds(proposal.value, idLookup);
+      // 建卡的原始 id 保留到批量格式修复结束，再连同后续引用一次归一。
+      const idNorm = normalizeChangeIds(proposal.value, idLookup, false);
       for (const note of idNorm.notes) noteOnce(b.notes, note);
       extractEntries.push({
         key: where,
@@ -1731,6 +1737,23 @@ export async function runNarratorTurn(
         extractEntries.push({ key: `messages[${i}]`, raw: item, schema: IncomingMessageSchema });
     }
     const extracted = new Map(await b.validateBatch("extract", extractEntries));
+    // 修复可能补回姓名或调整建卡字段，不能继续使用修复前的实体索引。
+    const validatedChanges = eventPlan.changes.flatMap((_, index) => {
+      const value = extracted.get(`changes[${index}]`);
+      return value === undefined ? [] : [value];
+    });
+    idLookup = buildIdLookup(world, deps.data ?? {}, validatedChanges);
+    for (const [key, value] of extracted) {
+      if (!key.startsWith("changes[")) continue;
+      const normalized = normalizeChangeIds(value, idLookup);
+      for (const note of normalized.notes) noteOnce(b.notes, note);
+      extracted.set(key, normalized.value);
+    }
+    shape = {
+      ...shape,
+      sceneMemory: normalizeMemoryNpcIds(shape.sceneMemory, idLookup),
+      summary: normalizeMemoryNpcIds(shape.summary, idLookup),
+    };
 
     // 落盘前轻量规则预检：把错填成事件 slug 或不存在实体 id 的条目，连同合法候选清单打包做 1 次精准修正
     const idPrecheck = findIdRuleIssues(extracted, idLookup, world, deps.data ?? {});
@@ -1844,10 +1867,12 @@ export async function runNarratorTurn(
       }
       const message = extracted.get(where) as z.infer<typeof IncomingMessageSchema> | undefined;
       if (!message) continue;
+      const normalized = normalizeChangeIds({ type: "phone.receive", ...message }, idLookup);
+      for (const note of normalized.notes) noteOnce(b.notes, note);
       proposals.push({
         where,
         kind: "message",
-        value: { ...message },
+        value: normalized.value as Record<string, unknown>,
         parse: (v) => {
           const parsed = IncomingMessageSchema.safeParse(v);
           return parsed.success

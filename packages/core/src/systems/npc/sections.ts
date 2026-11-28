@@ -130,7 +130,7 @@ export const npcSections: readonly SystemSection[] = [
   {
     order: 10,
     title: "人物",
-    render: ({ world, data, input, stage }) => {
+    render: ({ world, data, input, stage, npcMentionText }) => {
       const clock = WorldClockStateSchema.parse(world.slices.world);
       return castSection(NpcStateSchema.parse(world.slices.npc), {
         location: clock.location,
@@ -140,6 +140,7 @@ export const npcSections: readonly SystemSection[] = [
         data,
         now: world.time,
         input: input.text,
+        mentionText: npcMentionText,
         stage,
       });
     },

@@ -126,7 +126,8 @@ function markMet(
   now: number,
   data: Readonly<Record<string, unknown>>,
   currentLocation: string | null,
-): readonly string[] {
+): ApplyOutcome {
+  if (!npc.alive) return { ok: false, reason: `${npc.name} 已经死了，不能再出场` };
   const notes = npc.met ? [] : [`认识了 ${npc.name}`];
   npc.met = true;
   npc.lastSeenAt = now;
@@ -136,7 +137,7 @@ function markMet(
     npc.location = currentLocation;
   }
   npc.lastKnownLocation = npc.location;
-  return notes;
+  return { ok: true, notes };
 }
 
 export function seedNpc(
@@ -313,9 +314,13 @@ export function applyNpc(
     if (existing) {
       if (samePerson(existing, card)) {
         const met = markMet(existing, location, now, data, currentLocation);
+        if (!met.ok) return met;
         return {
           ok: true,
-          notes: [...met, `${existing.name} 已有卡（${existing.id}），这条建卡按出场记入`],
+          notes: [
+            ...(met.notes ?? []),
+            `${existing.name} 已有卡（${existing.id}），这条建卡按出场记入`,
+          ],
         };
       }
       return {
@@ -323,14 +328,25 @@ export function applyNpc(
         reason: `id ${card.id} 已经被「${existing.name}」的人物卡占用；给这个人换一个小写英文或拼音 id`,
       };
     }
-    const taken = nameTaken(draft, card.name, card.alias);
+    const sameFullName = Object.values(draft.npcs).filter((npc) => sameName(npc.name, card.name));
+    if (sameFullName.length > 1) {
+      return {
+        ok: false,
+        reason: `已有多张叫「${card.name}」的人物卡（${sameFullName.map((npc) => npc.id).join("、")}）；请用 meet 并填写明确的原人物卡 id`,
+      };
+    }
+    const taken = sameFullName[0] ?? nameTaken(draft, card.name, card.alias);
     if (taken) {
       // 名字对得上就是同一个人：记到已有那张卡上，不另建
       if (sameName(taken.name, card.name)) {
         const met = markMet(taken, location, now, data, currentLocation);
+        if (!met.ok) return met;
         return {
           ok: true,
-          notes: [...met, `「${taken.name}」已有卡（${taken.id}），这条建卡按出场记入，不另建卡`],
+          notes: [
+            ...(met.notes ?? []),
+            `「${taken.name}」已有卡（${taken.id}），这条建卡按出场记入，不另建卡`,
+          ],
         };
       }
       return {
@@ -530,7 +546,7 @@ export function applyNpc(
         : { ok: true, notes };
     }
     case "meet": {
-      return { ok: true, notes: markMet(npc, command.location, now, data, currentLocation) };
+      return markMet(npc, command.location, now, data, currentLocation);
     }
     case "memory": {
       if (!npc.met && command.source !== "phone") {
