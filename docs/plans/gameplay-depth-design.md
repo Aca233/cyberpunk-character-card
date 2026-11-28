@@ -8,11 +8,13 @@
 ## 一、模块 A：多剧本开局 + 创意工坊「剧本包」（推荐首期）
 
 ### 解决什么痛点
+
 - [openings.ts](file:///c:/cyberpunk-character-card/packages/content/src/openings.ts) 目前只有 1 个 `sandbox-2077` 自由沙盘开局，新玩家前几轮容易缺少方向感；
 - 引擎 [game.ts](file:///c:/cyberpunk-character-card/packages/core/src/game.ts) 已原生支持 `openings[]`、`meta.opening`、`deadlines`、`jobs`、`gear`、`eddies`、`location`、`premise`，几乎零底层返工即可开启多剧本；
 - 让创意工坊支持打包「剧本开局」，把长期内容产能交给玩家社区。
 
 ### 具体设计
+
 1. **内置 4 套风格迥异的可选开局（建档时自由切换）**
    - `sandbox-2077`：**夜之城自由沙盘**（保留现有无死线自由体验）。
    - `debt-7days`：**七日还债·霓虹催命** — 开局欠歌舞伎高利贷 15,000€$（写入 `deadlines` 7 天倒计时 + 1 名债主宿敌预备 NPC），迫使玩家一进城就跑中间人、打地下拳赛或干黑活凑钱。
@@ -29,11 +31,13 @@
 ## 二、模块 B：干大票（Heist）筹备板 + 随行搭档分工/分赃
 
 ### 解决什么痛点
+
 - 现有 `npc.following`（[npc/actions.ts](file:///c:/cyberpunk-character-card/packages/core/src/systems/npc/actions.ts)）已实现随行转场、占车位、防屏幕外暴毙；
 - 现有 `jobs`（[jobs/schema.ts](file:///c:/cyberpunk-character-card/packages/core/src/systems/jobs/schema.ts)）是一般单人委托；
 - 缺的是《赛博朋克》最具灵魂的**「筹备一票大的 → 拉随行搭档分工 → 按筹备成果进场 → 结算分赃与人情」**闭环。
 
 ### 具体设计
+
 1. **在 `JobSchema` 上轻量化扩展 `heist` 子结构（不另起一套臃肿系统）**
    - 只有高风险（`risk >= 4`）或明确立项为「大票」的委托才挂载 `heist`：
      - `phase`: `"prep" | "exec" | "aftermath"`（筹备 / 进场执行 / 善后分赃）
@@ -54,9 +58,11 @@
 ## 三、模块 C：安全屋据点设施 + 中后期传奇终局目标
 
 ### 解决什么痛点
+
 - 买完顶级义体、武器和跑车后欧元溢出，安全屋只剩睡觉交租，缺少长期驱动力。
 
 ### 具体设计
+
 1. **安全屋设施升级（扩展 `HomeSchema.upgrades`）**
    - 每处自有/长租安全屋可花费高额欧元（15,000 – 120,000€$）添置真实功能设施（零数值加成，全是**真实能力解锁**）：
      - **潜网冷浴椅**（`netrun-chair`）：无需去黑客窝点，在家直接安全发起深度潜网（`dive`），且热负荷冷却更快。
@@ -75,10 +81,12 @@
 ## 四、模块 D：街头活计公告板 + 潜网 / 超梦轻量交互条
 
 ### 解决什么痛点
+
 - `sidegigs.ts` 仅 6 场一次性比赛，且 `GigsPanel.tsx` 为空文件，玩家看不到城里有什么街头活可干；
 - 潜网深入（5 层）和超梦分析（3 层）底层极完整，但界面上缺少直观控制条。
 
 ### 具体设计
+
 1. **启用 `GigsPanel.tsx`（街头活计与赏金看板）**
    - 整合三栏一眼可见：
      - **当前委托与大票筹备**（含倒计时提醒与一键定位地图）；

@@ -10,12 +10,14 @@
 ## 一、战后现场战利品可视化与一键拾取（`combat` + 物品栏/角标）
 
 ### 1. 核心操作与视图（`packages/core/src/systems/combat/`）
+
 - **`combat/view.ts`**：丰富 `combatView.loot` 每件掉落物的信息，补充 `kind`、`rarity`、`iconic`、`ability`（继续复用 `formatWeaponWithMods` 展示已装配件名）。
 - **`combat/actions.ts`（新增，挂到 `combat/index.ts` 的 `actions`）**：
   - `lootCombatItem`（`{ type: "lootCombatItem", from: string, item: string }`）：校验非战斗（或战斗中目标已倒地且在原地）、玩家意识清醒（`health.condition === "up"`），直接发出 `{ type: "combat", action: "loot", target: from, item }`；
   - `lootCombatAll`（`{ type: "lootCombatAll", from?: string }`）：一键拾取当前地点指定目标或全部未拾取战利品，逐件转为 `combat loot` 原子结算（不调用模型、自动同步扣除 NPC 随身 `npcGear`）。
 
 ### 2. 前端界面（`apps/web/src/features/story/`）
+
 - **`Corners.tsx`**：当当前地点存在未拾取战利品时，在右下角物品栏卡片上显示醒目的「战利品 N」提示徽章，点击直达物品栏。
 - **`InventoryPage.tsx`**：当 `view.combat.loot.length > 0` 时，在物品栏内直接展示 **「现场战利品」区块**：
   - 按倒地/阵亡敌人分组列出可拾取武器（带稀有度色、改装配件名与效果说明）、治疗品、手雷与电子物件；
@@ -26,6 +28,7 @@
 ## 二、同行搭档装备与物品交接（`npc` + `inventory` + 物品栏）
 
 ### 1. 核心原子交接操作（`packages/core/src/systems/npc/actions.ts`）
+
 - 新增 `npcExchangeGear`（`{ type: "npcExchangeGear", id: string, action: "give" | "take", item: string }`）：
   - **前置校验**：非战斗状态、玩家清醒（`health.condition === "up"`）、目标 NPC 存活且 `following === true` 且在当前现场（`onStage`）；
   - **`give`（递给同伴）**：校验玩家背包持有该物品且同伴 `body.gear.length < NPC_GEAR_MAX` 且尚未持有同 id 物件，原子发出：
@@ -36,6 +39,7 @@
     2. `{ type: "item", action: "gain", id: item, reason: "从同行同伴处取回" }`（定制武器归属同步切回 `"player"`）。
 
 ### 2. 前端界面（`apps/web/src/features/story/InventoryPage.tsx` & `StoryScreen.tsx`）
+
 - **`StoryScreen.tsx`**：接通 `onLootCombatItem`、`onLootCombatAll`、`onExchangeCompanionGear` 三个即时动作回调（走统一的 `api.act` 即时动作通道）。
 - **`InventoryPage.tsx`**：
   - 在「随身物品」详情动作栏中：若身边有同行同伴，提供 **「交给 [同伴名]」** 按钮（多同伴时直接列出对应按钮）；

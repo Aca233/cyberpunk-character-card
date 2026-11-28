@@ -20,6 +20,7 @@
    - `npcEquipmentReference` 服装分桶收紧为 `armored/casual × budget`，进一步压低单轮未缓存体积。
 
 ## 验收标准
+
 - `biome lint packages apps tools functions` 0 错误 / 0 警告；
 - 6 份 `tsc --noEmit` 与 `tsx tools/check-data.ts` 全绿；
 - 实测 `judge` / `narrate` / `extract` 优化前后 token 占用与 `system` 缓存占比显著改善。

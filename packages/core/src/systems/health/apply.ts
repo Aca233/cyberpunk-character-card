@@ -62,6 +62,18 @@ export function healthDisplay(state: Pick<HealthState, "condition" | "injuries" 
 const ok = (...notes: string[]): ApplyOutcome => ({ ok: true, notes });
 const fail = (reason: string): ApplyOutcome => ({ ok: false, reason });
 
+function damageRulingError(
+  draft: Health,
+  tier: DamageTier,
+  ruling: ReturnType<typeof rulingFact>,
+): string | null {
+  if (!ruling) return null;
+  if (ruling.harm === "none") return "现场裁决未确认受伤，不能登记伤势";
+  if (draft.damagedBy === ruling.id) return "这一轮已经登记过伤害";
+  const rank = { graze: 0, heavy: 1, lethal: 2 };
+  return rank[tier] > rank[ruling.harm] ? "伤势超出现场裁决确认的范围" : null;
+}
+
 function recordInjury(
   draft: Health,
   entry: {
@@ -97,12 +109,8 @@ export function applyDamage(
 ): ApplyOutcome {
   if (draft.condition === "dead") return fail("角色已经死亡");
   const ruling = rulingFact(ctx.facts);
-  if (ruling) {
-    if (ruling.harm === "none") return fail("现场裁决未确认受伤，不能登记伤势");
-    if (draft.damagedBy === ruling.id) return fail("这一轮已经登记过伤害");
-    const rank = { graze: 0, heavy: 1, lethal: 2 };
-    if (rank[command.tier] > rank[ruling.harm]) return fail("伤势超出现场裁决确认的范围");
-  }
+  const rulingError = damageRulingError(draft, command.tier, ruling);
+  if (rulingError) return fail(rulingError);
   if (command.limb && (command.tier !== "lethal" || ruling?.limb !== true)) {
     return fail("断肢需要裁决已确认的直接断肢危险和致命损伤");
   }
@@ -133,8 +141,14 @@ export function applyLimb(
   command: Extract<HealthInternal, { type: "health.limb" }>,
 ): ApplyOutcome {
   if (command.action === "fit") {
-    const fixed = draft.lostLimbs.filter((l) => limbSlot(l) === command.slot);
-    draft.lostLimbs = draft.lostLimbs.filter((l) => limbSlot(l) !== command.slot);
+    const matches = (limb: Limb) =>
+      limbSlot(limb) === command.slot &&
+      (command.slot !== "arms" ||
+        command.armSide === undefined ||
+        command.armSide === "both" ||
+        limb === `${command.armSide}-arm`);
+    const fixed = draft.lostLimbs.filter(matches);
+    draft.lostLimbs = draft.lostLimbs.filter((limb) => !matches(limb));
     return ok(
       ...(fixed.length
         ? [`装上${command.name ?? "义肢"}，补上${fixed.map((l) => LIMB_LABELS[l]).join("、")}`]
@@ -154,6 +168,9 @@ export function applyHit(
   if (draft.condition === "dead") return fail("角色已经死亡");
   if (command.injuryId && draft.injuries.some((i) => i.id === command.injuryId))
     return fail("这处伤已经登记");
+  const ruling = command.source === "injury" ? undefined : rulingFact(ctx.facts);
+  const rulingError = damageRulingError(draft, command.tier, ruling);
+  if (rulingError) return fail(rulingError);
   recordInjury(draft, {
     part: command.part ?? null,
     tier: command.tier,
@@ -162,6 +179,7 @@ export function applyHit(
     source: command.source ?? "combat",
     ...(command.injuryId ? { id: command.injuryId } : {}),
   });
+  if (ruling) draft.damagedBy = ruling.id;
   return ok(
     `${command.part ? BODY_PART_LABELS[command.part] : "身体"}${DAMAGE_LABELS[command.tier]}：${command.reason}`,
   );

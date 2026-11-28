@@ -5,7 +5,6 @@
 ## 目标
 
 解决“底层已写好 8 类委托、8 个 NCPD 警情模板、6 场拳赛/赛车和中间人派单体系，但玩家打开追踪面板和地图时缺少直观主动入口”的玩法空洞（**绝不凭空刷事件**：NCPD 警情仅随时间自然浮现，中间人仅显示已相识或通讯录中可联系者）：
-
 1. **补齐核心视图坐标与据点字段**：
    - `sidegigsView` 补充 `locationName`、`district`、`x`、`y`；
    - `jobsView.fixers` 补充 `location`、`locationName`、`district`、`met`、`alive`。

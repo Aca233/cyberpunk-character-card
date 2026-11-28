@@ -1,7 +1,7 @@
 import type { ViewContext } from "../../kernel/system";
+import { deathKnown, NpcStateSchema } from "../npc";
 import { formatGameTime, locationCatalog, WorldClockStateSchema } from "../world";
 import { currentAttitude, factionCatalog } from "./apply";
-import { readNpcMap } from "./npcs";
 import {
   attitudeLabel,
   FACTION_KIND_LABELS,
@@ -15,7 +15,12 @@ export function factionsView({ world, data }: ViewContext) {
   const { location } = WorldClockStateSchema.parse(world.slices.world);
   const catalog = factionCatalog(data);
   const state = FactionsStateSchema.parse(world.slices.factions ?? {});
-  const npcs = readNpcMap(world.slices.npc);
+  const npcs = new Map(
+    Object.entries(NpcStateSchema.parse(world.slices.npc).npcs).map(([id, npc]) => [
+      id,
+      { ...npc, alive: !deathKnown(npc) },
+    ]),
+  );
   const place = location === null ? undefined : locationCatalog(data).get(location);
   const name = (id: string) => catalog.get(id)?.name ?? id;
   const npcName = (id: string | undefined) => (id ? (npcs.get(id)?.name ?? id) : null);
@@ -44,7 +49,7 @@ export function factionsView({ world, data }: ViewContext) {
         sponsor: state.membership.sponsor ?? null,
         sponsorName: sponsorNpc?.name ?? state.membership.sponsor ?? null,
         sponsorAlive: sponsorNpc ? sponsorNpc.alive : !state.membership.sponsorLost,
-        sponsorLost: state.membership.sponsorLost || (sponsorNpc ? !sponsorNpc.alive : false),
+        sponsorLost: sponsorNpc ? !sponsorNpc.alive : state.membership.sponsorLost,
         strikes: state.membership.strikes.map((s) => ({
           at: s.at,
           time: formatGameTime(s.at),
@@ -75,7 +80,7 @@ export function factionsView({ world, data }: ViewContext) {
     const held = turf.get(f.id) ?? f.turf;
     const member = state.membership?.faction === f.id;
 
-    // 内部派系状态与真实领袖 NPC 生死
+    // 玩家投影只公开已经获知的领袖生死，幕后权力真空仍保存在原势力状态。
     const wingState = state.wings[f.id];
     const rulingId = wingState?.ruling ?? f.wings[0]?.id ?? null;
     const playerWingId = wingState?.playerSide ?? null;
@@ -91,7 +96,7 @@ export function factionsView({ world, data }: ViewContext) {
       });
       const primaryId = isRuling ? (wingState?.leaderNpc ?? w.leaders[0]) : w.leaders[0];
       const primaryRef = primaryId ? npcs.get(primaryId) : undefined;
-      const vacant = isRuling && (wingState?.vacant || (primaryRef ? !primaryRef.alive : false));
+      const vacant = isRuling && (primaryRef ? !primaryRef.alive : Boolean(wingState?.vacant));
       return {
         id: w.id,
         name: w.name,
@@ -165,7 +170,7 @@ export function factionsView({ world, data }: ViewContext) {
       rulingWingName: rulingWing?.name ?? null,
       rulingVacant: rulingWing?.vacant ?? false,
       playerWingName: playerWing?.name ?? null,
-      wingNote: wingState?.note ?? null,
+      wingNote: wingState?.vacant && !rulingWing?.vacant ? null : (wingState?.note ?? null),
       /** 关联真人 NPC */
       keyNpcs,
       /** 正在火拼争夺中的城区 */

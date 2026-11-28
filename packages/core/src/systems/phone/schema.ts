@@ -90,6 +90,8 @@ export const PhoneStateSchema = z.object({
   chatBudget: z.record(z.string(), ChatSceneBudgetSchema).default({}),
   /** 已建立全息联络渠道的通讯录（键为人物 id 或中间人 id）；旧存档没有 */
   contacts: z.record(z.string(), ContactEntrySchema).default({}),
+  /** 显式拉黑/删除的频道；历史记录保留，但不能再据此恢复联络权限 */
+  blockedChannels: z.array(z.string().min(1)).default([]),
 });
 export type PhoneState = z.infer<typeof PhoneStateSchema>;
 
@@ -102,7 +104,7 @@ export const PhoneContactSchema = z
       .trim()
       .min(1)
       .max(40)
-      .describe("对方的人物 id 或中间人 id（必须已有卡或是已登记中间人）"),
+      .describe("对方的人物 id、中间人 id，或已有通讯记录的频道 id"),
     action: z
       .enum(["add", "remove"])
       .default("add")
@@ -206,8 +208,13 @@ export type PhoneInternal =
   | ChatMeta
   | SeedContactCommand;
 
-/** 检查某个频道/人物是否已建立全息联系渠道（显式入录或已有消息/来电往来） */
+export function isContactBlocked(phone: PhoneState, id: string): boolean {
+  return phone.blockedChannels.includes(id);
+}
+
+/** 检查某个频道/人物是否仍有全息联系渠道；历史记录不能覆盖显式封禁。 */
 export function hasContactChannel(phone: PhoneState, id: string): boolean {
+  if (isContactBlocked(phone, id)) return false;
   if (phone.contacts[id] !== undefined) return true;
   if (phone.messages.some((m) => m.from === id)) return true;
   if (phone.calls.some((c) => c.from === id)) return true;

@@ -26,6 +26,7 @@
    - 创意工坊发布纯数据 JSON 包时，保留 `art`（官方图标跨人可见），避免大体积 base64 撑爆 D1。
 
 ## 验收标准
+
 - `biome lint packages apps tools functions` 0 错误 / 0 警告；
 - 6 份 `tsc --noEmit` 与 `tsx tools/check-data.ts` 全绿；
 - 自建武器、物品、义体分别测试「挑官方图」「上传本地透明 PNG/JPG」「不选图自动兜底」三种情况，在创角、背包、衣橱、义体人形、档案、商店/义体医生中均正常显示且重启页面/读档后不丢失。

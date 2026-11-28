@@ -108,7 +108,7 @@ export const npcRules: RuleModule<NpcState> = {
 - 人物之间的关系不意味着消息自动互通。记录他已经得知的事时保留目击、通信或传闻来源及时间；不能仅因熟人出事就写成他已经知情。正文里透出两个有卡的人之间的关系（搭档、亲人、旧情、上下家、结仇），或者关系变了，写一条 tie，aToB、bToA 各从一边的角度写一句，会替换两人之间旧的那条；见不得光的关系 open 写 false。
 - 欠下或结下以后会被讨回来的人情和仇，写一条 ledger（owesYou 对方欠玩家角色、youOwe 玩家角色欠对方、grudge 对方记玩家角色的仇）；还了、报了、放下了，写 ledgerSettle，entry 填卡上「人情和仇」那一条的编号。
 - 死了的人不再出场，也不会发消息。
-- 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。正文里角色得知了有卡的人的一件事（本人说起、别人提到、传闻新闻、扫描），写一条 learn，照角色以为的写，骗人的话照骗的写；卡上已经有的不再写。
+- 卡上的「玩家角色知道」是玩家角色已经知道的这个人的事；角色只按这些和亲眼看到的说话行事，没打听过的身份、来历、秘密不能写成角色知道。正文里角色得知了有卡的人的一件事（本人说起、别人提到、传闻新闻、扫描），写一条 learn，照角色以为的写，骗人的话照骗的写；卡上已经有的不再写。明确听说或发现此人的死讯时，learn 另写 death:true；普通情报绝不带 death，离屏死亡也不能仅因本轮提到了这个人就公开。
 - 有卡的人实际受了伤写 npcHurt（part 填受伤部位 head / face / chest / belly / left-arm / right-arm / left-leg / right-leg 之一，tier 写 graze / heavy / lethal，reason 写明怎么伤的），得到治疗写 npcHeal；重伤需实际医疗稳定并等待恢复，不因切场自动痊愈，死了另写 npcDeath。已登记在当前交战中的敌人倒下、死亡或逃走时，另写 combat foe，state 分别为 down、dead、fled；仅受伤但仍站着不写 foe。玩家角色实际扫描了有卡的人写 npcScan，不写 combat scan。
 - 有卡的人拿到或丢了武器、换穿或脱下衣服、收下或递出药剂工具等随身物品写 npcGear，装上或拆掉义体写 npcChrome；玩家角色出钱给同行者买装备、装义体，或现场约好分账/付酬劳，同时写 money 扣钱。商店买卖（含卖给枪店/摊主）由 trade 自动入店库存，不给店主另发 npcGear。
 - 只有在剧情里明确结伴同行（同车转场、护送、一起去下一个地点）时才写 npcCompanion（following:true）；仅在同一个任务现场碰面、交谈、交易或并肩打一仗但之后各走各路的人，绝对不要写 following:true。已经标了「同行中」的人，只要正文里已经分开、告别、留守、交接完毕或玩家独自前往别处，必须写 npcCompanion（following:false）解除同行。同行者只有在场面真正陷入必死绝境（lethal）且确实避无可避时才会死，平时受创写 npcHurt。
@@ -342,10 +342,10 @@ function fullCard(npc: Npc, stage: Stage, npcs: NpcState["npcs"] = {}): string {
 function oneLine(npc: Npc, stage: Stage): string {
   if (!npc.alive) {
     const off = npc.offscreenDeath;
-    if (off !== null && !npc.known.some((k) => k.at >= off.at)) {
+    if (off !== null && off.knownAt === null) {
       const tail =
         stage.stage === "extract"
-          ? "正文里让玩家听说或撞见时写一条 learn"
+          ? "正文里让玩家听说死讯或发现死亡时写 learn（death:true）"
           : "在玩家亲耳听说或亲眼撞见之前，不要写成玩家角色已知";
       return `- ${label(npc, stage)} ${npc.role}；在玩家没看着的地方死了（${off.cause}），玩家角色还不知道；${tail}`;
     }

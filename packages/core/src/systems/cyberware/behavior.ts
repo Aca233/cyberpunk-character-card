@@ -11,6 +11,20 @@ export function isActiveBehaviorMode(mode: BehaviorChipMode | undefined): boolea
   return mode !== undefined && mode !== "off";
 }
 
+/** 卸载、替换或损坏导致的强制退出，也要保留无回忆托管的记忆断层。 */
+export function stopBehaviorChip(
+  state: BehaviorChipState,
+  def: CyberwareDef | undefined,
+  now: number,
+): void {
+  if (state.mode === "doll" && def?.behaviorChip?.recall === "none") state.memoryGap = true;
+  state.mode = "off";
+  state.protocol = null;
+  state.carrier = null;
+  state.since = now;
+  if (state.lastControl && state.lastControl.to === null) state.lastControl.to = now;
+}
+
 /** 行为芯片四态模型：off（清醒）/ doll（玩偶托管）/ protocol（改装协议）/ glitch（故障被骇） */
 export function applyBehaviorChip(
   states: Record<string, BehaviorChipState>,

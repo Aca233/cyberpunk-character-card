@@ -40,6 +40,7 @@ import {
 import {
   CHAT_SCENE_TURN_SOFT_CAP,
   hasContactChannel,
+  isContactBlocked,
   type Message,
   PhoneStateSchema,
 } from "./systems/phone";
@@ -176,6 +177,9 @@ export function validatePhoneChatTarget(world: WorldState, contact: string): Pho
       ok: false,
       reason: "对方是没有建档的加密频道，暂不支持主动发起手机私聊",
     };
+  }
+  if (isContactBlocked(phone, contact)) {
+    return { ok: false, reason: `已封禁 ${npc.name} 的联系频道，先在剧情中恢复联系再发私信` };
   }
   if (!hasContactChannel(phone, contact)) {
     return {

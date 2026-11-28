@@ -46,6 +46,7 @@
     - 首次进入本次体验的沉浸模式（按 `event: "bd:xbd:" + experienceId` 去重，防暂停续播重复触发）：
       - 若玩家处于免疫压制剂有效期（`isImmunosuppressed`），药效缓冲住神经失控，记录压制缓冲提示；
       - 否则读取当前 `neuralStage`，自动向 `humanity` 发出 `affect` 指令使神经症状升一级（`stable -> detached -> unstable -> edge -> crisis`），落盘可感知、可治疗/恢复的真实症状；
+
     - 若采用 `edit`（编辑分析）模式观看 XBD，则明确记录已切断直接感官回灌、规避神经过载（赋予专业编辑头环真实机制价值）。
 
 ## 二、验证清单

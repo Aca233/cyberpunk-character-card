@@ -47,6 +47,7 @@ export function falloutKinds(commands: readonly Command[], resolving: boolean): 
         break;
       case "combat":
         if (c.action === "start") kinds.add("fight");
+        if (c.action === "wound") kinds.add("injury");
         break;
       case "alert":
         if (num(c.delta) > 0) kinds.add("alert");

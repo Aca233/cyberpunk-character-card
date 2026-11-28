@@ -13,6 +13,7 @@
 ## 一、详细实施内容
 
 ### 1. 原作 NPC 版 V + 男 V 变体 + 关系网 + 支线 + 偶遇（`packages/content`）
+
 - **`packages/content/src/npcs.ts`**：
   - 新增 `id: "v"`（默认女 V 瓦莱丽，`alias: "V"`，23 岁，圈层 `merc`，常驻 `megabuilding-h10`，常去 `afterlife` / `viktor-clinic` / `el-coyote-cojo` / `lizzies-bar`），随身配招牌不朽手枪 `dying-night`（终夜）+ 实用街头装备与 `kiroshi-mk1` / `ballistic-coprocessor` 等基础义体。
   - 同处导出 `vMaleNpcVariant`（与 `v` 同 `id: "v"`，完整手写男 V 文森特的外貌、穿着、口吻与示范台词），供「人脉与旧识」一键切换。
@@ -30,6 +31,7 @@
   - 移除硬编码的「主角不是 V」文案，改为中性的自由沙盘声明。
 
 ### 2. 单张统一 V 预设主角卡 + 2×3 一键调配（`packages/content` + `apps/web`）
+
 - **`packages/content/src/characters.ts`（并从 `packages/content/src/index.ts` 导出）**：
   - 新增 `buildVCharacterCard(gender: "female" | "male", origin: "street-kid" | "nomad" | "corpo")`，覆盖 2 性别 × 3 出身的完整外貌、背景故事、性格、口吻、特长、主板模块、基础义体、开局行装（含招牌手枪 `dying-night` 与匹配载具）、H10 起步与旧识（杰克/维克多/米丝蒂/T-Bug/威尔逊；公司出身保留与杰克多年老交情、流浪出身贴合刚进城搭伙）。
   - `sampleCharacters` 只新增 **1 张** 预设 V 卡（默认 `buildVCharacterCard("female", "street-kid")`），绝不刷屏角色库。
@@ -40,6 +42,7 @@
   - 一键切换即同步替换对应组合的完整文案、主板模块、装备、义体与旧识，切完后仍可继续自由改任何细节，点开局直接生效。
 
 ### 3. 扮演 V 去重 & NPC 端一键切男/女 V（`packages/core` + `packages/runtime` + `apps/web`）
+
 - **`packages/core/src/schemas/character.ts` & `save.ts`**：
   - `CharacterCardSchema` 与 `SaveCharacterSchema` 新增可选字段 `replacesNpcId?: string`（V 预设卡标记 `"v"`）。
 - **`packages/core/src/game.ts`**：

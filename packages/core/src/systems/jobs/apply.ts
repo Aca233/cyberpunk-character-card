@@ -237,26 +237,36 @@ export function crewJob(
 export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): ApplyOutcome {
   const job = find(draft, command.id);
   if (!job) return fail(`没有委托 ${command.id}`);
-  if (job.status === "offered") {
-    // 玩家明确推掉待接委托，或未点接单直接把待接活办完/搞砸时，允许直接结算；其余已结单不可重复结束
-    if (command.outcome !== "abandoned") {
-      job.acceptedAt = job.acceptedAt ?? now;
-    }
-  } else if (job.status !== "active") {
+  if (job.status !== "offered" && job.status !== "active") {
     return fail(
       `委托 ${job.title} 现在是「${JOB_STATUS_LABELS[job.status]}」，已经结束，不能再重复结算`,
     );
   }
   const label = JOB_OUTCOME_LABELS[command.outcome];
   const paid = command.paid ?? 0;
+  const notes = [`委托${label}：${job.title}`];
+  const emit: Command[] = [];
+  const overrides = new Map((command.crewPayouts ?? []).map((p) => [p.npc, p.paid] as const));
+  if (overrides.size !== (command.crewPayouts?.length ?? 0))
+    return fail("同一搭档不能重复登记实付分成");
+  const joined = (job.crew ?? []).filter((member) => member.status === "joined");
+  if ([...overrides.keys()].some((npc) => !joined.some((member) => member.npc === npc)))
+    return fail("实付分成只能指定本单仍在小队中的搭档");
+  const plannedCrewPaid = joined.reduce(
+    (total, member) =>
+      total + (overrides.get(member.npc) ?? Math.floor((paid * member.cutPercent) / 100)),
+    0,
+  );
+  if (plannedCrewPaid > paid)
+    return fail(`搭档实付分成合计 ${plannedCrewPaid} 欧元，超过本单实际到账 ${paid} 欧元`);
+
+  // 待接委托也允许直接办完或推掉，但所有分账条件成立后才写入结单状态。
+  if (job.status === "offered" && command.outcome !== "abandoned")
+    job.acceptedAt = job.acceptedAt ?? now;
   job.status = command.outcome;
   job.closedAt = now;
   job.paid = paid;
   job.summary = command.summary;
-
-  const notes = [`委托${label}：${job.title}`];
-  const emit: Command[] = [];
-  const overrides = new Map((command.crewPayouts ?? []).map((p) => [p.npc, p.paid] as const));
 
   let totalCrewPaid = 0;
   const splitParts: string[] = [];
@@ -294,7 +304,7 @@ export function endJob(draft: Draft<JobsState>, command: JobEnd, now: number): A
     }
   }
 
-  const playerNet = Math.max(0, paid - totalCrewPaid);
+  const playerNet = paid - totalCrewPaid;
   if (playerNet > 0) {
     const moneyReason =
       totalCrewPaid > 0

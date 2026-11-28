@@ -19,6 +19,7 @@ import {
   CallCommandSchema,
   hasContactChannel,
   IncomingMessageSchema,
+  isContactBlocked,
   MESSAGES_PER_TURN,
   PhoneStateSchema,
 } from "../systems/phone";
@@ -97,8 +98,15 @@ export function offscreenFixers(
   if (!offscreenJobsOpen(world)) return [];
   const jobs = JobsStateSchema.parse(world.slices.jobs);
   const npcs = NpcStateSchema.parse(world.slices.npc).npcs;
+  const phone = PhoneStateSchema.parse(world.slices.phone ?? {});
   return Object.values(jobs.fixers)
-    .filter((f) => npcs[f.id]?.alive !== false && !present.has(f.id) && !npcs[f.id]?.following)
+    .filter(
+      (f) =>
+        npcs[f.id]?.alive !== false &&
+        !isContactBlocked(phone, f.id) &&
+        !present.has(f.id) &&
+        !npcs[f.id]?.following,
+    )
     .map((f) => ({ id: f.id, name: f.name }));
 }
 

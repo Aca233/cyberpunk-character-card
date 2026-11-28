@@ -421,7 +421,12 @@ const BaseNpcSchema = NpcCardSchema.extend({
     .default(null),
   /** 在玩家没看着的地方死的（场外推演写的）：死因和时间；玩家听说以前人物档案照旧显示活着 */
   offscreenDeath: z
-    .object({ cause: z.string().min(1), at: z.number().int() })
+    .object({
+      cause: z.string().min(1),
+      at: z.number().int(),
+      /** 明确听说死讯的时间；不能从同一分钟内的普通情报推断知情 */
+      knownAt: z.number().int().nullable().default(null),
+    })
     .nullable()
     .default(null),
   /** 换过装以后现在穿的（npcOutfit 写的）和换装的游戏时间；没换过是 null，按卡上的 outfit。旧存档没有 */
@@ -691,6 +696,7 @@ export const LearnSchema = z
     source: KnownSourceSchema.describe(
       "seen 玩家角色亲眼看到，self 本人说的，told 别人说的，rumor 传闻、新闻，scan 扫描",
     ),
+    death: z.boolean().optional().describe("本条明确得知此人已经死亡时写 true；普通情报不写"),
   })
   .describe(
     "玩家角色得知了有卡的人的一件事（身份、来历、去向、和谁有来往）：正文里真的透出来才写，一句话，写玩家角色以为的样子；对方骗人的话照骗的写，传闻照传的写。id 必须填【人物】里的目标人物 id（如 royce），不要给情报条目自造 slug",

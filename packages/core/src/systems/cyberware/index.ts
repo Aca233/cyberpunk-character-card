@@ -3,7 +3,7 @@ import type { HealthState } from "../health";
 import type { InventoryState } from "../inventory";
 import { cyberwareActions } from "./actions";
 import { applyBoost, applyCyberware, applyDebt, cyberwareCatalog, install } from "./apply";
-import { applyBehaviorChip, behaviorChipLines } from "./behavior";
+import { applyBehaviorChip, behaviorChipLines, stopBehaviorChip } from "./behavior";
 import { cyberwareEvents } from "./events";
 import { cyberwareRules } from "./prompt";
 import { ripperdocDebtsView, ripperdocView } from "./ripperdoc";
@@ -205,15 +205,11 @@ export const cyberware = defineSystem<
       if (!chips) return;
       const installedIds = new Set(draft.installed.map((entry) => entry.id));
       const brokenIds = new Set(ctx.read<HealthState>("health").brokenChrome);
+      const catalog = cyberwareCatalog(ctx.data);
       for (const [deviceId, state] of Object.entries(chips)) {
         if (state.mode === "off") continue;
         if (!installedIds.has(deviceId) || brokenIds.has(deviceId)) {
-          if (state.mode === "doll") state.memoryGap = true;
-          state.mode = "off";
-          state.protocol = null;
-          state.carrier = null;
-          state.since = ctx.now;
-          if (state.lastControl && state.lastControl.to === null) state.lastControl.to = ctx.now;
+          stopBehaviorChip(state, catalog.get(deviceId), ctx.now);
         }
       }
     },

@@ -7,6 +7,7 @@ import {
   CALLS_KEPT,
   type ChatMeta,
   type ContactSource,
+  isContactBlocked,
   type Message,
   PHONE_KEPT,
   PHONE_THREAD_MIN,
@@ -24,6 +25,9 @@ export function addContact(
   note?: string,
   silent = false,
 ): ApplyOutcome {
+  if (source === "exchange" && isContactBlocked(draft, id)) {
+    draft.blockedChannels = draft.blockedChannels.filter((blocked) => blocked !== id);
+  }
   const existing = draft.contacts[id];
   if (existing) {
     if (note !== undefined && existing.note === undefined) {
@@ -42,11 +46,23 @@ export function addContact(
   };
 }
 
-/** 从通讯录移除联系人（剧情拉黑/删号） */
-export function removeContact(draft: Draft<PhoneState>, id: string, name: string): ApplyOutcome {
-  if (draft.contacts[id] === undefined) return { ok: true };
+/** 拉黑/删除频道并保留历史记录，只有再次显式添加才恢复联络。 */
+export function removeContact(
+  draft: Draft<PhoneState>,
+  id: string,
+  name: string,
+  now: number,
+): ApplyOutcome {
+  if (isContactBlocked(draft, id)) return { ok: true };
+  draft.blockedChannels.push(id);
   delete draft.contacts[id];
-  return { ok: true, notes: [`已从通讯录移除 ${name}`] };
+  for (const call of draft.calls) {
+    if (call.from === id && call.status === "ringing") {
+      call.status = "declined";
+      call.endedAt = now;
+    }
+  }
+  return { ok: true, notes: [`已封禁 ${name} 的联系频道，历史记录保留`] };
 }
 
 function isProtectedJobMessage(m: Message, openJobIds: ReadonlySet<string>): boolean {
@@ -90,6 +106,8 @@ export function receiveMessage(
   job?: string,
   openJobIds: ReadonlySet<string> = new Set(),
 ): ApplyOutcome {
+  if (isContactBlocked(draft, from))
+    return { ok: false, reason: `已封禁 ${name} 的联系频道，不能接收新消息` };
   if (draft.contacts[from] === undefined) {
     draft.contacts[from] = { addedAt: now, source: "inbound" };
   }
@@ -118,6 +136,8 @@ export function sendPlayerMessage(
   now: number,
   openJobIds: ReadonlySet<string> = new Set(),
 ): ApplyOutcome {
+  if (isContactBlocked(draft, to))
+    return { ok: false, reason: `已封禁 ${name} 的联系频道，先恢复联系再发消息` };
   for (const m of draft.messages) {
     if (m.from === to && !m.read) m.read = true;
   }
@@ -195,6 +215,8 @@ export function replyMessage(
 ): ApplyOutcome {
   const m = draft.messages.find((x) => x.id === id);
   if (!m) return { ok: false, reason: `消息记录里没有第 ${id} 条消息` };
+  if (isContactBlocked(draft, m.from))
+    return { ok: false, reason: `已封禁 ${m.name} 的联系频道，先恢复联系再回复` };
   m.read = true;
   m.replied = true;
   if (text !== undefined) {
@@ -212,6 +234,8 @@ export function receiveCall(
   about: string,
   now: number,
 ): ApplyOutcome {
+  if (isContactBlocked(draft, from))
+    return { ok: false, reason: `已封禁 ${name} 的联系频道，不能接收全息电话` };
   if (draft.calls.some((c) => c.status === "ringing")) {
     return { ok: false, reason: "已经有一通全息电话在响，先接或拒接" };
   }
@@ -241,6 +265,8 @@ export function answerCall(
 ): ApplyOutcome {
   const call = draft.calls.find((c) => c.id === id);
   if (!call) return { ok: false, reason: `通话记录里没有第 ${id} 通` };
+  if (answer && isContactBlocked(draft, call.from))
+    return { ok: false, reason: `已封禁 ${call.name} 的联系频道，不能接通` };
   if (call.status !== "ringing")
     return { ok: false, reason: `这通全息电话已经${CALL_STATUS_LABELS[call.status]}` };
   call.status = answer ? "answered" : "declined";
@@ -264,5 +290,9 @@ export function tickCalls(draft: Draft<PhoneState>, to: number): void {
 /** 后端在调模型前检查：要回复的消息得还在消息记录里 */
 export function replyBlock(world: WorldState, id: number): string | undefined {
   const phone = PhoneStateSchema.parse(world.slices.phone ?? {});
-  return phone.messages.some((m) => m.id === id) ? undefined : `消息记录里没有第 ${id} 条消息`;
+  const message = phone.messages.find((m) => m.id === id);
+  if (!message) return `消息记录里没有第 ${id} 条消息`;
+  return isContactBlocked(phone, message.from)
+    ? `已封禁 ${message.name} 的联系频道，先恢复联系再回复`
+    : undefined;
 }

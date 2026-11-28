@@ -2,6 +2,7 @@ import type { Draft } from "immer";
 import type { ApplyOutcome, Command, SystemContext } from "../../kernel/system";
 import { checkNarratedPurchase } from "../commerce";
 import type { WorldClockState } from "../world";
+import { stopBehaviorChip } from "./behavior";
 import { quoteCyberware } from "./quote";
 import {
   ARM_SIDE_LABELS,
@@ -17,6 +18,7 @@ import {
   type Ripperdoc,
   type RipperdocDebtCommand,
   RipperdocListSchema,
+  resolveArmSides,
   SLOT_LABELS,
   TRADE_IN_RATE,
 } from "./schema";
@@ -188,6 +190,7 @@ export function install(
   if (!check.ok) {
     return { ok: false, reason: check.reason };
   }
+  const resolvedArmSide = resolveArmSides([...remainingProbes, candidate]).get(id);
   const emit: Command[] = [];
   if (old >= 0) {
     const [prev] = draft.installed.splice(old, 1);
@@ -198,11 +201,7 @@ export function install(
       notes.push(`换下${catalog.get(prev.id)?.name ?? prev.id}`);
       const control = draft.behaviorChips?.[prev.id];
       if (control && control.mode !== "off") {
-        control.mode = "off";
-        control.protocol = null;
-        control.carrier = null;
-        control.since = now;
-        if (control.lastControl && control.lastControl.to === null) control.lastControl.to = now;
+        stopBehaviorChip(control, catalog.get(prev.id), now);
       }
       emit.push({ type: "health.limb", action: "clear", id: prev.id });
     }
@@ -232,7 +231,13 @@ export function install(
   const sideNote = armSide ? `（${ARM_SIDE_LABELS[armSide]}）` : "";
   notes.push(`${SLOT_LABELS[def.slot]}装上${def.name}${sideNote}`);
   if (def.slot === "arms" || def.slot === "legs") {
-    emit.push({ type: "health.limb", action: "fit", slot: def.slot, name: def.name });
+    emit.push({
+      type: "health.limb",
+      action: "fit",
+      slot: def.slot,
+      ...(resolvedArmSide ? { armSide: resolvedArmSide } : {}),
+      name: def.name,
+    });
   }
   if (purchase && purchase.price > 0) {
     emit.push({
@@ -257,11 +262,7 @@ export function remove(
   draft.installed.splice(i, 1);
   const control = draft.behaviorChips?.[id];
   if (control && control.mode !== "off") {
-    control.mode = "off";
-    control.protocol = null;
-    control.carrier = null;
-    control.since = now;
-    if (control.lastControl && control.lastControl.to === null) control.lastControl.to = now;
+    stopBehaviorChip(control, catalog.get(id), now);
   }
   for (const part of Object.values(draft.parts)) {
     if (part.holder === "installed" && part.model === id) part.holder = "player";

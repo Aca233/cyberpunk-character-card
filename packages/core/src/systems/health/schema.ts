@@ -147,6 +147,7 @@ export const HealthInternalSchemas = {
     type: z.literal("health.limb"),
     action: z.enum(["fit", "repair", "clear"]),
     slot: z.enum(["arms", "legs"]).optional(),
+    armSide: z.enum(["left", "right", "both"]).optional(),
     id: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
   }),

@@ -56,6 +56,7 @@ import {
   BUDGET_LABELS,
   type BudgetTrace,
   contextBudget,
+  DEFAULT_WINDOW,
   fitMemories,
   historyMaxFor,
   historyStrideFor,
@@ -1590,14 +1591,16 @@ export async function runNarratorTurn(
         extractNarrative,
         tradePlansText,
       );
-      // 超出辅助模型上下文预算时分级撤下可选参考块（系统层始终保留完整物品与义体 ID 基表）
-      const auxBudget = deps.auxContextWindow
-        ? Math.max(8_000, deps.auxContextWindow - (deps.auxMaxOutputTokens ?? 4_096))
-        : undefined;
-      if (auxBudget !== undefined) {
-        const estimateExtract = (p: ReturnType<typeof buildExtractPrompt>) =>
-          p.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
-        if (needExtractEquipment && estimateExtract(extract) > auxBudget) {
+      // 只撤可选创作/能力参考，不裁正文、事实、人物边界或完整 ID 基表。
+      // 辅助连接未单独配置时实际回落到正文连接，窗口也按同一连接核算。
+      const auxWindow = deps.auxContextWindow ?? deps.contextWindow ?? DEFAULT_WINDOW;
+      const auxOutput = deps.auxMaxOutputTokens ?? deps.maxOutputTokens ?? 4_096;
+      const auxBudget = Math.max(0, auxWindow - auxOutput);
+      // 为消息角色与供应商的 JSON 协议包装留余量；不能用输入预算下限突破实际窗口。
+      const estimateExtract = (p: ReturnType<typeof buildExtractPrompt>) =>
+        256 + p.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+      if (estimateExtract(extract) > auxBudget) {
+        if (needExtractEquipment) {
           extract = buildExtractPrompt(
             world,
             records,
@@ -1606,6 +1609,7 @@ export async function runNarratorTurn(
             extractNarrative,
             tradePlansText,
           );
+          noteOnce(b.notes, "抽取窗口不足，撤下可选新人物装备参考；完整正文与世界事实保留");
         }
         if (estimateExtract(extract) > auxBudget) {
           extract = buildExtractPrompt(
@@ -1621,16 +1625,25 @@ export async function runNarratorTurn(
             extractNarrative,
             tradePlansText,
           );
+          noteOnce(b.notes, "抽取窗口不足，撤下可选能力详解；完整物品、义体与地点 ID 基表保留");
         }
+      }
+      const extractInput = estimateExtract(extract);
+      if (extractInput > auxBudget) {
+        const minimumWindow = extractInput + auxOutput;
+        throw new NarratorStageError(
+          "extract",
+          `④ 辅助模型上下文不足：当前窗口 ${auxWindow} token，完整抽取输入估算 ${extractInput} token（含协议余量），输出预留 ${auxOutput} token，合计至少需要 ${minimumWindow} token。未发送超预算请求，完整正文与事实已保存在正文断点。请改用实际支持至少 ${minimumWindow} token 的辅助模型并更新窗口配置；也可在输入可容纳时降低输出上限。配置调整后可从已保存正文继续记账，原配置下反复重试不会解决。`,
+          false,
+          "narrated",
+        );
       }
       let reply: Reply;
       try {
         reply = await b.call({
           purpose: "aux",
           temperature: EXTRACT_TEMPERATURE,
-          ...(deps.auxMaxOutputTokens !== undefined
-            ? { maxOutputTokens: deps.auxMaxOutputTokens }
-            : {}),
+          maxOutputTokens: auxOutput,
           responseFormat: responseJsonSchema("extract"),
           messages: extract.messages,
           ...(deps.saveId ? { cacheKey: `cp:${deps.saveId}:extract` } : {}),

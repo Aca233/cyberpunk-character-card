@@ -403,9 +403,26 @@ export function applyTrade(
   world: WorldState,
   data: Readonly<Record<string, unknown>>,
   facts: Readonly<Record<string, unknown>> = {},
+  options: { readonly recipient?: string } = {},
 ): ApplyOutcome {
   const quoted = quoteTrade(world, data, command);
   if (!quoted.ok) return quoted;
+  const recipient = options.recipient
+    ? (world.slices.npc as NpcState).npcs[options.recipient]
+    : undefined;
+  if (options.recipient) {
+    if (command.action !== "buy" || !quoted.item)
+      return { ok: false, reason: "只能为同行同伴购买实物装备" };
+    if (!recipient?.met || !recipient.alive) return { ok: false, reason: "找不到这位在场的同伴" };
+    if (!recipient.following)
+      return { ok: false, reason: `${recipient.name}当前没有与你同行，先结伴同行再为其配装` };
+    if (recipient.location !== (world.slices.world as WorldClockState).location)
+      return { ok: false, reason: `${recipient.name}不在现场，无法交付装备` };
+    if (recipient.body?.gear.includes(quoted.item.id))
+      return { ok: false, reason: `${recipient.name}身上已经有这件装备了` };
+    if ((recipient.body?.gear.length ?? 0) >= NPC_GEAR_MAX)
+      return { ok: false, reason: `${recipient.name}的随身装备栏已满（最多 ${NPC_GEAR_MAX} 件）` };
+  }
   const changed = checkNarratedPurchase(facts, {
     seller: quoted.counterparty,
     kind: command.action === "service" ? "service" : "item",
@@ -422,7 +439,7 @@ export function applyTrade(
     const npcs = (world.slices.npc as NpcState).npcs;
     const location = (world.slices.world as WorldClockState).location;
     const object = draft.objects[item.id];
-    if (command.action === "buy" && item.quickhackId) {
+    if (command.action === "buy" && item.quickhackId && !recipient) {
       if (!draft.claimedQuickhacks.includes(item.quickhackId)) {
         draft.claimedQuickhacks.push(item.quickhackId);
       }
@@ -460,6 +477,7 @@ export function applyTrade(
       ) {
         object.location = null;
       }
+      const backpackBefore = recipient ? { ...draft.backpack } : undefined;
       const result = applyItem(
         draft,
         {
@@ -473,9 +491,32 @@ export function applyTrade(
         world.time,
         location,
         npcs,
-        { shopTransfer: Boolean(quoted.shop) },
+        { shopTransfer: Boolean(quoted.shop), autoQuick: !recipient },
       );
       if (!result.ok) return result;
+      if (recipient && backpackBefore) {
+        const receivedId = Object.keys(draft.backpack).find(
+          (id) => (draft.backpack[id] ?? 0) > (backpackBefore[id] ?? 0),
+        );
+        if (!receivedId) return { ok: false, reason: "成交未产生可向同伴交付的实物" };
+        const transferred = applyItem(
+          draft,
+          {
+            type: "item",
+            action: "lose",
+            id: receivedId,
+            recipient: recipient.id,
+            reason: `为同行同伴${recipient.name}购入：${command.reason}`,
+          },
+          itemCatalog(withWorldObjects(data, draft.objects)),
+          world.time,
+          location,
+          npcs,
+        );
+        if (!transferred.ok) return transferred;
+        emitted.push(...(transferred.emit ?? []));
+        serviceNotes.push(`已交给同行同伴${recipient.name}`);
+      }
       if (command.action === "sell" && quoted.shop) {
         const soldObj = draft.objects[item.id];
         if (soldObj) {

@@ -25,6 +25,7 @@
    - 收场阶段原已并行执行「宏观局势 + 人物社交」双轨，进一步把回退的「⑦ 整理场景摘要」并入同一次 `Promise.all`（三路均读取结算态、互不串味），最后按原固定顺序（`macro` → `social` → `memory/summary`）合并落盘。
 
 ## 验收标准
+
 - `biome lint packages apps tools functions` 0 错误 / 0 警告；
 - 6 份 `tsc --noEmit` 与 `tsx tools/check-data.ts` 全绿；
 - 实测常规回合、新人物回合与多人同场（3 名原作 NPC 在场）下 `judge` / `narrate` / `extract` 的 token 占用与边界隔离，确认所有 ID 索引与演出字段完整保留。

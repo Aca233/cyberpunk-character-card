@@ -12,6 +12,7 @@
 ## 更新方案
 
 ### 1. 全城 75 位原作 NPC 装备重配（`packages/content`）
+
 涉及文件：`packages/content/src/npcs.ts`、`packages/content/src/npcsExtra.ts`、`packages/content/src/everydayLife.ts`。
 
 按 7 大圈层与所属势力、财力、职业与原作形象逐一更新 `body.gear`（严守每人 `≤ 12` 件上限、无重复 ID、且与 `outfit` 描写保持一致）：
@@ -31,6 +32,7 @@
   - 按行当匹配 `med-kit`、`hemostatic-gel`、`tool-kit`、`trauma-paramedic-vest`、`work-apron` / `techie-goggles` / `cyber-shades` / `club-heels` 等贴合身份的单品。
 
 ### 2. NPC 装备效果与护甲展示联动（`packages/core` + `apps/web`，可选一并做）
+
 - **`packages/core/src/systems/npc/body.ts`**：
   - 为 `bodyView.gear[]` 补齐 `effectTags`（复用 `itemEffectTags`），并在 `NpcBodyView` 上新增 `armorSummary` / `gearBadges`（复用 `summarizeGearEffects`）；
   - 让 `scanTacticalProfile` 同时识别 NPC 所穿的防弹/重型护甲（如穿着 `militech-heavy-rig` / `arasaka-kabuto-helm` 时给出对应破甲战术提示）。
@@ -38,11 +40,13 @@
   - 在人物档案与物品栏同伴页展示该 NPC 当前着装生效的护甲/效果胶囊，并与交接装备实时同步。
 
 ### 3. （可选）同步刷新 20 套开局出身行装（`packages/content/src/loadouts.ts`）
+
 - 视需要决定是否顺带把玩家捏人 20 套开局出身行装同步用上新服装与战术道具（默认先聚焦 NPC，避免无意改动玩家开局平衡）。
 
 ---
 
 ## 验收标准
+
 - `biome lint packages apps tools functions` 0 错误 / 0 警告；
 - 6 份 `tsc --noEmit` 全绿；
 - `tsx tools/check-data.ts` 通过（所有 75 位 NPC 的 `body.gear` 全部为有效物品 ID、无重复、不超 12 件上限）；

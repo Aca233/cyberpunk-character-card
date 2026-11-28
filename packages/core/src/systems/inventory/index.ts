@@ -120,10 +120,19 @@ export const inventory = defineSystem<
             ctx.read<WorldClockState>("world").location,
             ctx.read<NpcState>("npc").npcs,
           );
+        case "inventory.buyForNpc":
         case "trade":
           return applyTrade(
             draft,
-            command,
+            command.type === "trade"
+              ? command
+              : {
+                  type: "trade",
+                  action: "buy",
+                  item: command.item,
+                  with: command.shop,
+                  reason: command.reason,
+                },
             {
               time: ctx.now,
               slices: {
@@ -139,6 +148,7 @@ export const inventory = defineSystem<
             },
             ctx.data,
             ctx.facts,
+            command.type === "inventory.buyForNpc" ? { recipient: command.npc } : {},
           );
         case "gunsmith":
           return applyGunsmith(

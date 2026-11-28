@@ -313,6 +313,7 @@ export function applyPlaceItem(
   if (action === "leave") {
     if (command.definition !== undefined) {
       if (command.source !== undefined) return fail("随身来源只能引用已有物品");
+      if (count !== 1) return fail("首次登记独立物件每次只能留置 1 件，多件物品请分别使用独立 id");
       if (catalog.has(id) || draft.objects[id]) return fail("已有物件不可重新定义，直接使用原 id");
       if (command.definition.id !== id) return fail("物件定义的 id 必须与物品 id 一致");
       const parsed = ItemDefSchema.safeParse(command.definition);
@@ -368,6 +369,11 @@ export function applyPlaceItem(
   );
   const entry = index >= 0 ? draft.placed[index] : undefined;
   if (!entry || entry.count < count) return fail(`指定位置没有足够的 ${id}`);
+  const object = draft.objects[id];
+  if (object && (count !== 1 || entry.count !== 1))
+    return fail("独立物件的留置数量无效，不能将同一实物身份作为多件取回");
+  if (object && object.holder !== holder)
+    return fail("留置记录与独立物件的实际归属不一致，不能重复取回");
   if (entry.count === count) draft.placed.splice(index, 1);
   else entry.count -= count;
   const def = catalog.get(id) ?? draft.objects[id]?.definition;
@@ -466,7 +472,7 @@ export function applyItem(
   now = 0,
   location: string | null = null,
   npcs: NpcState["npcs"] = {},
-  options: { readonly shopTransfer?: boolean } = {},
+  options: { readonly shopTransfer?: boolean; readonly autoQuick?: boolean } = {},
 ): ApplyOutcome {
   let def = catalog.get(command.id) ?? draft.objects[command.id]?.definition;
   if (command.weaponState !== undefined && command.action !== "gain") {
@@ -584,7 +590,7 @@ export function applyItem(
     case "gain":
       put(draft, def.id);
       moveObject(draft, def.id, "player", null, now, command.reason);
-      autoQuick(draft, def);
+      if (options.autoQuick !== false) autoQuick(draft, def);
       return {
         ok: true,
         notes: [def.iconic ? `获得不朽物品：${def.name}` : `获得 ${def.name}`],

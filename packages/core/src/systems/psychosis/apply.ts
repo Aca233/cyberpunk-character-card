@@ -137,7 +137,7 @@ export function applyLostControl(
   return { ok: true, notes: [`[失控] 你想：${command.intent}；实际：${command.actual}`] };
 }
 
-/** 场景结束：还开着的记忆空白到这里为止 */
+/** 发作实际平复：还开着的记忆空白到这里为止 */
 export function closeBlackouts(draft: Draft<PsychosisState>, now: number): void {
   for (const b of draft.blackouts) if (b.to === null) b.to = now;
 }
@@ -148,7 +148,28 @@ function isSevereEpisode(command: unknown): boolean {
   return c.type === "episode" && c.action !== "end" && c.severity === "severe";
 }
 
-/** 哪几轮落在已经结束的记忆空白里：那个场景从严重发作那一轮起，到场景结束 */
+interface BlackoutBoundaryRecord {
+  readonly seq: number;
+  readonly patches?: readonly {
+    readonly op?: string;
+    readonly path: readonly (string | number)[];
+    readonly value?: unknown;
+  }[];
+}
+
+type Blackout = PsychosisState["blackouts"][number];
+
+function blackoutEntry(value: unknown): Blackout | null {
+  if (typeof value !== "object" || value === null) return null;
+  const b = value as Partial<Blackout>;
+  return typeof b.scene === "number" &&
+    typeof b.from === "number" &&
+    (b.to === null || typeof b.to === "number")
+    ? (b as Blackout)
+    : null;
+}
+
+/** 只折叠已结束的实际失忆区间；结束轮仍属于边界，之后同场景的正常轮次不再吞掉。 */
 export function blackoutTurns(
   turns: readonly {
     readonly seq: number;
@@ -156,15 +177,70 @@ export function blackoutTurns(
     readonly commands: readonly unknown[];
   }[],
   slice: unknown,
+  records: readonly BlackoutBoundaryRecord[] = turns,
 ): ReadonlySet<number> {
   const state = PsychosisStateSchema.parse(slice ?? {});
-  const closed = new Set(state.blackouts.filter((b) => b.to !== null).map((b) => b.scene));
-  const started = new Set<number>();
   const out = new Set<number>();
+  const retained = state.blackouts.filter((b) => b.to !== null);
+  if (retained.length === 0) return out;
+  const ranges: { blackout: Blackout; first: number; last: number }[] = [];
+  const active: { blackout: Blackout; first: number }[] = [];
+  let recordedBoundaries = false;
+  for (const record of records) {
+    for (const patch of record.patches ?? []) {
+      const path = patch.path;
+      if (path[0] !== "slices" || path[1] !== "psychosis" || path[2] !== "blackouts") continue;
+      recordedBoundaries = true;
+      if (path.length === 4) {
+        const b = blackoutEntry(patch.value);
+        // 未满时 push 是 add；满额后的 push + shift 仅最后一项是新段，其余 replace 是旧段搬位。
+        if (b?.to === null && (patch.op === "add" || path[3] === BLACKOUTS_KEPT - 1)) {
+          active.push({ blackout: b, first: record.seq });
+        }
+      } else if (path.length === 5 && path[4] === "to" && typeof patch.value === "number") {
+        // closeBlackouts 总是同时关闭全部未结束段；seq 能区分同一分钟内的多次开始/平复。
+        for (const range of active.splice(0)) {
+          ranges.push({
+            ...range,
+            blackout: { ...range.blackout, to: patch.value },
+            last: record.seq,
+          });
+        }
+      }
+    }
+  }
+  if (recordedBoundaries) {
+    const key = (b: Blackout) => `${b.scene}:${b.from}:${b.to}`;
+    const counts = new Map<string, number>();
+    for (const b of retained) counts.set(key(b), (counts.get(key(b)) ?? 0) + 1);
+    // 从后往前匹配保留段，避免同分钟的同值旧段顶替最新段。
+    for (const range of ranges.reverse()) {
+      const id = key(range.blackout);
+      const left = counts.get(id) ?? 0;
+      if (left === 0) continue;
+      counts.set(id, left - 1);
+      for (const t of turns) if (t.seq >= range.first && t.seq <= range.last) out.add(t.seq);
+    }
+    return out;
+  }
+  // 没有补丁的调用仍可按明确的 episode end 定界，不凭场景号把之后的回合一并折叠。
+  const closedScenes = new Set(retained.map((b) => b.scene));
+  let first: number | null = null;
+  let scene: number | undefined;
   for (const t of turns) {
-    if (t.scene === undefined || !closed.has(t.scene)) continue;
-    if (!started.has(t.scene) && t.commands.some(isSevereEpisode)) started.add(t.scene);
-    if (started.has(t.scene)) out.add(t.seq);
+    for (const command of t.commands) {
+      if (isSevereEpisode(command) && first === null) {
+        first = t.seq;
+        scene = t.scene;
+      }
+      if (typeof command !== "object" || command === null) continue;
+      const c = command as { type?: unknown; action?: unknown };
+      if (c.type !== "episode" || c.action !== "end" || first === null) continue;
+      if (scene !== undefined && closedScenes.has(scene)) {
+        for (const turn of turns) if (turn.seq >= first && turn.seq <= t.seq) out.add(turn.seq);
+      }
+      first = null;
+    }
   }
   return out;
 }

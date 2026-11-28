@@ -21,6 +21,8 @@ import {
   AnswerSchema,
   CallCommandSchema,
   ChatMetaSchema,
+  hasContactChannel,
+  isContactBlocked,
   type PhoneCommand,
   PhoneContactSchema,
   type PhoneInternal,
@@ -90,6 +92,7 @@ export const phone = defineSystem<PhoneState, PhoneCommand, PhoneInternal>({
     feedRead: [],
     chatBudget: {},
     contacts: {},
+    blockedChannels: [],
   }),
   commands: {
     phoneContact: PhoneContactSchema,
@@ -109,7 +112,14 @@ export const phone = defineSystem<PhoneState, PhoneCommand, PhoneInternal>({
       case "phoneContact": {
         const npcs = ctx.read<NpcState>("npc");
         const jobs = ctx.read<JobsState>("jobs");
-        const target = resolveContactTarget(command.id, npcs, jobs);
+        const history =
+          draft.messages.find((message) => message.from === command.id) ??
+          draft.calls.find((call) => call.from === command.id);
+        const target =
+          resolveContactTarget(command.id, npcs, jobs) ??
+          (hasContactChannel(draft, command.id) || isContactBlocked(draft, command.id)
+            ? { id: command.id, name: history?.name ?? command.id, alive: true }
+            : undefined);
         if (!target) {
           return {
             ok: false,
@@ -117,7 +127,7 @@ export const phone = defineSystem<PhoneState, PhoneCommand, PhoneInternal>({
           };
         }
         if (command.action === "remove") {
-          return removeContact(draft, target.id, target.name);
+          return removeContact(draft, target.id, target.name, ctx.now);
         }
         if (!target.alive) {
           return { ok: false, reason: `${target.name} 已经死亡，无法交换联系方式` };

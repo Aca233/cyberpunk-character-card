@@ -86,12 +86,16 @@ export function memoryPool(
   const out: MemoryEntry[] = [];
 
   // 掉出窗口的旧轮次；场外提问和未定稿的不算
-  const turns = effectiveTurns(records).filter((t) => {
+  const allTurns = effectiveTurns(records);
+  // 热层按完整历史（含 OOC）取窗口，不能先删 OOC 再按数量排除游戏轮次。
+  const hotSeqs = new Set((hot > 0 ? allTurns.slice(-hot) : []).map((t) => t.seq));
+  const turns = allTurns.filter((t) => {
+    if (hotSeqs.has(t.seq)) return false;
     if (t.ooc === true || t.unsettled !== undefined) return false;
     const input = TurnInputSchema.safeParse(t.input);
     return !(input.success && input.data.mode === "ooc");
   });
-  for (const t of turns.slice(0, Math.max(0, turns.length - hot)).slice(-MAX_CANDIDATES)) {
+  for (const t of turns.slice(-MAX_CANDIDATES)) {
     out.push({
       id: `turn:${t.seq}`,
       kind: "turn",

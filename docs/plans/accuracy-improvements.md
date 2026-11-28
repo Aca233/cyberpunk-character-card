@@ -30,6 +30,7 @@
    - 改进：直接改为 `events: [{ id, requires, changes: [...], messages?: [...] }]`（每条指令天生归属所在事件，不可能漏归属、重复归属或下标错位），同时给 `extract` 的 `responseFormat` 传入顶层 `ExtractDocSchema` 让原生 Structured Outputs 在解码层硬约束顶层结构。
 
 ## 验收标准
+
 - `biome lint packages apps tools functions` 0 错误 / 0 警告；
 - 6 份 `tsc --noEmit` 与 `tsx tools/check-data.ts` 全绿；
 - 实测典型错填案例（如错填事件 slug、错填中文名、引号差异导致 `evidence.quote` 失败、多事件下标错位）均能自动恢复或精准隔离，不连坐整场收尾。

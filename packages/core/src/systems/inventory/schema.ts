@@ -676,6 +676,14 @@ export function availableQuickSupply(
 
 /** 只能由代码发出：其他系统消耗实际携带的补给、留置与车辆同步 */
 export const InventoryInternalSchemas = {
+  /** 商店面板为同行同伴购买：与普通 trade 共用原子钱货结算。 */
+  "inventory.buyForNpc": z.strictObject({
+    type: z.literal("inventory.buyForNpc"),
+    shop: z.string().min(1).max(80),
+    item: z.string().min(1).max(64),
+    npc: z.string().min(1).max(64),
+    reason: z.string().min(1),
+  }),
   /** 资料系统：向真实空白载体写入固定内容，不新增物品或复制其他资产。 */
   "inventory.chipWrite": z.strictObject({
     type: z.literal("inventory.chipWrite"),

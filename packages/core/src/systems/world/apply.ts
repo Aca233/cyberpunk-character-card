@@ -163,12 +163,6 @@ export function applyWorld(
   if (command.activity === "rest") {
     draft.phasesAwake = 0;
     draft.awakeMinutes = 0;
-  } else if (command.phases !== undefined && command.phases > 0) {
-    const beforeFatigued = isFatigued(draft);
-    draft.phasesAwake = (draft.phasesAwake ?? 0) + command.phases;
-    if (!beforeFatigued && isFatigued(draft)) {
-      notes.push("连续多个时段未睡眠，身体疲劳：眼皮发沉、发力与反应发滞");
-    }
   } else if (deltaMinutes > 0) {
     const beforeFatigued = isFatigued(draft);
     const totalAwake = (draft.awakeMinutes ?? 0) + deltaMinutes;

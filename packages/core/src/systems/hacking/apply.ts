@@ -284,6 +284,15 @@ function heatDeltaFor(
   return Math.max(1, base - relief);
 }
 
+function sameHackTarget(
+  entry: { readonly target: string; readonly npc?: string | undefined },
+  target: string,
+  npc: string | undefined,
+): boolean {
+  if (npc !== undefined || entry.npc !== undefined) return npc !== undefined && entry.npc === npc;
+  return entry.target === target;
+}
+
 /** 目标是否已在本现场捅穿个人黑冰（建立立足点） */
 export function hasTargetFoothold(
   state: Pick<HackingState, "breachedTargets" | "activeEffects">,
@@ -292,17 +301,14 @@ export function hasTargetFoothold(
   location: string | null,
 ): boolean {
   const matchLocation = (loc: string | null) => loc === null || loc === location;
-  const matchWho = (entryTarget: string, entryNpc?: string) =>
-    (npc !== undefined && entryNpc === npc) ||
-    entryTarget === target ||
-    entryTarget.includes(target) ||
-    target.includes(entryTarget);
-  if (state.breachedTargets.some((b) => matchLocation(b.location) && matchWho(b.target, b.npc))) {
+  if (
+    state.breachedTargets.some((b) => matchLocation(b.location) && sameHackTarget(b, target, npc))
+  ) {
     return true;
   }
   // 已经在该目标身上成功跑通了前期控制/隐蔽/破冰破解，也视为已在神经端口留下立足点
   return state.activeEffects.some(
-    (e) => matchLocation(e.location) && matchWho(e.target, e.npc) && e.category !== "ultimate",
+    (e) => matchLocation(e.location) && sameHackTarget(e, target, npc) && e.category !== "ultimate",
   );
 }
 
@@ -315,7 +321,7 @@ function recordBreachedTarget(
   via?: string,
 ): void {
   const exists = draft.breachedTargets.findIndex(
-    (b) => b.location === location && ((npc !== undefined && b.npc === npc) || b.target === target),
+    (b) => b.location === location && sameHackTarget(b, target, npc),
   );
   const entry = {
     target,
@@ -531,7 +537,10 @@ export function applyHack(draft: Hacking, command: HackCommand, ctx: SystemConte
 
   const effectDesc = def?.effect ?? `${command.program}已作用于目标硬件`;
   const existingIdx = draft.activeEffects.findIndex(
-    (e) => e.program === programId && e.target === command.target && e.location === location,
+    (e) =>
+      e.program === programId &&
+      sameHackTarget(e, command.target, command.npc) &&
+      e.location === location,
   );
   const entry = {
     program: programId,

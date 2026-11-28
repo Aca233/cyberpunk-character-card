@@ -13,6 +13,7 @@
 ## 模块 A：服装与装备「真实系统效果」打通（`core` + `web`）
 
 ### 1. 结构化装备能力字段（`packages/core/src/systems/inventory/schema.ts`）
+
 在 `ItemDefSchema` 中为服装与功能装备增加清晰的定性/轻机制字段（坚持本作无 RPG 膨胀数值、以物理与机制事实结算的原则）：
 - `carryBonus?: number`：携带上限加成（如多袋工装裤 +1、战术胸挂 +3、重装携行包 +4），直接计入 `loadoutSummary` 的 `carryMax`（与义体 `carryBonus` 统一累加）。
 - `protection?: { level: "light" | "ballistic" | "heavy"; coverage: ("head" | "torso" | "limbs")[] }`：防护档位与部位（防划伤碎弹 / 防手枪微冲口径 / 防步枪与破片），穿着后生效。
@@ -22,6 +23,7 @@
 - `factionDisguise?: string`：特定势力制服伪装标识（如 NCPD / 荒坂 / 军用科技 / 创伤小组 / 各帮派）。
 
 ### 2. 跨系统状态联动与提示词透出
+
 - **`inventory/view.ts`**：计算并投影 `inventory.gearEffects`（当前穿着 + 随身装备汇总的防护部位档位、携带上限加成、潜网散热、环境抗性、潜行词条、势力伪装）。
 - **`inventory/status.ts`**：
   - 去掉「穿着没有护甲」的硬编码，改用实际汇总的防护/散热/抗性/隐匿/伪装 + 每件穿着的简明 `ability` 喂给模型；
@@ -33,6 +35,7 @@
   - `med-kit`（急救绷带包）与治疗品补全 `ability` 说明，支持更清晰的非战斗急救体验。
 
 ### 3. 前端效果可视化（`apps/web/src/features/story/InventoryPage.tsx`）
+
 - 在物品栏「随身」视图顶部增加紧凑的 **当前装备生效效果总览条**（如 `躯干防弹`、`携带 +3`、`潜网散热 +2`、`面部遮蔽`、`滤毒`）。
 - 选中服装或功能装备时，在详情卡内以结构化效果徽章醒目展示其防护、携带加成、散热、抗性与潜行效果。
 
@@ -70,6 +73,7 @@
 ---
 
 ## 验收计划
+
 - `tsx tools/assets/pick.ts --only ui` 与 `tsx tools/assets/check.ts` 资产清单与索引校验全通过，服装/插件/常用道具实现专图无撞图；
 - `biome lint packages apps tools functions` 0 错误 0 警告；
 - 6 个 `tsc --noEmit` 全部通过；

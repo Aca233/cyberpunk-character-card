@@ -2,7 +2,7 @@ import type { SystemSection } from "../../kernel/system";
 import { JobsStateSchema } from "../jobs";
 import { deathKnown, NpcStateSchema } from "../npc";
 import { formatGameTime } from "../world";
-import { CALL_STATUS_LABELS, PhoneStateSchema } from "./schema";
+import { CALL_STATUS_LABELS, hasContactChannel, PhoneStateSchema } from "./schema";
 
 /** 通讯录与通话用意：通讯录告诉三阶段哪些人已有私人频道；通话用意只给叙事模型，未接听时不泄露 */
 export const phoneSections: readonly SystemSection[] = [
@@ -19,8 +19,15 @@ export const phoneSections: readonly SystemSection[] = [
         ...phone.messages.map((m) => m.from),
         ...phone.calls.map((c) => c.from),
       ]);
+      const blocked = phone.blockedChannels.map(
+        (id) => `${npcs[id]?.name ?? fixers[id]?.name ?? id}［${id}］`,
+      );
+      const blockedLine = blocked.length
+        ? `\n已封禁的频道：${blocked.join("、")}。历史短信仅供回看，不能收发消息或接通电话；只有正文明确恢复联系时才写 phoneContact add。`
+        : "";
+      for (const id of keys) if (!hasContactChannel(phone, id)) keys.delete(id);
       if (keys.size === 0) {
-        return "暂无已交换联系方式的联系人（普通人物未在通讯录里时，双方没有彼此私人全息号）。";
+        return `暂无已交换联系方式的联系人（普通人物未在通讯录里时，双方没有彼此私人全息号）。${blockedLine}`;
       }
       const items = [...keys].map((id) => {
         const npc = npcs[id];
@@ -29,7 +36,7 @@ export const phoneSections: readonly SystemSection[] = [
         const note = phone.contacts[id]?.note ? `（${phone.contacts[id]?.note}）` : "";
         return `${name}［${id}${deadTag}］${note}`;
       });
-      return `已有联系方式：${items.join("、")}。其余人物未留全息频道。`;
+      return `已有联系方式：${items.join("、")}。其余人物未留全息频道。${blockedLine}`;
     },
   },
   {

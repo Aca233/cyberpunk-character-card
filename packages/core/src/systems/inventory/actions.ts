@@ -64,28 +64,6 @@ export const SellItemActionSchema = z.strictObject({
 
 type ShopAction = z.infer<typeof BuyItemActionSchema> | z.infer<typeof SellItemActionSchema>;
 
-const CompanionGearProbeSchema = z
-  .object({
-    npcs: z
-      .record(
-        z.string(),
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          alive: z.boolean().default(true),
-          met: z.boolean().default(false),
-          following: z.boolean().default(false),
-          body: z
-            .object({
-              gear: z.array(z.string()).default([]),
-            })
-            .optional(),
-        }),
-      )
-      .default({}),
-  })
-  .catch({ npcs: {} });
-
 /** 商店的买卖：人要在店里；买的要在货架上、肯卖，卖的只收背包里的 */
 function shopCommands(
   world: WorldState,
@@ -103,22 +81,15 @@ function shopCommands(
   if (!quote.ok) return quote.reason;
 
   if (action.type === "buyItem" && action.forNpc) {
-    const npc = CompanionGearProbeSchema.parse(world.slices.npc ?? {}).npcs[action.forNpc];
-    if (!npc?.met || !npc.alive) return "找不到这位在场的同伴";
-    if (!npc.following) return `${npc.name}当前没有与你同行，先结伴同行再为其配装`;
-    const gear = npc.body?.gear ?? [];
-    if (gear.includes(action.id)) return `${npc.name}身上已经有这件装备了`;
-    if (gear.length >= 12) return `${npc.name}的随身装备栏已满（最多 12 件）`;
-    const out: Command[] = [];
-    if (quote.price > 0) {
-      out.push({
-        type: "money",
-        delta: -quote.price,
-        reason: `在${quote.party.name}为同行同伴${npc.name}购入${quote.label}`,
-      });
-    }
-    out.push({ type: "npcGear", id: npc.id, action: "add", item: action.id });
-    return out;
+    return [
+      {
+        type: "inventory.buyForNpc",
+        shop: action.shop,
+        item: action.id,
+        npc: action.forNpc,
+        reason: "通过商店面板为同行同伴购入装备",
+      },
+    ];
   }
 
   return [command];

@@ -1,11 +1,8 @@
 import type { FeedItem, ViewContext } from "../../kernel/system";
-import { isOpen, JOB_STATUS_LABELS, JobsStateSchema } from "../jobs";
+import { JOB_STATUS_LABELS, JobsStateSchema } from "../jobs";
 import { deathKnown, NpcStateSchema } from "../npc";
 import { formatGameTime } from "../world";
-import { PHONE_THREAD_MIN, PhoneStateSchema } from "./schema";
-
-/** 界面上最多列几条消息（先保每个会话最近几条和关联未结委托，再补最近消息） */
-const PHONE_SHOWN = 60;
+import { hasContactChannel, isContactBlocked, PhoneStateSchema } from "./schema";
 
 /** 各频道未读消息的 id；打开频道后交回 readMessages 标已读 */
 export function phoneFeedUnread(feed: readonly FeedItem[]) {
@@ -16,43 +13,14 @@ export function phoneFeedUnread(feed: readonly FeedItem[]) {
   };
 }
 
-/** 按逆时间选出要给界面的消息，确保每个联系人的最近往来与进行中委托消息不被单一话痨线程挤掉 */
-function selectShownMessages(
-  messages: PhoneState["messages"],
-  jobs: Map<string, ReturnType<typeof JobsStateSchema.parse>["jobs"][number]>,
-) {
-  const newestFirst = [...messages].reverse();
-  const picked = new Set<number>();
-  const threadCount = new Map<string, number>();
-
-  for (const m of newestFirst) {
-    if (picked.size >= PHONE_SHOWN) break;
-    const linked = m.job === undefined ? undefined : jobs.get(m.job);
-    const openLinked = linked !== undefined && isOpen(linked);
-    const seen = threadCount.get(m.from) ?? 0;
-    if (openLinked || seen < PHONE_THREAD_MIN) {
-      picked.add(m.id);
-      threadCount.set(m.from, seen + 1);
-    }
-  }
-
-  for (const m of newestFirst) {
-    if (picked.size >= PHONE_SHOWN) break;
-    picked.add(m.id);
-  }
-
-  return newestFirst.filter((m) => picked.has(m.id));
-}
-
-type PhoneState = ReturnType<typeof PhoneStateSchema.parse>;
-
 /** 消息和联系人；只展示玩家知道的生死，不暴露场外死亡 */
 export function phoneMessagesView({ world }: ViewContext) {
   const phoneState = PhoneStateSchema.parse(world.slices.phone ?? {});
   const npcs = NpcStateSchema.parse(world.slices.npc);
   const jobsState = JobsStateSchema.parse(world.slices.jobs);
   const jobs = new Map(jobsState.jobs.map((j) => [j.id, j]));
-  const shown = selectShownMessages(phoneState.messages, jobs);
+  // 存档已限制为最多 80 条；投影完整保留，避免有未读的旧会话变成不可阅读的空线程。
+  const shown = [...phoneState.messages].reverse();
   return {
     unread: phoneState.messages.filter((m) => m.sender !== "player" && !m.read).length,
     messages: shown.map((m) => {
@@ -90,6 +58,7 @@ export function phoneMessagesView({ world }: ViewContext) {
 
       const keys = new Set<string>([
         ...Object.keys(phoneState.contacts),
+        ...phoneState.blockedChannels,
         ...latestMsg.keys(),
         ...latestCall.keys(),
       ]);
@@ -112,6 +81,7 @@ export function phoneMessagesView({ world }: ViewContext) {
               ? Math.max(msgAt, callAt)
               : (msgAt ?? callAt ?? entry?.addedAt ?? -1);
           const alive = npc ? !deathKnown(npc) : true;
+          const blocked = isContactBlocked(phoneState, from);
           const met = Boolean(npc?.met);
           const isFixer = Boolean(fixer);
           return {
@@ -122,7 +92,8 @@ export function phoneMessagesView({ world }: ViewContext) {
             alive,
             met,
             isFixer,
-            canChat: Boolean(npc) && alive,
+            blocked,
+            canChat: Boolean(npc) && alive && hasContactChannel(phoneState, from),
             contactSource: entry?.source ?? "inbound",
             contactNote: entry?.note ?? null,
             last:

@@ -227,7 +227,7 @@ export function applyOffscreenDeath(
   if (npc.following) return { ok: false, reason: `${npc.name}正与你同行，不能死在屏幕外` };
   npc.alive = false;
   npc.following = false;
-  npc.offscreenDeath = { cause: command.cause, at: now };
+  npc.offscreenDeath = { cause: command.cause, at: now, knownAt: null };
   return { ok: true, notes: [`${npc.name} 在屏幕外死了：${command.cause}`], signals: ["npc.died"] };
 }
 
@@ -292,11 +292,11 @@ export function currentOutfit(npc: Npc): string | undefined {
   return npc.wearing?.text ?? npc.outfit;
 }
 
-/** 人物档案里显示死了没有：屏幕外死的，要等玩家在那之后听说了这个人的事（learn）才算知道 */
+/** 人物档案里的生死：离屏死亡仅在明确得知死讯后公开，不由普通情报的时间推断。 */
 export function deathKnown(npc: Npc): boolean {
   if (npc.alive) return false;
   const off = npc.offscreenDeath;
-  return off === null || npc.known.some((k) => k.at >= off.at);
+  return off === null || off.knownAt !== null;
 }
 
 export function applyNpc(
@@ -404,6 +404,9 @@ export function applyNpc(
   }
   // 死了的人也能被打听到
   if (command.type === "learn") {
+    if (command.death === true && npc.offscreenDeath && npc.offscreenDeath.knownAt === null) {
+      npc.offscreenDeath.knownAt = now;
+    }
     if (npc.known.some((k) => k.text === command.text)) return { ok: true };
     npc.known.push({ text: command.text, source: command.source, at: now });
     if (npc.known.length > KNOWN_KEPT) npc.known.splice(0, npc.known.length - KNOWN_KEPT);

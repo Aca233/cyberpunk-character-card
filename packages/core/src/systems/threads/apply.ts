@@ -310,7 +310,8 @@ function applyRemind(draft: State, now: number): ApplyOutcome {
 }
 
 /** 清理主人已死或已了结的宿敌与心事事项（在时间推进与 npc.died 信号时立即执行） */
-export function cleanupDeadThreads(draft: State, ctx: SystemContext): void {
+export function cleanupDeadThreads(draft: State, ctx: SystemContext): readonly Command[] {
+  const emit: Command[] = [];
   const rivals = ctx.read<NemesisState>("nemesis").nemeses;
   const npcs = ctx.read<NpcState>("npc").npcs;
   for (let i = draft.threads.length - 1; i >= 0; i--) {
@@ -318,21 +319,26 @@ export function cleanupDeadThreads(draft: State, ctx: SystemContext): void {
     if (t.kind === "nemesis") {
       const rival = rivals.find((n) => n.npc === t.owner);
       if (!rival || (t.owner !== null && npcs[t.owner]?.alive === false)) {
-        closeThread(draft, i, rival ? "他死了" : "恩怨了结了", ctx.now);
+        const end = rival ? "他死了" : "恩怨了结了";
+        const closed = closeThread(draft, i, end, ctx.now);
+        emit.push(syncCityEvent(closed, end, "over"));
       }
     } else if (t.kind === "concern") {
       if (t.owner !== null && npcs[t.owner]?.alive === false) {
-        closeThread(draft, i, "当事人在变故中身亡，此事无疾而终", ctx.now);
+        const end = "当事人在变故中身亡，此事无疾而终";
+        const closed = closeThread(draft, i, end, ctx.now);
+        emit.push(syncCityEvent(closed, end, "over"));
       }
     }
   }
+  return emit;
 }
 
 /**
  * 时间推进时同步宿敌、已死人物心事与长期降温的城中突发事
  */
-export function tickThreads(draft: State, ctx: SystemContext): void {
-  cleanupDeadThreads(draft, ctx);
+export function tickThreads(draft: State, ctx: SystemContext): readonly Command[] {
+  const emit = [...cleanupDeadThreads(draft, ctx)];
   const rivals = ctx.read<NemesisState>("nemesis").nemeses;
   const npcs = ctx.read<NpcState>("npc").npcs;
   // 长期处于 cooling 且超过 CIVIC_COOLING_EXPIRE_DAYS 天未动的城中突发事自动自然平息
@@ -341,7 +347,9 @@ export function tickThreads(draft: State, ctx: SystemContext): void {
     if (t.kind !== "civic" || t.status !== "cooling") continue;
     const touched = t.updatedAt ?? t.openedAt;
     if (ctx.now - touched >= CIVIC_COOLING_EXPIRE_DAYS * DAY) {
-      closeThread(draft, i, "风波随时间自然平息", ctx.now);
+      const end = "风波随时间自然平息";
+      const closed = closeThread(draft, i, end, ctx.now);
+      emit.push(syncCityEvent(closed, end, "over"));
     }
   }
   for (const n of rivals) {
@@ -370,6 +378,7 @@ export function tickThreads(draft: State, ctx: SystemContext): void {
       steps: [],
     });
   }
+  return emit;
 }
 
 export function applyThreads(
